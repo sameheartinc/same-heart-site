@@ -1,0 +1,26 @@
+@import url("https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Literata:ital,opsz,wght@0,18..144,400;0,18..144,500;1,18..144,400&display=swap");
+
+:root {
+  --void: #0a0e1a;
+  --panel: #121a2c;
+  --ink: #ece7dc;
+  --ink-dim: #9aa3b8;
+  --gold: #c9a15a;
+  --rose: #c9576a;
+
+  --font-display: "Unbounded", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Literata", Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
