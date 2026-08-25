@@ -64,7 +64,9 @@ export default function Home() {
       >
         <input
           type="email"
+          name="email"
           placeholder="your@email.com"
+          aria-label="Email address"
           style={{
             background: "var(--panel)",
             border: "1px solid #313f5e",
