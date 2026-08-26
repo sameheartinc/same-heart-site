@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main
@@ -64,9 +66,7 @@ export default function Home() {
       >
         <input
           type="email"
-          name="email"
           placeholder="your@email.com"
-          aria-label="Email address"
           style={{
             background: "var(--panel)",
             border: "1px solid #313f5e",
@@ -93,6 +93,21 @@ export default function Home() {
           Notify me
         </button>
       </form>
+
+      <Link
+        href="/login"
+        style={{
+          marginTop: "22px",
+          fontFamily: "var(--font-mono)",
+          fontSize: "11px",
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: "var(--ink-faint, #5c6684)",
+          textDecoration: "underline",
+        }}
+      >
+        Find your frequency &rarr;
+      </Link>
     </main>
   );
 }
