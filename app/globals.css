@@ -5,8 +5,10 @@
   --panel: #121a2c;
   --ink: #ece7dc;
   --ink-dim: #9aa3b8;
+  --ink-faint: #5c6684;
   --gold: #c9a15a;
   --rose: #c9576a;
+  --border: #313f5e;
 
   --font-display: "Unbounded", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Literata", Georgia, serif;

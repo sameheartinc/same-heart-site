@@ -1,6 +1,34 @@
+"use client";
+
 import Link from "next/link";
+import { useRef } from "react";
+
+// Deterministic pseudo-random stars -- same values on server and client,
+// so there's no hydration mismatch and no need to wait for JS to draw them.
+function seeded(n: number) {
+  const x = Math.sin(n) * 10000;
+  return x - Math.floor(x);
+}
+const STARS = Array.from({ length: 110 }, (_, i) => ({
+  left: seeded(i * 12.9898) * 100,
+  top: seeded(i * 78.233 + 1) * 100,
+  size: seeded(i * 37.719 + 2) * 1.6 + 1,
+  delay: seeded(i * 4.671 + 3) * 6,
+  duration: seeded(i * 9.123 + 4) * 3 + 4,
+}));
 
 export default function Home() {
+  const chimeRef = useRef<HTMLAudioElement>(null);
+
+  function playChime() {
+    const a = chimeRef.current;
+    if (!a) return;
+    a.currentTime = 0;
+    a.play().catch(() => {
+      /* autoplay can be blocked before any interaction -- silently ignore */
+    });
+  }
+
   return (
     <main
       style={{
@@ -11,103 +39,206 @@ export default function Home() {
         justifyContent: "center",
         textAlign: "center",
         padding: "24px",
+        position: "relative",
+        overflow: "hidden",
         background:
-          "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,161,90,0.12), transparent 60%), var(--void)",
+          "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(201,161,90,0.10), transparent 65%), var(--void)",
       }}
     >
-      <p
-        style={{
-          fontFamily: "var(--font-display)",
-          fontSize: "11px",
-          letterSpacing: "0.2em",
-          textTransform: "uppercase",
-          color: "var(--gold)",
-          marginBottom: "18px",
-        }}
-      >
-        Same Heart&trade; &middot; First Signal
-      </p>
+      <style>{`
+        @keyframes twinkle {
+          0%, 100% { opacity: .15; }
+          50%      { opacity: .95; }
+        }
+        .stars {
+          position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+        }
+        .stars span {
+          position: absolute; border-radius: 50%;
+          background: var(--ink, #ece7dc);
+          animation: twinkle ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .stars span { animation: none; opacity: .35; }
+        }
 
-      <h1
-        style={{
-          fontFamily: "var(--font-display)",
-          fontWeight: 800,
-          fontSize: "clamp(2.5rem, 7vw, 4.5rem)",
-          margin: 0,
-        }}
-      >
-        Something is arriving.
-      </h1>
+        @keyframes heartbeatGlow {
+          0%   { text-shadow: 0 0 16px rgba(201,161,90,0.4), 0 0 40px rgba(201,161,90,0.18); transform: scale(1); }
+          14%  { text-shadow: 0 0 30px rgba(201,161,90,0.7), 0 0 70px rgba(201,161,90,0.35); transform: scale(1.035); }
+          28%  { text-shadow: 0 0 14px rgba(201,161,90,0.4), 0 0 34px rgba(201,161,90,0.16); transform: scale(1); }
+          42%  { text-shadow: 0 0 24px rgba(201,161,90,0.55), 0 0 55px rgba(201,161,90,0.25); transform: scale(1.02); }
+          65%  { text-shadow: 0 0 10px rgba(201,161,90,0.3), 0 0 26px rgba(201,161,90,0.12); transform: scale(1); }
+          100% { text-shadow: 0 0 10px rgba(201,161,90,0.3), 0 0 26px rgba(201,161,90,0.12); transform: scale(1); }
+        }
+        .frequency-cta {
+          display: inline-block;
+          font-family: var(--font-display);
+          font-weight: 800;
+          font-size: clamp(2rem, 7.5vw, 4.1rem);
+          letter-spacing: 0.02em;
+          line-height: 1.05;
+          text-transform: uppercase;
+          color: var(--gold);
+          text-decoration: none;
+          animation: heartbeatGlow 2.8s ease-in-out infinite;
+          transition: text-shadow 0.15s ease, transform 0.15s ease;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .frequency-cta:hover,
+        .frequency-cta:focus-visible {
+          text-shadow: 0 0 30px rgba(201,161,90,0.8), 0 0 80px rgba(201,161,90,0.5), 0 0 130px rgba(201,161,90,0.25);
+          transform: scale(1.04);
+          animation-play-state: paused;
+        }
+        .frequency-cta:active {
+          text-shadow: 0 0 40px rgba(201,161,90,0.95), 0 0 100px rgba(201,161,90,0.65);
+          transform: scale(0.97);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .frequency-cta { animation: none; }
+        }
+      `}</style>
 
-      <p
-        style={{
-          fontFamily: "var(--font-body)",
-          fontStyle: "italic",
-          color: "var(--ink-dim)",
-          maxWidth: "48ch",
-          marginTop: "18px",
-          fontSize: "1.1rem",
-        }}
-      >
-        SAMEHEART is opening its doors soon. Quiet from the outside &mdash;
-        a whole universe once you&rsquo;re in.
-      </p>
+      <div className="stars" aria-hidden="true">
+        {STARS.map((s, i) => (
+          <span
+            key={i}
+            style={{
+              left: `${s.left}%`,
+              top: `${s.top}%`,
+              width: `${s.size}px`,
+              height: `${s.size}px`,
+              animationDelay: `${s.delay}s`,
+              animationDuration: `${s.duration}s`,
+            }}
+          />
+        ))}
+      </div>
 
-      {/* Replace this with a real waitlist form wired to Supabase once
-          the "profiles" table (see supabase/schema.sql) is set up. */}
-      <form
-        style={{
-          marginTop: "34px",
-          display: "flex",
-          gap: "10px",
-          flexWrap: "wrap",
-          justifyContent: "center",
-        }}
-      >
-        <input
-          type="email"
-          placeholder="your@email.com"
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <p
           style={{
-            background: "var(--panel)",
-            border: "1px solid #313f5e",
-            borderRadius: "999px",
-            padding: "12px 18px",
-            color: "var(--ink)",
-            fontFamily: "var(--font-body)",
-            minWidth: "240px",
-          }}
-        />
-        <button
-          type="submit"
-          style={{
-            background: "var(--gold)",
-            border: "none",
-            borderRadius: "999px",
-            padding: "12px 22px",
-            color: "var(--void)",
             fontFamily: "var(--font-display)",
-            fontWeight: 600,
-            cursor: "pointer",
+            fontSize: "11px",
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: "var(--gold)",
+            marginBottom: "20px",
           }}
         >
-          Notify me
-        </button>
-      </form>
+          Same Heart&trade; &middot; First Signal
+        </p>
 
-      <Link
-        href="/login"
-        style={{
-          marginTop: "22px",
-          fontFamily: "var(--font-mono)",
-          fontSize: "11px",
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          color: "var(--ink-faint, #5c6684)",
-          textDecoration: "underline",
-        }}
-      >
-        Find your frequency &rarr;
-      </Link>
+        <p
+          style={{
+            fontFamily: "var(--font-body)",
+            fontStyle: "italic",
+            color: "var(--ink-dim)",
+            fontSize: "1.02rem",
+            margin: "0 0 26px",
+          }}
+        >
+          Something is arriving.
+        </p>
+
+        <Link
+          href="/login"
+          className="frequency-cta"
+          onClick={playChime}
+          onTouchStart={() => {}}
+        >
+          Find Your Frequency
+        </Link>
+
+        <p
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "10px",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--ink-faint, #5c6684)",
+            margin: "18px 0 30px",
+          }}
+        >
+          Touch to tune in
+        </p>
+
+        <p
+          style={{
+            fontFamily: "var(--font-body)",
+            fontStyle: "italic",
+            color: "var(--ink-dim)",
+            maxWidth: "44ch",
+            fontSize: "0.95rem",
+            margin: "0 0 8px",
+          }}
+        >
+          SAMEHEART is opening its doors soon. Quiet from the outside &mdash;
+          a whole universe once you&rsquo;re in.
+        </p>
+
+        {/* Collapsed by default -- nothing shows until someone clicks it.
+            Replace with a real waitlist write to Supabase later if wanted
+            (see the "profiles" table in supabase/schema.sql). */}
+        <details style={{ marginTop: "22px" }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--ink-faint, #5c6684)",
+            }}
+          >
+            Or leave your email
+          </summary>
+          <form
+            style={{
+              marginTop: "14px",
+              display: "flex",
+              gap: "8px",
+              flexWrap: "wrap",
+              justifyContent: "center",
+            }}
+          >
+            <input
+              type="email"
+              placeholder="your@email.com"
+              style={{
+                background: "var(--panel)",
+                border: "1px solid #313f5e",
+                borderRadius: "999px",
+                padding: "9px 14px",
+                color: "var(--ink)",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.85rem",
+                minWidth: "200px",
+              }}
+            />
+            <button
+              type="submit"
+              style={{
+                background: "none",
+                border: "1px solid var(--gold)",
+                borderRadius: "999px",
+                padding: "9px 16px",
+                color: "var(--gold)",
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: "0.8rem",
+                cursor: "pointer",
+              }}
+            >
+              Notify me
+            </button>
+          </form>
+        </details>
+      </div>
+
+      {/* Plays a soft heartbeat chime on tap/click -- browsers only allow
+          this because it's triggered by a real user gesture, not on load. */}
+      <audio ref={chimeRef} src="/heartbeat.wav" preload="auto" />
     </main>
   );
 }
