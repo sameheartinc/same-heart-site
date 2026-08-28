@@ -82,46 +82,26 @@ async function shopifyFetch<T>(
   return json.data;
 }
 
+type ProductNode = {
+  id: string;
+  title: string;
+  handle: string;
+  description: string;
+  onlineStoreUrl: string | null;
+  images: { edges: Array<{ node: { url: string } }> };
+  priceRange: { minVariantPrice: { amount: string; currencyCode: string } };
+};
+
 interface ProductsQueryResult {
-  products: {
-    edges: Array<{
-      node: {
-        id: string;
-        title: string;
-        handle: string;
-        description: string;
-        onlineStoreUrl: string | null;
-        images: { edges: Array<{ node: { url: string } }> };
-        priceRange: { minVariantPrice: { amount: string; currencyCode: string } };
-      };
-    }>;
-  };
+  products: { edges: Array<{ node: ProductNode }> };
 }
 
-export async function listProducts(first = 12): Promise<ShopifyProduct[]> {
-  const query = `
-    query Products($first: Int!) {
-      products(first: $first) {
-        edges {
-          node {
-            id
-            title
-            handle
-            description
-            onlineStoreUrl
-            images(first: 1) {
-              edges { node { url } }
-            }
-            priceRange {
-              minVariantPrice { amount currencyCode }
-            }
-          }
-        }
-      }
-    }
-  `;
-  const data = await shopifyFetch<ProductsQueryResult>(query, { first });
-  return data.products.edges.map(({ node }) => ({
+interface CollectionProductsQueryResult {
+  collection: { products: { edges: Array<{ node: ProductNode }> } } | null;
+}
+
+function mapProduct(node: ProductNode): ShopifyProduct {
+  return {
     id: node.id,
     title: node.title,
     handle: node.handle,
@@ -130,5 +110,65 @@ export async function listProducts(first = 12): Promise<ShopifyProduct[]> {
     priceAmount: node.priceRange.minVariantPrice.amount,
     priceCurrency: node.priceRange.minVariantPrice.currencyCode,
     onlineStoreUrl: node.onlineStoreUrl,
-  }));
+  };
+}
+
+const PRODUCT_FIELDS = `
+  id
+  title
+  handle
+  description
+  onlineStoreUrl
+  images(first: 1) {
+    edges { node { url } }
+  }
+  priceRange {
+    minVariantPrice { amount currencyCode }
+  }
+`;
+
+// The Merch Ship deliberately shows a hand-picked selection, not just
+// "whatever Shopify returns first" -- Rob curates exactly what's
+// featured (and in what order) by arranging products inside this one
+// Shopify Collection. Rearranging it there is instant; no code change,
+// no redeploy, on the site's end.
+const FEATURED_COLLECTION_HANDLE = "same-heart-page";
+
+async function listFeaturedCollectionProducts(first: number): Promise<ShopifyProduct[] | null> {
+  const query = `
+    query CollectionProducts($handle: String!, $first: Int!) {
+      collection(handle: $handle) {
+        products(first: $first) {
+          edges { node { ${PRODUCT_FIELDS} } }
+        }
+      }
+    }
+  `;
+  const data = await shopifyFetch<CollectionProductsQueryResult>(query, {
+    handle: FEATURED_COLLECTION_HANDLE,
+    first,
+  });
+  if (!data.collection) return null; // handle doesn't exist (yet) -- fall back
+  return data.collection.products.edges.map(({ node }) => mapProduct(node));
+}
+
+async function listAllProducts(first: number): Promise<ShopifyProduct[]> {
+  const query = `
+    query Products($first: Int!) {
+      products(first: $first) {
+        edges { node { ${PRODUCT_FIELDS} } }
+      }
+    }
+  `;
+  const data = await shopifyFetch<ProductsQueryResult>(query, { first });
+  return data.products.edges.map(({ node }) => mapProduct(node));
+}
+
+export async function listProducts(first = 24): Promise<ShopifyProduct[]> {
+  // Prefer the curated "same-heart-page" collection. If it's ever
+  // missing (deleted, renamed, or not created yet), fall back to
+  // Shopify's default product list rather than showing an empty shop.
+  const featured = await listFeaturedCollectionProducts(first);
+  if (featured && featured.length > 0) return featured;
+  return listAllProducts(first);
 }

@@ -731,8 +731,8 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "38px" }}>
       <style>{`
         @keyframes signalBubbleGlow {
-          0%, 100% { box-shadow: 0 0 30px rgba(201,87,106,0.22), inset 0 0 50px rgba(0,0,0,0.4); }
-          50%      { box-shadow: 0 0 52px rgba(201,87,106,0.4), inset 0 0 50px rgba(0,0,0,0.4); }
+          0%, 100% { box-shadow: 0 0 50px rgba(201,87,106,0.28), inset 0 0 70px rgba(0,0,0,0.4); }
+          50%      { box-shadow: 0 0 85px rgba(201,87,106,0.48), inset 0 0 70px rgba(0,0,0,0.4); }
         }
         @keyframes signalDotPulse {
           0%, 100% { opacity: 0.4; transform: scale(1); }
@@ -749,13 +749,13 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
       <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "16px" }}>
         <span
           className="signal-live-dot"
-          style={{ width: "6px", height: "6px", borderRadius: "50%", background: ACCENT, display: "inline-block" }}
+          style={{ width: "9px", height: "9px", borderRadius: "50%", background: ACCENT, display: "inline-block" }}
         />
         <p
           style={{
             margin: 0,
             fontFamily: "var(--font-mono)",
-            fontSize: "9px",
+            fontSize: "12px",
             letterSpacing: "0.22em",
             textTransform: "uppercase",
             color: ACCENT,
@@ -772,7 +772,7 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
         className="signal-bubble"
         style={{
           position: "relative",
-          width: "min(240px, 62vw)",
+          width: "min(460px, 88vw)",
           aspectRatio: "1 / 1",
           borderRadius: "50%",
           overflow: "hidden",
@@ -807,7 +807,7 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
             left: 0,
             right: 0,
             bottom: 0,
-            padding: "20px 20px 24px",
+            padding: "30px 28px 34px",
             background: "linear-gradient(to top, rgba(8,10,18,0.94), rgba(8,10,18,0) 72%)",
           }}
         >
@@ -815,7 +815,7 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
             style={{
               margin: "0 0 4px",
               fontFamily: "var(--font-body)",
-              fontSize: "0.76rem",
+              fontSize: "1.05rem",
               fontWeight: 600,
               color: "#fff",
               lineHeight: 1.25,
@@ -831,7 +831,7 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
             style={{
               margin: 0,
               fontFamily: "var(--font-mono)",
-              fontSize: "8px",
+              fontSize: "10px",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               color: ACCENT,
