@@ -395,6 +395,8 @@ export default function CommonsPage() {
           The world is talking.
         </h1>
 
+        {!showingSearch && signal.length > 0 && <SignalBubble articles={signal} />}
+
         {/* Live presence bar -- every number here is real, queried fresh
             on load. Nothing simulated. */}
         <div
@@ -700,6 +702,167 @@ export default function CommonsPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+function SignalBubble({ articles }: { articles: NewsArticle[] }) {
+  const [index, setIndex] = useState(0);
+  const [fading, setFading] = useState(false);
+
+  useEffect(() => {
+    if (articles.length <= 1) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const id = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setIndex((i) => (i + 1) % articles.length);
+        setFading(false);
+      }, 380);
+    }, 6500);
+    return () => clearInterval(id);
+  }, [articles.length]);
+
+  if (articles.length === 0) return null;
+  const article = articles[Math.min(index, articles.length - 1)];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "38px" }}>
+      <style>{`
+        @keyframes signalBubbleGlow {
+          0%, 100% { box-shadow: 0 0 30px rgba(201,87,106,0.22), inset 0 0 50px rgba(0,0,0,0.4); }
+          50%      { box-shadow: 0 0 52px rgba(201,87,106,0.4), inset 0 0 50px rgba(0,0,0,0.4); }
+        }
+        @keyframes signalDotPulse {
+          0%, 100% { opacity: 0.4; transform: scale(1); }
+          50%      { opacity: 1; transform: scale(1.3); }
+        }
+        .signal-bubble { animation: signalBubbleGlow 4.5s ease-in-out infinite; }
+        .signal-live-dot { animation: signalDotPulse 1.8s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .signal-bubble { animation: none; }
+          .signal-live-dot { animation: none; opacity: 0.9; }
+        }
+      `}</style>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "16px" }}>
+        <span
+          className="signal-live-dot"
+          style={{ width: "6px", height: "6px", borderRadius: "50%", background: ACCENT, display: "inline-block" }}
+        />
+        <p
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-mono)",
+            fontSize: "9px",
+            letterSpacing: "0.22em",
+            textTransform: "uppercase",
+            color: ACCENT,
+          }}
+        >
+          The Signal &middot; Live
+        </p>
+      </div>
+
+      <a
+        href={article.url}
+        target="_blank"
+        rel="noreferrer"
+        className="signal-bubble"
+        style={{
+          position: "relative",
+          width: "min(240px, 62vw)",
+          aspectRatio: "1 / 1",
+          borderRadius: "50%",
+          overflow: "hidden",
+          textDecoration: "none",
+          display: "block",
+          background: article.image_url
+            ? `center/cover no-repeat url(${article.image_url})`
+            : "radial-gradient(circle at 35% 30%, rgba(201,87,106,0.35), var(--void))",
+          border: "1px solid rgba(201,87,106,0.55)",
+          opacity: fading ? 0 : 1,
+          transition: "opacity 0.38s ease",
+        }}
+      >
+        {/* Glass sheen -- a soft highlight arcing across the top-left,
+            like light catching the curve of glass. */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(155deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 30%, rgba(255,255,255,0) 55%)",
+          }}
+        />
+        {/* Inner rim shadow so the image reads as curved, not flat */}
+        <div
+          aria-hidden="true"
+          style={{ position: "absolute", inset: 0, boxShadow: "inset 0 0 26px rgba(0,0,0,0.55)", borderRadius: "50%" }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: "20px 20px 24px",
+            background: "linear-gradient(to top, rgba(8,10,18,0.94), rgba(8,10,18,0) 72%)",
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 4px",
+              fontFamily: "var(--font-body)",
+              fontSize: "0.76rem",
+              fontWeight: 600,
+              color: "#fff",
+              lineHeight: 1.25,
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical" as const,
+              overflow: "hidden",
+            }}
+          >
+            {article.title}
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-mono)",
+              fontSize: "8px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: ACCENT,
+            }}
+          >
+            {article.source_name ?? "Unknown source"}
+          </p>
+        </div>
+      </a>
+
+      {articles.length > 1 && (
+        <div style={{ display: "flex", gap: "6px", marginTop: "16px" }}>
+          {articles.slice(0, 8).map((a, i) => (
+            <button
+              key={a.id}
+              onClick={() => setIndex(i)}
+              aria-label={`Show story ${i + 1}`}
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                background: i === index ? ACCENT : "var(--border)",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
