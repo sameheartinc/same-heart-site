@@ -40,3 +40,18 @@ rituals, evolving rewards) built on top of the Standing/XP/Skins
 system that already exists. That's the recommended first step toward
 this vision, not the robotics/global-platform pieces, which are
 genuinely long-horizon.
+
+## Addendum, Aug 28, 2026 -- the "computer agency" framing
+
+Same Heart eventually evolving into something like a computer agency:
+deep learning, e-learning, information-seeking and distribution, and
+"ultimate problem solving" -- built toward a personal AI/robot unit
+that actually knows the individual user. Framed as: Same Heart is "the
+beginning of something beyond words that helps millions," with a
+rough personal timeline goal of ~2 years toward shipping people their
+own personal work robot through third-party manufacturing partners
+(not Same Heart building hardware itself -- partnering/integrating).
+
+This deepens, doesn't replace, the robotics-companion note above --
+same direction, more specific shape (an agency-model business,
+software-first, hardware via third parties down the line).
