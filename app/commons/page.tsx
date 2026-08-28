@@ -772,9 +772,9 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
         className="signal-bubble"
         style={{
           position: "relative",
-          width: "min(460px, 88vw)",
-          aspectRatio: "1 / 1",
-          borderRadius: "50%",
+          width: "min(230px, 62vw)",
+          aspectRatio: "4 / 3",
+          borderRadius: "20px",
           overflow: "hidden",
           textDecoration: "none",
           display: "block",
@@ -799,7 +799,7 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
         {/* Inner rim shadow so the image reads as curved, not flat */}
         <div
           aria-hidden="true"
-          style={{ position: "absolute", inset: 0, boxShadow: "inset 0 0 26px rgba(0,0,0,0.55)", borderRadius: "50%" }}
+          style={{ position: "absolute", inset: 0, boxShadow: "inset 0 0 26px rgba(0,0,0,0.55)", borderRadius: "20px" }}
         />
         <div
           style={{
@@ -807,20 +807,20 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
             left: 0,
             right: 0,
             bottom: 0,
-            padding: "30px 28px 34px",
-            background: "linear-gradient(to top, rgba(8,10,18,0.94), rgba(8,10,18,0) 72%)",
+            padding: "14px 14px 12px",
+            background: "linear-gradient(to top, rgba(8,10,18,0.96), rgba(8,10,18,0.05) 60%, rgba(8,10,18,0) 100%)",
           }}
         >
           <p
             style={{
               margin: "0 0 4px",
               fontFamily: "var(--font-body)",
-              fontSize: "1.05rem",
+              fontSize: "0.8rem",
               fontWeight: 600,
               color: "#fff",
               lineHeight: 1.25,
               display: "-webkit-box",
-              WebkitLineClamp: 3,
+              WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical" as const,
               overflow: "hidden",
             }}
@@ -831,7 +831,7 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
             style={{
               margin: 0,
               fontFamily: "var(--font-mono)",
-              fontSize: "10px",
+              fontSize: "8px",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               color: ACCENT,
