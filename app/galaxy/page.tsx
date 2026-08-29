@@ -136,12 +136,75 @@ export default function GalaxyPage() {
         }
         .galaxy-node-label { transition: color 0.28s ease; }
         .galaxy-node:hover .galaxy-node-label { color: var(--gold); }
+
+        /* The node "star": a spinning multicolour spiral plus a faint
+           staticky grain layer, tinted by each node's own accent color --
+           replaces the old plain-letter monogram with something that
+           rewards a second look. */
+        .galaxy-node-star {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+        }
+        .galaxy-node-star::before {
+          content: "";
+          position: absolute;
+          inset: -35%;
+          background: conic-gradient(
+            from 0deg,
+            #f0d9a8,
+            #c9576a,
+            #7c9fd9,
+            #7fd9c4,
+            #e0703a,
+            #c9a15a,
+            #f0d9a8
+          );
+          animation: galaxyRingSpin 7s linear infinite;
+          mix-blend-mode: screen;
+          opacity: 0.8;
+        }
+        .galaxy-node-star::after {
+          content: "";
+          position: absolute;
+          inset: -4px;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+          opacity: 0.22;
+          mix-blend-mode: overlay;
+          animation: galaxyStaticFlicker 0.5s steps(2) infinite;
+        }
+        .galaxy-node-star-core {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background: radial-gradient(circle at 50% 50%, var(--n-accent) 0%, transparent 72%);
+          mix-blend-mode: color;
+          opacity: 0.6;
+        }
+        @keyframes galaxyStaticFlicker {
+          0%, 100% { opacity: 0.16; transform: translate(0, 0); }
+          25%      { opacity: 0.28; transform: translate(1px, -1px); }
+          50%      { opacity: 0.14; transform: translate(-1px, 1px); }
+          75%      { opacity: 0.26; transform: translate(1px, 1px); }
+        }
+        .galaxy-node:hover .galaxy-node-star {
+          box-shadow: 0 0 34px var(--n-accent);
+        }
+
+        /* Smaller hit-boxes on phones so nodes have real breathing room
+           instead of crowding the center of the console. */
+        @media (max-width: 480px) {
+          .galaxy-node-wrap { width: 106px !important; height: 106px !important; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .galaxy-core,
           .galaxy-node-wrap,
           .galaxy-node-float,
           .galaxy-ring-outer,
-          .galaxy-ring-ticks { animation: none; }
+          .galaxy-ring-ticks,
+          .galaxy-node-star::before,
+          .galaxy-node-star::after { animation: none; }
         }
       `}</style>
 
@@ -304,25 +367,19 @@ export default function GalaxyPage() {
                   }}
                 >
                   <span
-                    className="galaxy-node-dot"
+                    className="galaxy-node-dot galaxy-node-star"
                     style={{
-                      width: "54px",
-                      height: "54px",
+                      width: "58px",
+                      height: "58px",
                       borderRadius: "50%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "var(--panel)",
+                      background: "#050810",
                       border: `1px solid ${node.accent}`,
                       boxShadow: `0 0 ${node.dim ? 10 : 18}px ${node.accent}${node.dim ? "33" : "44"}`,
-                      color: node.accent,
-                      fontFamily: "var(--font-display)",
-                      fontWeight: 800,
-                      fontSize: "1.1rem",
                       transition: "box-shadow 0.28s ease",
+                      ["--n-accent" as string]: node.accent,
                     }}
                   >
-                    {node.monogram}
+                    <span className="galaxy-node-star-core" aria-hidden="true" />
                   </span>
                   <span
                     className="galaxy-node-label"

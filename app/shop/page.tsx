@@ -72,14 +72,16 @@ export default function ShopPage() {
             background: "var(--panel)",
             border: `1px solid ${ACCENT}`,
             boxShadow: `0 0 22px ${ACCENT}44`,
-            color: ACCENT,
-            fontFamily: "var(--font-display)",
-            fontWeight: 800,
-            fontSize: "1.4rem",
             marginBottom: "22px",
+            overflow: "hidden",
           }}
         >
-          S
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mark.png"
+            alt="Same Heart"
+            style={{ width: "58%", height: "58%", objectFit: "contain" }}
+          />
         </span>
         <h1
           style={{

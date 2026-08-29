@@ -44,7 +44,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     tagline: "Community & chat",
     accent: "#c9576a",
     angleDeg: -155,
-    radiusPct: 33,
+    radiusPct: 39,
     scale: 1.3,
   },
   {

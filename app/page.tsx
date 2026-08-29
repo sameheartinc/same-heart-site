@@ -97,6 +97,26 @@ export default function Home() {
         @media (prefers-reduced-motion: reduce) {
           .frequency-cta { animation: none; }
         }
+
+        .merch-cta {
+          display: inline-block;
+          padding: 10px 22px;
+          border: 1px solid rgba(201,161,90,0.5);
+          border-radius: 999px;
+          color: var(--gold);
+          font-family: var(--font-mono);
+          font-size: 11px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          text-decoration: none;
+          transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+        }
+        .merch-cta:hover,
+        .merch-cta:focus-visible {
+          border-color: var(--gold);
+          background: rgba(201,161,90,0.08);
+          transform: scale(1.03);
+        }
       `}</style>
 
       <div className="stars" aria-hidden="true">
@@ -176,6 +196,10 @@ export default function Home() {
           SAMEHEART is opening its doors soon. Quiet from the outside &mdash;
           a whole universe once you&rsquo;re in.
         </p>
+
+        <Link href="/shop" className="merch-cta" style={{ marginTop: "4px" }}>
+          Visit the Merch Ship
+        </Link>
 
         {/* Collapsed by default -- nothing shows until someone clicks it.
             Replace with a real waitlist write to Supabase later if wanted
