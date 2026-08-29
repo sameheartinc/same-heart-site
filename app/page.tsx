@@ -263,6 +263,40 @@ export default function Home() {
       {/* Plays a soft heartbeat chime on tap/click -- browsers only allow
           this because it's triggered by a real user gesture, not on load. */}
       <audio ref={chimeRef} src="/heartbeat.wav" preload="auto" />
+
+      <footer
+        style={{
+          position: "absolute",
+          bottom: "16px",
+          left: 0,
+          right: 0,
+          zIndex: 1,
+          display: "flex",
+          justifyContent: "center",
+          gap: "16px",
+        }}
+      >
+        {[
+          { href: "/privacy", label: "Privacy" },
+          { href: "/terms", label: "Terms" },
+          { href: "/contact", label: "Contact" },
+        ].map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            style={{
+              color: "var(--ink-faint, #5c6684)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "9px",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              textDecoration: "none",
+            }}
+          >
+            {link.label}
+          </Link>
+        ))}
+      </footer>
     </main>
   );
 }

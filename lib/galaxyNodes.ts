@@ -52,7 +52,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     href: "/shop",
     monogram: "S",
     name: "The Merch Ship",
-    tagline: "Not shop. Ship.",
+    tagline: "Shop > Ship",
     accent: "#7c9fd9",
     angleDeg: -25,
     radiusPct: 33,

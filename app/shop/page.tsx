@@ -63,7 +63,17 @@ export default function ShopPage() {
           <img
             src="/mark.png"
             alt="Same Heart"
-            style={{ width: "58%", height: "58%", objectFit: "contain" }}
+            style={{
+              width: "58%",
+              height: "58%",
+              objectFit: "contain",
+              // mark.png is a dark navy shape -- nearly invisible on its
+              // own against this same-toned circle, so give it the same
+              // gold glow treatment used for the logo everywhere else on
+              // the site (see the Galaxy page's core mark).
+              filter:
+                "drop-shadow(0 0 4px rgba(201,161,90,0.9)) drop-shadow(0 0 9px rgba(201,161,90,0.55))",
+            }}
           />
         </span>
         <h1
@@ -86,7 +96,7 @@ export default function ShopPage() {
             margin: "0 0 30px",
           }}
         >
-          Not shop. Ship.
+          Shop &gt; Ship
         </p>
 
         {loadingProducts ? null : !configured ? (
@@ -205,6 +215,29 @@ export default function ShopPage() {
         >
           &larr; Back to the Galaxy
         </Link>
+
+        <div style={{ marginTop: "40px", display: "flex", justifyContent: "center", gap: "16px" }}>
+          {[
+            { href: "/privacy", label: "Privacy" },
+            { href: "/terms", label: "Terms" },
+            { href: "/contact", label: "Contact" },
+          ].map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              style={{
+                color: "var(--ink-faint, #5c6684)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                textDecoration: "none",
+              }}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
       </div>
     </main>
   );
