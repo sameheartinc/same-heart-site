@@ -207,3 +207,14 @@ drop policy if exists "Signed-in users see news" on news_articles;
 create policy "Signed-in users see news" on news_articles for select using (auth.uid() is not null);
 
 notify pgrst, 'reload schema';
+
+-- Return-engagement streak (see lib/streak.ts, lib/standing.ts). Adds the
+-- three columns the Hub needs to track daily check-ins and turns Standing
+-- from a static default into something actually earned by XP. Safe to
+-- run more than once.
+
+alter table profiles add column if not exists current_streak integer default 0;
+alter table profiles add column if not exists longest_streak integer default 0;
+alter table profiles add column if not exists last_visit_date date;
+
+notify pgrst, 'reload schema';

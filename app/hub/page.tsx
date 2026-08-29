@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { SKINS, getSkin, type SkinKey } from "@/lib/skins";
 import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
+import { computeCheckIn, streakVisualTier, type StreakMilestone } from "@/lib/streak";
+import { getStanding } from "@/lib/standing";
 
 type Profile = {
   display_name: string | null;
@@ -19,6 +21,9 @@ type Profile = {
   ship_skin: string | null;
   path_key: string | null;
   spark_id: number | null;
+  current_streak: number;
+  longest_streak: number;
+  last_visit_date: string | null;
 };
 
 type LogEntry = {
@@ -45,6 +50,7 @@ export default function HubPage() {
   const [logDraft, setLogDraft] = useState("");
   const [logSaving, setLogSaving] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
+  const [milestone, setMilestone] = useState<StreakMilestone | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -57,7 +63,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date"
         )
         .eq("id", userData.user.id)
         .single();
@@ -80,13 +86,78 @@ export default function HubPage() {
         console.error("log_entries fetch failed:", logFetchError);
       }
 
+      let currentProfile = profileData as Profile;
+      let currentLog = (logData ?? []) as LogEntry[];
+
+      // The return-engagement check-in: once per calendar day, showing up
+      // to the Hub grows the streak, awards a little XP, and -- on real
+      // milestones -- shows a small, honest "you did this" moment. See
+      // lib/streak.ts for the actual rules.
+      const checkIn = computeCheckIn({
+        current_streak: currentProfile.current_streak ?? 0,
+        longest_streak: currentProfile.longest_streak ?? 0,
+        last_visit_date: currentProfile.last_visit_date ?? null,
+      });
+
+      if (checkIn.changed) {
+        const newXp = currentProfile.xp + checkIn.xpAwarded;
+        const newStanding = getStanding(newXp);
+        const description = checkIn.milestone
+          ? `Checked in -- day ${checkIn.streak.current_streak} streak. ${checkIn.milestone.label}.`
+          : `Checked in -- day ${checkIn.streak.current_streak} streak.`;
+
+        const { error: streakUpdateError } = await supabase
+          .from("profiles")
+          .update({
+            xp: newXp,
+            standing: newStanding,
+            current_streak: checkIn.streak.current_streak,
+            longest_streak: checkIn.streak.longest_streak,
+            last_visit_date: checkIn.streak.last_visit_date,
+          })
+          .eq("id", userData.user.id);
+
+        if (streakUpdateError) {
+          // Non-fatal -- worst case, today's check-in just doesn't stick
+          // and tries again next visit. Never block the Hub over this.
+          console.error("streak check-in update failed:", streakUpdateError);
+        } else {
+          currentProfile = {
+            ...currentProfile,
+            xp: newXp,
+            standing: newStanding,
+            current_streak: checkIn.streak.current_streak,
+            longest_streak: checkIn.streak.longest_streak,
+            last_visit_date: checkIn.streak.last_visit_date,
+          };
+
+          const { data: logEntry, error: logInsertError } = await supabase
+            .from("log_entries")
+            .insert({
+              profile_id: userData.user.id,
+              description,
+              category: "system",
+              xp_awarded: checkIn.xpAwarded,
+            })
+            .select("id, occurred_at, description, xp_awarded")
+            .single();
+          if (logInsertError) {
+            console.error("streak log_entries insert failed:", logInsertError);
+          } else if (logEntry) {
+            currentLog = [logEntry as LogEntry, ...currentLog];
+          }
+
+          setMilestone(checkIn.milestone);
+        }
+      }
+
       setUserId(userData.user.id);
-      setProfile(profileData as Profile);
-      setLog((logData ?? []) as LogEntry[]);
+      setProfile(currentProfile);
+      setLog(currentLog);
       setIsAnonymous(Boolean((userData.user as { is_anonymous?: boolean }).is_anonymous));
       // A fresh line every visit -- leans toward their archetype's own
       // lines when it has any, but never runs out either way.
-      setQuote(pickQuote((profileData as Profile).archetype));
+      setQuote(pickQuote(currentProfile.archetype));
       setLoading(false);
     })();
   }, [router]);
@@ -144,6 +215,7 @@ export default function HubPage() {
   const activeSkin = getSkin(profile.ship_skin);
   const path = profile.path_key ? PATHS[profile.path_key as PathKey] : null;
   const spark = sparkLabel(profile.spark_id);
+  const streakTier = streakVisualTier(profile.current_streak ?? 0);
 
   return (
     <main
@@ -171,8 +243,13 @@ export default function HubPage() {
         }
         .liftoff-btn { animation: liftPulse 2.6s ease-in-out infinite; }
         .liftoff-btn:hover { animation-play-state: paused; }
+        @keyframes streakPulse {
+          0%, 100% { box-shadow: 0 0 24px rgba(201,161,90,0.32); }
+          50% { box-shadow: 0 0 34px rgba(201,161,90,0.55); }
+        }
+        .streak-glow-pulse { animation: streakPulse 3.4s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
-          .hub-quote, .liftoff-btn { animation: none; }
+          .hub-quote, .liftoff-btn, .streak-glow-pulse { animation: none; }
         }
       `}</style>
 
@@ -194,6 +271,44 @@ export default function HubPage() {
           >
             &ldquo;{quote.text}&rdquo;
           </p>
+        )}
+
+        {milestone && (
+          <div
+            className="hub-quote"
+            style={{
+              background: "var(--panel)",
+              border: "1px solid var(--gold)",
+              borderRadius: "14px",
+              padding: "16px 20px",
+              marginBottom: "22px",
+              textAlign: "center",
+              boxShadow: "0 0 24px rgba(201,161,90,0.25)",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                color: "var(--gold)",
+              }}
+            >
+              Day {milestone.day} &middot; {milestone.label}
+            </p>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontFamily: "var(--font-body)",
+                fontStyle: "italic",
+                color: "var(--ink-dim)",
+                fontSize: "0.85rem",
+              }}
+            >
+              +{milestone.bonusXp} XP for showing up, day after day.
+            </p>
+          </div>
         )}
 
         {isAnonymous && (
@@ -301,11 +416,40 @@ export default function HubPage() {
               </p>
             )}
           </div>
-          <div style={{ textAlign: "center", padding: "12px 20px", border: "1px solid var(--border)", borderRadius: "12px" }}>
-            <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", color: "var(--gold)" }}>
-              {dayNumber}
+          <div style={{ display: "flex", gap: "10px" }}>
+            <div style={{ textAlign: "center", padding: "12px 20px", border: "1px solid var(--border)", borderRadius: "12px" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", color: "var(--gold)" }}>
+                {dayNumber}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)" }}>DAY</div>
             </div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)" }}>DAY</div>
+            <div
+              title={streakTier.label}
+              className={streakTier.glow >= 4 ? "streak-glow-pulse" : undefined}
+              style={{
+                textAlign: "center",
+                padding: "12px 20px",
+                border: `1px solid ${streakTier.glow > 0 ? "var(--gold)" : "var(--border)"}`,
+                borderRadius: "12px",
+                boxShadow:
+                  streakTier.glow > 0
+                    ? `0 0 ${6 * streakTier.glow}px rgba(201,161,90,${0.12 * streakTier.glow})`
+                    : "none",
+                transition: "box-shadow 0.6s ease, border-color 0.6s ease",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800,
+                  fontSize: "1.6rem",
+                  color: streakTier.glow > 0 ? "var(--gold)" : "var(--ink)",
+                }}
+              >
+                {profile.current_streak ?? 0}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)" }}>STREAK</div>
+            </div>
           </div>
         </div>
 

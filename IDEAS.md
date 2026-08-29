@@ -21,24 +21,37 @@ advice; likely similar restrictions in the US and elsewhere). Needs:
 
 Not actioned. Revisit when Rob wants to scope it out.
 
-## Return-engagement loop ("candy for a baby") -- near-term, buildable
+## Return-engagement loop ("candy for a baby") -- BUILT Aug 29, 2026
 
-Raised Aug 28, 2026, as part of a bigger long-term vision (see
-VISION.md). The concretely buildable piece: give people a real,
-evolving reason to come back to the Hub/Commons regularly, on top of
-the Standing/XP/Skins system that already exists. Rough shape, not
-built yet:
-- Daily/streak mechanic -- something that visibly evolves the longer
-  someone keeps showing up (a streak counter, a capsule/ship visual
-  that changes over time, a new quote or unlock tied to consistency)
-- Small, honest surprises rather than manipulative dark-pattern
-  notifications -- in keeping with the site's existing "we tell you
-  what's real vs not built yet" ethos
-- Could tie into: Skins unlocks, Commons contribution levels (already
-  noted as a deferred Commons-plan piece), the Wallet once it's built
+Raised Aug 28, 2026 as part of the bigger long-term vision (see
+VISION.md). Built out Aug 29, 2026: a real daily streak mechanic on the
+Hub, on top of the Standing/XP system (which existed as unused
+scaffolding until this -- `standing` never actually moved off its
+default before this).
 
-Good candidate for "what's next" once current deploy/Shopify/news work
-settles. Needs real scoping before building.
+What's live: `lib/streak.ts` (the check-in rules -- one count per UTC
+calendar day, streak resets if a day's missed) and `lib/standing.ts`
+(XP -> Standing tier, purely earned, never purchasable, per the Field
+Guide's own promise). app/hub/page.tsx calls the check-in once per Hub
+load: awards a flat 8 XP for showing up, plus one-time bonus XP at day
+3/7/14/30/60/100 (see MILESTONES in lib/streak.ts), and recomputes
+Standing from the new XP total. A small evolving "STREAK" counter box
+sits next to the existing "DAY" counter on the Hub, glowing brighter at
+each streak tier, and a one-time celebratory banner appears only on the
+exact visit a milestone is crossed -- not on every visit, per the
+"honest, not manipulative" rule from the original ask. Every check-in
+also drops a line in "Your log" so the XP isn't a mystery.
+
+Needs a Supabase migration to actually work -- see the bottom of
+supabase/schema.sql (three new columns on `profiles`:
+current_streak, longest_streak, last_visit_date) -- run once in the
+Supabase SQL Editor before this does anything live.
+
+Not yet built (future iteration, only if this proves people actually
+come back for it): tying streak milestones to unlocking new Skins
+(currently all three Skins are free-pick, no locking); Commons
+contribution levels; Wallet integration once the Wallet itself is
+built.
 
 ## Livestreaming via Muvi Live (future)
 
