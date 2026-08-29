@@ -39,3 +39,37 @@ built yet:
 
 Good candidate for "what's next" once current deploy/Shopify/news work
 settles. Needs real scoping before building.
+
+## Livestreaming via Muvi Live (future)
+
+Raised Aug 29, 2026. Rob wants to eventually offer livestreams through
+Muvi Live (live.muvi.com) -- noticed other creators/brands doing the
+same. Not scoped, not started.
+
+What Muvi Live actually is (per their own marketing, verified Aug 2026):
+a hosted live-streaming + VOD platform with built-in monetization
+(pay-per-view paywall, ad-based) and a 14-day free trial. Broadcasts
+from a camera, phone, or third-party encoder via RTMP/HLS; auto-records
+livestreams into replayable VOD. Integrates into an existing website via
+a copy-paste embed code (also has a WordPress plugin, and APIs/SDKs for
+custom dev).
+
+What Rob would actually need to make this real:
+- A Muvi Live account/subscription (trial first, then a paid plan --
+  pricing tiers weren't public on their marketing page, would need to
+  check directly with Muvi or start the trial)
+- Something to actually stream: a camera/phone, or streaming software
+  (e.g. OBS) if going the RTMP route from a computer
+- A decision on monetization shape -- free stream, pay-per-view single
+  events, or a paywalled series/subscription
+- The actual embed step: since sameheart.ca is a custom Next.js site
+  (not WordPress/Squarespace), this would mean dropping Muvi's embed
+  code/player into a real page component (e.g. a new `/live` route)
+  rather than using their WordPress plugin -- straightforward once he's
+  ready, just needs the actual embed snippet from his Muvi account
+- Content/schedule plan: what's actually being streamed, how often,
+  and how it ties into the rest of the Same Heart experience (Commons,
+  Signal, etc.)
+
+Not actioned. Revisit when Rob has a Muvi account and wants to build
+the embed page.

@@ -1,39 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
 import type { ShopifyProduct } from "@/lib/shopify";
 
 const ACCENT = "#7c9fd9";
 
 // The Merch Ship -- real products once Shopify is connected, an honest
-// "still docking" state if it isn't. Signed-in gated like every other
-// Galaxy destination. Fetches through /api/shop/products rather than
-// talking to Shopify directly, so the private access token never has to
-// leave the server.
+// "still docking" state if it isn't. Open to everyone (no sign-in
+// required) so a landing-page click or an outside link (ads, socials)
+// lands straight on real products instead of a login wall. Fetches
+// through /api/shop/products rather than talking to Shopify directly,
+// so the private access token never has to leave the server.
 export default function ShopPage() {
-  const router = useRouter();
-  const [checking, setChecking] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
   const [configured, setConfigured] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
-        router.replace("/login");
-        return;
-      }
-      setChecking(false);
-    })();
-  }, [router]);
-
-  useEffect(() => {
-    if (checking) return;
     (async () => {
       try {
         const res = await fetch("/api/shop/products");
@@ -47,9 +32,7 @@ export default function ShopPage() {
         setLoadingProducts(false);
       }
     })();
-  }, [checking]);
-
-  if (checking) return null;
+  }, []);
 
   return (
     <main
