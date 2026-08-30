@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ensureSession } from "@/lib/session";
 import { getTurnstileToken } from "@/lib/turnstile";
@@ -467,12 +468,14 @@ function LoginPageInner() {
               gap: "14px",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/mark.png"
-              alt="Same Heart"
-              style={{ width: "56px", height: "auto", margin: "0 auto 4px" }}
-            />
+            <Link href="/" style={{ display: "block", margin: "0 auto 4px", width: "56px" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/mark.png"
+                alt="Same Heart -- back to home"
+                style={{ width: "56px", height: "auto", cursor: "pointer" }}
+              />
+            </Link>
             <p
               style={{
                 fontFamily: "var(--font-display)",

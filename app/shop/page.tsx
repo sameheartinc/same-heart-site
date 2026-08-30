@@ -44,7 +44,8 @@ export default function ShopPage() {
       }}
     >
       <div style={{ maxWidth: "900px", margin: "0 auto", textAlign: "center" }}>
-        <span
+        <Link
+          href="/"
           style={{
             display: "inline-flex",
             width: "64px",
@@ -62,7 +63,7 @@ export default function ShopPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/mark.png"
-            alt="Same Heart"
+            alt="Same Heart -- back to home"
             style={{
               width: "58%",
               height: "58%",
@@ -75,7 +76,7 @@ export default function ShopPage() {
                 "drop-shadow(0 0 4px rgba(201,161,90,0.9)) drop-shadow(0 0 9px rgba(201,161,90,0.55))",
             }}
           />
-        </span>
+        </Link>
         <h1
           style={{
             fontFamily: "var(--font-display)",

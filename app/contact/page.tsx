@@ -19,12 +19,14 @@ export default function ContactPage() {
       }}
     >
       <div style={{ maxWidth: "520px", textAlign: "center" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/mark.png"
-          alt="Same Heart"
-          style={{ width: "56px", height: "auto", marginBottom: "22px" }}
-        />
+        <Link href="/" style={{ display: "inline-block" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mark.png"
+            alt="Same Heart -- back to home"
+            style={{ width: "56px", height: "auto", marginBottom: "22px", cursor: "pointer" }}
+          />
+        </Link>
 
         <h1
           style={{
