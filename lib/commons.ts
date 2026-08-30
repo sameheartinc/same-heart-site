@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { getStanding } from "@/lib/standing";
 
 // The Commons -- v1. This is the real, functional core of the much
 // bigger vision (see README): communities, discussions/questions, and
@@ -14,6 +15,7 @@ export interface PublicProfile {
   spark_id: number | null;
   path_key: string | null;
   ship_skin: string | null;
+  designation: string | null;
 }
 
 export interface Community {
@@ -57,7 +59,7 @@ export async function fetchProfilesByIds(ids: string[]): Promise<Record<string, 
   if (unique.length === 0) return {};
   const { data, error } = await supabase
     .from("public_profiles")
-    .select("id, display_name, spark_id, path_key, ship_skin")
+    .select("id, display_name, spark_id, path_key, ship_skin, designation")
     .in("id", unique);
   if (error || !data) return {};
   const map: Record<string, PublicProfile> = {};
@@ -273,5 +275,46 @@ export async function createReply(input: { threadId: string; profileId: string; 
   // update, since there's deliberately no general update policy on
   // commons_threads.
   await supabase.rpc("bump_thread_activity", { thread_id: input.threadId });
+
+  // A small Heartbeats reward for participating -- capped low and kept
+  // separate from the Exchange, so replying is real but modest next to
+  // actually transmitting genuine impact. Best-effort: never let this
+  // block the reply itself from posting.
+  try {
+    await awardReplyHeartbeats(input.profileId);
+  } catch (err) {
+    console.error("reply Heartbeats award failed:", err);
+  }
+
   return data as CommonsReply;
+}
+
+const REPLY_HEARTBEATS = 3;
+const DAILY_REPLY_HEARTBEATS_CAP = 15;
+
+async function awardReplyHeartbeats(profileId: string) {
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const { data: todaysLog } = await supabase
+    .from("log_entries")
+    .select("xp_awarded")
+    .eq("profile_id", profileId)
+    .eq("category", "commons")
+    .gte("occurred_at", startOfDay.toISOString());
+  const todaysTotal = (todaysLog ?? []).reduce((sum, r) => sum + (r.xp_awarded ?? 0), 0);
+  const award = Math.min(REPLY_HEARTBEATS, Math.max(0, DAILY_REPLY_HEARTBEATS_CAP - todaysTotal));
+  if (award <= 0) return;
+
+  const { data: profileRow } = await supabase.from("profiles").select("xp").eq("id", profileId).single();
+  const newXp = (profileRow?.xp ?? 0) + award;
+  await supabase
+    .from("profiles")
+    .update({ xp: newXp, standing: getStanding(newXp) })
+    .eq("id", profileId);
+  await supabase.from("log_entries").insert({
+    profile_id: profileId,
+    description: "Replied in the Commons.",
+    category: "commons",
+    xp_awarded: award,
+  });
 }

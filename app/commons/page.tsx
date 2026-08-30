@@ -21,6 +21,8 @@ import {
   type NewsArticle,
   type PublicProfile,
 } from "@/lib/commons";
+import { listRecentTransmissions, transmitLink, type Transmission } from "@/lib/exchange";
+import { getWorldIssue } from "@/lib/worldIssues";
 
 const SEEN_KEY = "commons-entrance-seen";
 const ACCENT = "#c9576a";
@@ -54,6 +56,16 @@ export default function CommonsPage() {
   const [newThreadBody, setNewThreadBody] = useState("");
   const [newThreadBusy, setNewThreadBusy] = useState(false);
   const [newThreadError, setNewThreadError] = useState<string | null>(null);
+
+  // The Exchange -- transmitting links, and the incoming feed of them.
+  const [transmissions, setTransmissions] = useState<Transmission[]>([]);
+  const [transmitUrl, setTransmitUrl] = useState("");
+  const [transmitBusy, setTransmitBusy] = useState(false);
+  const [transmitError, setTransmitError] = useState<string | null>(null);
+  const [transmitSuccess, setTransmitSuccess] = useState<{
+    heartbeats: number;
+    dailyCapReached: boolean;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -89,23 +101,26 @@ export default function CommonsPage() {
   }, [checking, stage]);
 
   const loadHome = useCallback(async () => {
-    const [statsData, communitiesData, live, questions, signalData] = await Promise.all([
+    const [statsData, communitiesData, live, questions, signalData, transmissionsData] = await Promise.all([
       fetchCommonsStats(),
       listCommunities(),
       listThreads({ limit: 6 }),
       listThreads({ kind: "question", limit: 6 }),
       fetchSignal(8),
+      listRecentTransmissions(12),
     ]);
     setStats(statsData);
     setCommunities(communitiesData);
     setLiveThreads(live);
     setQuestionThreads(questions);
     setSignal(signalData);
+    setTransmissions(transmissionsData);
 
     const ids = [
       ...communitiesData.map((c) => c.created_by),
       ...live.map((t) => t.profile_id),
       ...questions.map((t) => t.profile_id),
+      ...transmissionsData.map((t) => t.profile_id),
     ];
     setAuthors(await fetchProfilesByIds(ids));
   }, []);
@@ -179,6 +194,25 @@ export default function CommonsPage() {
       setNewThreadError("Couldn't post that -- try again in a moment.");
     } finally {
       setNewThreadBusy(false);
+    }
+  }
+
+  async function handleTransmit(e: React.FormEvent) {
+    e.preventDefault();
+    const url = transmitUrl.trim();
+    if (!url) return;
+    setTransmitBusy(true);
+    setTransmitError(null);
+    setTransmitSuccess(null);
+    try {
+      const result = await transmitLink(url);
+      setTransmissions((prev) => [result.transmission, ...prev].slice(0, 12));
+      setTransmitSuccess({ heartbeats: result.heartbeatsAwarded, dailyCapReached: result.dailyCapReached });
+      setTransmitUrl("");
+    } catch (err) {
+      setTransmitError(err instanceof Error ? err.message : "That transmission didn't go through.");
+    } finally {
+      setTransmitBusy(false);
     }
   }
 
@@ -411,6 +445,205 @@ export default function CommonsPage() {
           <StatCard label="Active conversations" value={stats.activeConversations} sub="last 24h" />
           <StatCard label="Communities" value={stats.communitiesActive} sub="" />
           <StatCard label="Projects" value="Not open yet" sub="" muted />
+        </div>
+
+        {/* The Exchange -- transmit a link, get it weighed against real
+            global issues, earn Heartbeats for genuine impact. See
+            lib/exchange.ts / app/api/exchange/transmit/route.ts. */}
+        <div
+          style={{
+            background: "linear-gradient(180deg, rgba(124,159,217,0.06), transparent)",
+            border: "1px solid rgba(124,159,217,0.35)",
+            borderRadius: "16px",
+            padding: "22px",
+            marginBottom: "34px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "10px",
+              marginBottom: "14px",
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  color: "#7c9fd9",
+                }}
+              >
+                Comms Deck &middot; The Exchange
+              </p>
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontFamily: "var(--font-body)",
+                  fontStyle: "italic",
+                  color: "var(--ink-dim)",
+                  fontSize: "0.85rem",
+                }}
+              >
+                Dial in what actually matters. Transmit a link -- an article, a video, a
+                thread -- and it&rsquo;s weighed against the world&rsquo;s real problems.
+              </p>
+            </div>
+            <Link
+              href="/commons/roster"
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "#7c9fd9",
+                textDecoration: "none",
+                border: "1px solid rgba(124,159,217,0.5)",
+                borderRadius: "999px",
+                padding: "8px 14px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              View the Roster &rarr;
+            </Link>
+          </div>
+
+          <form
+            onSubmit={handleTransmit}
+            style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "14px" }}
+          >
+            <input
+              value={transmitUrl}
+              onChange={(e) => setTransmitUrl(e.target.value)}
+              placeholder="Paste a link to transmit..."
+              type="url"
+              required
+              style={{
+                flex: "1 1 240px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                border: "1px solid rgba(124,159,217,0.4)",
+                background: "var(--panel)",
+                color: "var(--ink)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.85rem",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={transmitBusy}
+              style={{
+                padding: "12px 20px",
+                borderRadius: "10px",
+                border: "1px solid #7c9fd9",
+                background: "rgba(124,159,217,0.12)",
+                color: "#7c9fd9",
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "0.8rem",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                cursor: transmitBusy ? "default" : "pointer",
+                opacity: transmitBusy ? 0.6 : 1,
+              }}
+            >
+              {transmitBusy ? "Scanning..." : "Transmit"}
+            </button>
+          </form>
+
+          {transmitError && (
+            <p
+              style={{
+                margin: "0 0 14px",
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px",
+                color: "var(--rose)",
+              }}
+            >
+              {transmitError}
+            </p>
+          )}
+          {transmitSuccess && (
+            <p
+              style={{
+                margin: "0 0 14px",
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px",
+                color: "#7c9fd9",
+              }}
+            >
+              +{transmitSuccess.heartbeats} Heartbeats received.
+              {transmitSuccess.dailyCapReached && " You've hit today's Exchange ceiling -- more tomorrow."}
+            </p>
+          )}
+
+          {/* Incoming transmissions -- other ships' signals, most recent
+              first. Deliberately styled like a comms log, not a social
+              feed. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {transmissions.length === 0 ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  color: "var(--ink-faint, #5c6684)",
+                }}
+              >
+                No transmissions yet. Be the first ship to send one.
+              </p>
+            ) : (
+              transmissions.slice(0, 6).map((t) => {
+                const sender = authors[t.profile_id];
+                const shipId = sender?.designation || sender?.display_name || "Unknown ship";
+                const issue = getWorldIssue(t.issue_key);
+                return (
+                  <div
+                    key={t.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: "10px",
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      background: "rgba(124,159,217,0.05)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "11px",
+                    }}
+                  >
+                    <span style={{ color: "#7c9fd9", flexShrink: 0 }}>&#9679;</span>
+                    <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{shipId}</span>
+                    <a
+                      href={t.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        color: "var(--ink-dim)",
+                        textDecoration: "none",
+                        flex: 1,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={t.title ?? t.url}
+                    >
+                      {t.title ?? t.domain ?? t.url}
+                    </a>
+                    {issue && (
+                      <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{issue.label}</span>
+                    )}
+                    <span style={{ color: "var(--gold)", flexShrink: 0 }}>+{t.heartbeats_awarded}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         <form

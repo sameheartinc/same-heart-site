@@ -155,22 +155,37 @@ export default function GuidePage() {
           it. It's just proof of when you showed up, nothing more.
         </Section>
 
-        <Section title="Standing & XP">
-          Both show up in your Hub already. Being straightforward about
-          where things actually stand: the specific actions that grow
-          them are still being built, so right now they mostly just
-          exist, waiting for that to catch up. Once real ways to earn XP
-          exist, this section gets rewritten with the specifics --
-          nothing here is final, and nothing about money will ever change
-          your Standing. Money can buy expression -- a skin, a piece of
-          merch -- never standing.
+        <Section title="Standing & Heartbeats">
+          Heartbeats are what you actually earn here -- shown next to
+          your Standing in the Hub. Three real ways to earn them today:
+          showing up (the Hub tracks a daily streak, with real milestones
+          at day 3, 7, 14, 30, 60, and 100), replying in the Commons (a
+          small amount, capped low each day), and the Exchange --
+          transmitting a real link into the Commons, which gets weighed
+          against the world's actual problems and rewarded by genuine
+          impact, not just by posting. Standing (Listener, Signal,
+          Beacon, Constant, Same Heart) is purely a function of total
+          Heartbeats earned. Nothing about money will ever change it --
+          money can buy expression, a skin, a piece of merch -- never
+          Standing.
         </Section>
 
         <Section title="Skins">
           Purely how your Hub looks to you. Switching skins never touches
-          Standing, XP, or anything else about your account -- it's the
-          one thing here that's entirely, harmlessly yours to change as
-          often as you want.
+          Standing, Heartbeats, or anything else about your account --
+          it's the one thing here that's entirely, harmlessly yours to
+          change as often as you want.
+        </Section>
+
+        <Section title="The Exchange & the Roster">
+          The Exchange lives in the Commons: paste in a link -- an
+          article, a video, a thread, anything -- and it gets read and
+          weighed against a fixed list of real global issues (conflict,
+          climate, public health, and others), then rewarded with
+          Heartbeats based on genuine impact, not just for posting. It's
+          deliberately hard to max out in a single day. The Roster, also
+          in the Commons, shows everyone ranked by Heartbeats -- the one
+          leaderboard here that money could never buy a spot on.
         </Section>
 
         <Section title="Your log">
