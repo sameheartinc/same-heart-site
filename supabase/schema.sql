@@ -255,3 +255,28 @@ drop policy if exists "Users log their own guide messages" on guide_messages;
 create policy "Users log their own guide messages" on guide_messages for insert with check (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';
+
+-- Keys, the first real piece of the Keys and Doors design further up in
+-- this plan. A key is a small, permanent achievement earned from activity
+-- that already exists elsewhere on the site -- never spent, never lost,
+-- and never granted by the client. profile_keys has no insert/update
+-- policy on purpose: the only writer is the service-role client inside
+-- app/api/keys/evaluate/route.ts, which recomputes eligibility itself
+-- from data it already trusts (e.g. exchange_transmissions, which only
+-- the Exchange's own server route ever writes) rather than believing
+-- anything a request claims. Safe to run more than once.
+
+create table if not exists profile_keys (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  key_color text not null,
+  earned_at timestamptz default now(),
+  unique (profile_id, key_color)
+);
+
+alter table profile_keys enable row level security;
+
+drop policy if exists "Users see their own keys" on profile_keys;
+create policy "Users see their own keys" on profile_keys for select using (auth.uid() = profile_id);
+
+notify pgrst, 'reload schema';

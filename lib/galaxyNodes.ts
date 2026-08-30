@@ -22,6 +22,10 @@ export interface GalaxyNode {
   radiusPct: number;
   scale: number;
   dim?: boolean;
+  // True for a node whose href leaves the site entirely (e.g. an outside
+  // donation page) -- tells the Galaxy page to open it in a new tab
+  // instead of navigating away from Same Heart.
+  external?: boolean;
 }
 
 export const GALAXY_NODES: GalaxyNode[] = [
@@ -80,5 +84,23 @@ export const GALAXY_NODES: GalaxyNode[] = [
     radiusPct: 57,
     scale: 0.58,
     dim: true,
+  },
+  {
+    // A real, working destination, not a "coming soon" placeholder --
+    // deliberately sized modestly (smaller than Commons/Shop, not dimmed
+    // like Field Guide) so it reads as present but not asking for
+    // anything. Sits in the widest open gap on the ring, between Field
+    // Guide and the Wallet. Links straight out to an existing Buy Me a
+    // Coffee page -- no payment code runs on Same Heart itself.
+    key: "hearth",
+    href: "https://buymeacoffee.com/robcmunro",
+    external: true,
+    monogram: "♥",
+    name: "The Hearth",
+    tagline: "Keep it running",
+    accent: "#ff6f91",
+    angleDeg: 95,
+    radiusPct: 44,
+    scale: 0.85,
   },
 ];

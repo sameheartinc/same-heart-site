@@ -7,13 +7,26 @@
 // a skin is just: put these values on a wrapping element, and everything
 // inside repaints automatically. No component needs to know skins exist.
 //
-// To add a new skin later: copy one entry, change the key, name, blurb,
-// and the seven hex values. Nothing else in the app needs to change.
+// To add a new plain palette skin later: copy one entry, change the key,
+// name, blurb, and the seven hex values. Nothing else in the app needs to
+// change.
+//
+// `kind` is the seam for a second, richer sort of skin: "artwork" skins
+// carry a real image (`image`, a path under /public) and an attribution
+// line (`credit`) alongside the usual palette, so a piece of real art can
+// stand behind the Hub instead of just a gradient. Every existing skin is
+// `kind: "palette"` with no image, so this is purely additive -- nothing
+// about how they render changes. `image`/`credit` are curated here, not
+// user-uploaded, on purpose: no upload flow, no moderation surface, no new
+// privacy question to answer for a purely cosmetic feature.
 
 export type SkinKey = "cosmic-gold" | "earth-tones" | "pastel-dream";
 
+export type SkinKind = "palette" | "artwork";
+
 export type Skin = {
   key: SkinKey;
+  kind: SkinKind;
   name: string;
   blurb: string;
   vars: {
@@ -26,11 +39,14 @@ export type Skin = {
     "--rose": string;
     "--border": string;
   };
+  image?: string;
+  credit?: string;
 };
 
 export const SKINS: Skin[] = [
   {
     key: "cosmic-gold",
+    kind: "palette",
     name: "Cosmic Gold",
     blurb: "Deep space, warm metal. The original signal.",
     vars: {
@@ -46,6 +62,7 @@ export const SKINS: Skin[] = [
   },
   {
     key: "earth-tones",
+    kind: "palette",
     name: "Earth Tones",
     blurb: "Clay, umber, and sun. Grounded and warm.",
     vars: {
@@ -61,6 +78,7 @@ export const SKINS: Skin[] = [
   },
   {
     key: "pastel-dream",
+    kind: "palette",
     name: "Pastel Dream",
     blurb: "Soft light, quiet color. Same signal, softer voice.",
     vars: {

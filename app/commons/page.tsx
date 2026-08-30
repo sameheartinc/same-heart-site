@@ -544,11 +544,11 @@ export default function CommonsPage() {
             <input
               value={transmitUrl}
               onChange={(e) => setTransmitUrl(e.target.value)}
-              placeholder="Paste a link to transmit..."
+              placeholder="Drop an X, YouTube, Facebook, or other link -- https://example.com"
               type="url"
               required
               style={{
-                flex: "1 1 240px",
+                flex: "2 1 320px",
                 padding: "12px 14px",
                 borderRadius: "10px",
                 border: "1px solid rgba(124,159,217,0.4)",
@@ -561,11 +561,11 @@ export default function CommonsPage() {
             <input
               value={transmitTagline}
               onChange={(e) => setTransmitTagline(e.target.value)}
-              placeholder="Add a bold tagline (optional)"
+              placeholder="Bold tagline (optional)"
               type="text"
               maxLength={80}
               style={{
-                flex: "1 1 200px",
+                flex: "1 1 160px",
                 padding: "12px 14px",
                 borderRadius: "10px",
                 border: "1px solid rgba(124,159,217,0.4)",

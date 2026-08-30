@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { SKINS, getSkin, type SkinKey } from "@/lib/skins";
+import { listMyKeys, evaluateKeys, KEY_INFO, type ProfileKey } from "@/lib/keys";
 import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
 import { computeCheckIn, streakVisualTier, type StreakMilestone } from "@/lib/streak";
@@ -51,6 +52,7 @@ export default function HubPage() {
   const [logSaving, setLogSaving] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const [milestone, setMilestone] = useState<StreakMilestone | null>(null);
+  const [keys, setKeys] = useState<ProfileKey[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -151,14 +153,25 @@ export default function HubPage() {
         }
       }
 
+      const myKeys = await listMyKeys();
+
       setUserId(userData.user.id);
       setProfile(currentProfile);
       setLog(currentLog);
+      setKeys(myKeys);
       setIsAnonymous(Boolean((userData.user as { is_anonymous?: boolean }).is_anonymous));
       // A fresh line every visit -- leans toward their archetype's own
       // lines when it has any, but never runs out either way.
       setQuote(pickQuote(currentProfile.archetype));
       setLoading(false);
+
+      // Quiet background check for anything newly earned -- never blocks
+      // the Hub, and a no-op almost every visit.
+      evaluateKeys().then((result) => {
+        if (result.newlyEarned.length > 0) {
+          listMyKeys().then(setKeys);
+        }
+      });
     })();
   }, [router]);
 
@@ -213,6 +226,12 @@ export default function HubPage() {
   );
 
   const activeSkin = getSkin(profile.ship_skin);
+  // Palette skins (all of them today) render exactly as before -- plain
+  // var(--void). An "artwork" skin additionally carries a real image, laid
+  // under a dark scrim so the same text/contrast rules still hold.
+  const heroBackground = activeSkin.image
+    ? `linear-gradient(rgba(5,7,13,0.74), rgba(5,7,13,0.74)), url(${activeSkin.image}) center / cover fixed no-repeat`
+    : "var(--void)";
   const path = profile.path_key ? PATHS[profile.path_key as PathKey] : null;
   const spark = sparkLabel(profile.spark_id);
   const streakTier = streakVisualTier(profile.current_streak ?? 0);
@@ -221,7 +240,7 @@ export default function HubPage() {
     <main
       style={{
         minHeight: "100vh",
-        background: "var(--void)",
+        background: heroBackground,
         padding: "40px 22px",
         color: "var(--ink)",
         transition: "background 0.5s ease, color 0.5s ease",
@@ -483,7 +502,7 @@ export default function HubPage() {
                 <button
                   key={s.key}
                   type="button"
-                  title={s.name}
+                  title={s.credit ? `${s.name} -- ${s.credit}` : s.name}
                   aria-label={s.name}
                   aria-pressed={isActive}
                   onClick={() => chooseSkin(s.key)}
@@ -493,7 +512,9 @@ export default function HubPage() {
                     borderRadius: "50%",
                     cursor: isActive ? "default" : "pointer",
                     padding: 0,
-                    background: `linear-gradient(135deg, ${s.vars["--void"]} 50%, ${s.vars["--gold"]} 50%)`,
+                    background: s.image
+                      ? `url(${s.image}) center / cover`
+                      : `linear-gradient(135deg, ${s.vars["--void"]} 50%, ${s.vars["--gold"]} 50%)`,
                     border: isActive ? `2px solid ${s.vars["--gold"]}` : "2px solid transparent",
                     boxShadow: isActive ? `0 0 0 2px var(--void), 0 0 0 3px ${s.vars["--gold"]}66` : "none",
                     transition: "box-shadow 0.2s ease, transform 0.15s ease",
@@ -515,6 +536,54 @@ export default function HubPage() {
             saving&hellip;
           </span>
         </div>
+
+        {/* Keys -- silent until you've actually earned one. Nothing to
+            configure, nothing to nag about; it just appears the first
+            time it's real. See lib/keys.ts and PLAN.md. */}
+        {keys.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginBottom: "22px",
+              padding: "0 4px",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--ink-faint)",
+              }}
+            >
+              Keys
+            </span>
+            <div style={{ display: "flex", gap: "8px" }}>
+              {keys.map((k) => {
+                const info = KEY_INFO[k.key_color];
+                if (!info) return null;
+                return (
+                  <span
+                    key={k.key_color}
+                    title={`${info.name} -- ${info.blurb}`}
+                    style={{
+                      width: "14px",
+                      height: "14px",
+                      borderRadius: "50%",
+                      background: info.accent,
+                      boxShadow: `0 0 8px ${info.accent}99`,
+                      display: "inline-block",
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Lift Off -- the way out of the capsule and into the Galaxy. */}
         <button
