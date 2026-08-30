@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import PageLoading from "@/components/PageLoading";
 import CommonsSphere from "@/components/CommonsSphere";
+import CommonsGuide from "@/components/CommonsGuide";
 import {
   authorName,
   createCommunity,
@@ -926,14 +927,17 @@ export default function CommonsPage() {
           What's here now: real communities, real discussions and
           questions, real replies, a live presence count, and The Signal
           -- real headlines, refreshed hourly from real sources -- all
-          backed by the database, nothing simulated. What's not built
-          yet: live group chat, AI-assisted analysis and the Commons
-          Guide, Projects, Exchange impact-tracking, and the full 3D
+          backed by the database, nothing simulated. The Commons Guide
+          (bottom right) is a real, live AI chat too now. What's not
+          built yet: live group chat, deeper AI-assisted analysis,
+          Projects, Exchange impact-tracking, and the full 3D
           scanned-room experience from the original vision. Those are
           real, tracked next phases -- not forgotten, just not here
           today.
         </p>
       </div>
+
+      <CommonsGuide />
     </main>
   );
 }

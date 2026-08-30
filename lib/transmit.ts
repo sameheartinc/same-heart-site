@@ -10,7 +10,7 @@
 // available, or if anything about audio throws -- this is a nice-to-have,
 // never something that should block the actual submit.
 
-export const TRANSMIT_DURATION_MS = 1100;
+export const TRANSMIT_DURATION_MS = 1200;
 
 export function playTransmitSound(): void {
   try {
@@ -47,22 +47,33 @@ export function playTransmitSound(): void {
     noise.start(now);
     noise.stop(now + noiseDuration);
 
-    // --- Signal lock (~0.25s - ~0.75s): a tone sweeping up and settling. ---
-    const toneStart = now + 0.22;
+    // --- Signal lock (~0.3s onward): a tone settling in, not sweeping or
+    // plucking. A small, slow rise (a third of a semitone-heavy octave,
+    // not two full octaves) plus a soft attack and a long, gentle decay
+    // keep this feeling like a signal settling in, not a "blip"/droplet
+    // pluck -- that quick, wide pitch-jump-plus-fast-decay combination is
+    // exactly what reads as a water droplet, so it's deliberately avoided
+    // here. A triangle wave (instead of a pure sine) through a lowpass
+    // filter gives it a little body/warmth without adding brightness.
+    const toneStart = now + 0.3;
     const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(220, toneStart);
-    osc.frequency.exponentialRampToValueAtTime(880, toneStart + 0.35);
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(340, toneStart);
+    osc.frequency.linearRampToValueAtTime(430, toneStart + 0.5);
+
+    const toneFilter = ctx.createBiquadFilter();
+    toneFilter.type = "lowpass";
+    toneFilter.frequency.value = 1100;
 
     const oscGain = ctx.createGain();
     oscGain.gain.setValueAtTime(0, toneStart);
-    oscGain.gain.linearRampToValueAtTime(0.14, toneStart + 0.08);
-    oscGain.gain.setValueAtTime(0.14, toneStart + 0.3);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, toneStart + 0.55);
+    oscGain.gain.linearRampToValueAtTime(0.08, toneStart + 0.18);
+    oscGain.gain.setValueAtTime(0.08, toneStart + 0.45);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, toneStart + 0.85);
 
-    osc.connect(oscGain).connect(ctx.destination);
+    osc.connect(toneFilter).connect(oscGain).connect(ctx.destination);
     osc.start(toneStart);
-    osc.stop(toneStart + 0.6);
+    osc.stop(toneStart + 0.9);
 
     // Tear the context down once everything's finished playing -- most
     // browsers cap how many AudioContexts can be alive at once.

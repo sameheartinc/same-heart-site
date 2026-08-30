@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { ensureSession } from "@/lib/session";
+import { getTurnstileToken } from "@/lib/turnstile";
 import { usePathSignal } from "@/lib/cursorSignal";
 import { AxisScores, PathKey, PATHS, combineScores, pickPath } from "@/lib/paths";
 import { ONBOARDING_WORLD, WORLDS } from "@/lib/worlds";
@@ -58,6 +59,32 @@ function LoginPageInner() {
     })();
   }, [claimMode, router]);
 
+  // Google (and any future OAuth provider) redirects back here with
+  // ?oauth=1. supabase-js parses the returned token and establishes the
+  // session itself; this just waits for that to land and then routes the
+  // same way any other sign-in does, instead of leaving the gate showing.
+  useEffect(() => {
+    if (searchParams.get("oauth") !== "1") return;
+    setStage("entering");
+    let cancelled = false;
+    (async () => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (data.session) {
+          setUserId(data.session.user.id);
+          await continueAfterEntry(data.session.user.id);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      if (!cancelled) setStage("gate");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
+
   async function continueAfterEntry(existingUserId: string) {
     const { data: profileData } = await supabase
       .from("profiles")
@@ -75,6 +102,15 @@ function LoginPageInner() {
     // Signed in (or already had a session) but never finished the
     // founding sequence -- pick up right where that left off.
     setStage("quiz");
+  }
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/login?oauth=1` },
+    });
+    if (error) setError(error.message);
   }
 
   async function openGate() {
@@ -144,10 +180,20 @@ function LoginPageInner() {
       return;
     }
 
+    // Same invisible Turnstile check lib/session.ts already uses for
+    // anonymous entry -- this covers the explicit email/password path too,
+    // which never had a token before. Supabase ignores a missing/null
+    // token when CAPTCHA protection isn't turned on yet, so this is safe
+    // to ship ahead of flipping that setting on.
+    const captchaToken = await getTurnstileToken();
     const result =
       mode === "signup"
-        ? await supabase.auth.signUp({ email, password })
-        : await supabase.auth.signInWithPassword({ email, password });
+        ? await supabase.auth.signUp({ email, password, options: captchaToken ? { captchaToken } : undefined })
+        : await supabase.auth.signInWithPassword({
+            email,
+            password,
+            options: captchaToken ? { captchaToken } : undefined,
+          });
 
     setLoading(false);
 
@@ -445,6 +491,29 @@ function LoginPageInner() {
               </p>
             )}
 
+            {!claimMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  style={googleButtonStyle}
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+                    <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.85.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
+                    <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z" />
+                    <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+                  </svg>
+                  Continue with Google
+                </button>
+                <div style={dividerStyle}>
+                  <span style={dividerLineStyle} />
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", letterSpacing: "0.08em", color: "var(--ink-faint)" }}>OR</span>
+                  <span style={dividerLineStyle} />
+                </div>
+              </>
+            )}
+
             <input
               type="email"
               required
@@ -538,4 +607,33 @@ const buttonStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
   marginTop: "6px",
+};
+
+const googleButtonStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "10px",
+  background: "var(--panel)",
+  border: "1px solid var(--border)",
+  borderRadius: "10px",
+  padding: "11px 14px",
+  color: "var(--ink)",
+  fontFamily: "var(--font-body)",
+  fontSize: "0.92rem",
+  fontWeight: 500,
+  cursor: "pointer",
+};
+
+const dividerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  margin: "2px 0",
+};
+
+const dividerLineStyle: React.CSSProperties = {
+  flex: 1,
+  height: "1px",
+  background: "var(--border)",
 };
