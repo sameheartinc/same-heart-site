@@ -137,15 +137,31 @@ export async function POST(request: NextRequest) {
   const profileId = userData.user.id;
 
   let url: string;
+  let tagline: string | null = null;
   try {
     const body = await request.json();
     url = String(body.url || "").trim();
+    if (typeof body.tagline === "string") {
+      // A single-line "bold pitch" the sender writes themselves -- not
+      // part of the AI scoring, just flavor text shown with the link.
+      // Collapse any newlines/tabs since the feed renders it on one line.
+      const cleaned = body.tagline.replace(/[\r\n\t]+/g, " ").trim();
+      if (cleaned.length > 0) tagline = cleaned;
+    }
   } catch {
     return NextResponse.json({ error: "Couldn't read that request." }, { status: 400 });
   }
 
   if (!/^https?:\/\/.+/i.test(url) || url.length > 2000) {
     return NextResponse.json({ error: "That doesn't look like a real link." }, { status: 400 });
+  }
+
+  const MAX_TAGLINE_LENGTH = 80;
+  if (tagline && tagline.length > MAX_TAGLINE_LENGTH) {
+    return NextResponse.json(
+      { error: `Keep your tagline under ${MAX_TAGLINE_LENGTH} characters.` },
+      { status: 400 }
+    );
   }
 
   let domain: string;
@@ -223,6 +239,7 @@ export async function POST(request: NextRequest) {
       impact_score: scored.impactScore,
       reasoning: scored.reasoning,
       heartbeats_awarded: heartbeatsAwarded,
+      tagline,
     })
     .select("*")
     .single();

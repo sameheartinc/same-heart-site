@@ -28,6 +28,26 @@ import { getWorldIssue } from "@/lib/worldIssues";
 const SEEN_KEY = "commons-entrance-seen";
 const ACCENT = "#c9576a";
 
+// Bright colors a submitted tagline can render in -- picked fresh (not
+// stored) every time a transmission renders, so the same tagline can show
+// up in a different color on a later render/reload. Chosen to read clearly
+// against the dark Commons background.
+const TAGLINE_COLORS = [
+  "#ff5f6d",
+  "#ffd166",
+  "#06d6a0",
+  "#4cc9f0",
+  "#c77dff",
+  "#ff70a6",
+  "#f72585",
+  "#7bf1a8",
+  "#ff9f1c",
+];
+
+function randomTaglineColor(): string {
+  return TAGLINE_COLORS[Math.floor(Math.random() * TAGLINE_COLORS.length)];
+}
+
 export default function CommonsPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
@@ -61,6 +81,7 @@ export default function CommonsPage() {
   // The Exchange -- transmitting links, and the incoming feed of them.
   const [transmissions, setTransmissions] = useState<Transmission[]>([]);
   const [transmitUrl, setTransmitUrl] = useState("");
+  const [transmitTagline, setTransmitTagline] = useState("");
   const [transmitBusy, setTransmitBusy] = useState(false);
   const [transmitError, setTransmitError] = useState<string | null>(null);
   const [transmitSuccess, setTransmitSuccess] = useState<{
@@ -206,10 +227,11 @@ export default function CommonsPage() {
     setTransmitError(null);
     setTransmitSuccess(null);
     try {
-      const result = await transmitLink(url);
+      const result = await transmitLink(url, transmitTagline);
       setTransmissions((prev) => [result.transmission, ...prev].slice(0, 12));
       setTransmitSuccess({ heartbeats: result.heartbeatsAwarded, dailyCapReached: result.dailyCapReached });
       setTransmitUrl("");
+      setTransmitTagline("");
     } catch (err) {
       setTransmitError(err instanceof Error ? err.message : "That transmission didn't go through.");
     } finally {
@@ -536,6 +558,24 @@ export default function CommonsPage() {
                 fontSize: "0.85rem",
               }}
             />
+            <input
+              value={transmitTagline}
+              onChange={(e) => setTransmitTagline(e.target.value)}
+              placeholder="Add a bold tagline (optional)"
+              type="text"
+              maxLength={80}
+              style={{
+                flex: "1 1 200px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                border: "1px solid rgba(124,159,217,0.4)",
+                background: "var(--panel)",
+                color: "var(--ink)",
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+              }}
+            />
             <button
               type="submit"
               disabled={transmitBusy}
@@ -609,8 +649,8 @@ export default function CommonsPage() {
                     key={t.id}
                     style={{
                       display: "flex",
-                      alignItems: "baseline",
-                      gap: "10px",
+                      flexDirection: "column",
+                      gap: "4px",
                       padding: "8px 10px",
                       borderRadius: "8px",
                       background: "rgba(124,159,217,0.05)",
@@ -618,28 +658,43 @@ export default function CommonsPage() {
                       fontSize: "11px",
                     }}
                   >
-                    <span style={{ color: "#7c9fd9", flexShrink: 0 }}>&#9679;</span>
-                    <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{shipId}</span>
-                    <a
-                      href={t.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        color: "var(--ink-dim)",
-                        textDecoration: "none",
-                        flex: 1,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                      title={t.title ?? t.url}
-                    >
-                      {t.title ?? t.domain ?? t.url}
-                    </a>
-                    {issue && (
-                      <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{issue.label}</span>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+                      <span style={{ color: "#7c9fd9", flexShrink: 0 }}>&#9679;</span>
+                      <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{shipId}</span>
+                      <a
+                        href={t.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: "var(--ink-dim)",
+                          textDecoration: "none",
+                          flex: 1,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={t.title ?? t.url}
+                      >
+                        {t.title ?? t.domain ?? t.url}
+                      </a>
+                      {issue && (
+                        <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{issue.label}</span>
+                      )}
+                      <span style={{ color: "var(--gold)", flexShrink: 0 }}>+{t.heartbeats_awarded}</span>
+                    </div>
+                    {t.tagline && (
+                      <div
+                        style={{
+                          paddingLeft: "20px",
+                          fontFamily: "var(--font-display)",
+                          fontWeight: 700,
+                          fontSize: "12px",
+                          color: randomTaglineColor(),
+                        }}
+                      >
+                        {t.tagline}
+                      </div>
                     )}
-                    <span style={{ color: "var(--gold)", flexShrink: 0 }}>+{t.heartbeats_awarded}</span>
                   </div>
                 );
               })

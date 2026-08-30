@@ -19,6 +19,7 @@ export interface Transmission {
   impact_score: number | null;
   reasoning: string | null;
   heartbeats_awarded: number;
+  tagline: string | null;
   created_at: string;
 }
 
@@ -62,14 +63,19 @@ export async function listRoster(limit = 50): Promise<RankedProfile[]> {
   return data as RankedProfile[];
 }
 
-// Posts a link to the scoring route. Throws with a human-readable
-// message on failure (bad URL, daily cap, network) -- callers should
-// catch and show `error.message` directly, it's already written for a
-// person to read.
-export async function transmitLink(url: string): Promise<TransmitResult> {
+// Posts a link to the scoring route. `tagline` is an optional short,
+// bold one-liner the person is adding themselves (their own pitch for the
+// link, not part of the AI scoring) -- trimmed here, capped and validated
+// again server-side since this is a client helper, not a trust boundary.
+// Throws with a human-readable message on failure (bad URL, daily cap,
+// network) -- callers should catch and show `error.message` directly,
+// it's already written for a person to read.
+export async function transmitLink(url: string, tagline?: string): Promise<TransmitResult> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("You need to be signed in to transmit.");
+
+  const trimmedTagline = tagline?.trim();
 
   const res = await fetch("/api/exchange/transmit", {
     method: "POST",
@@ -77,7 +83,7 @@ export async function transmitLink(url: string): Promise<TransmitResult> {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, tagline: trimmedTagline || undefined }),
   });
 
   const json = await res.json().catch(() => ({}));

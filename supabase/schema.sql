@@ -226,6 +226,20 @@ notify pgrst, 'reload schema';
 -- runaway script (or an enthusiastic human) can't blow through the
 -- Gemini API budget. Safe to run more than once.
 
+-- The Exchange: an optional bold tagline someone can add to their own
+-- transmission -- their own one-line pitch for the link, shown in a
+-- randomly-picked bright color every time it renders in the feed (see
+-- lib/exchange.ts, app/api/exchange/transmit/route.ts, app/commons/page.tsx).
+-- Deliberately nullable and short -- this is flavor text, not a second body,
+-- and length is enforced server-side in the transmit route. Note:
+-- exchange_transmissions and public_rankings already exist live in your
+-- Supabase project but were never added to this file -- a pre-existing gap,
+-- not something this line causes. This alter is safe to run against the
+-- table as it actually exists, and safe to run more than once.
+alter table exchange_transmissions add column if not exists tagline text;
+
+notify pgrst, 'reload schema';
+
 create table if not exists guide_messages (
   id uuid default gen_random_uuid() primary key,
   profile_id uuid references profiles(id) on delete cascade,
