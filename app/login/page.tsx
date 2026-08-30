@@ -329,6 +329,28 @@ function LoginPageInner() {
             >
               Touch the mark to arrive
             </p>
+            {stage === "gate" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signin");
+                  setStage("form");
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--ink-faint)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  letterSpacing: "0.08em",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  marginTop: "-8px",
+                }}
+              >
+                Already have an account? Sign in
+              </button>
+            )}
           </div>
         )}
 
