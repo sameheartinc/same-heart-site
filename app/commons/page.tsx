@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { getSkin } from "@/lib/skins";
 import PageLoading from "@/components/PageLoading";
 import CommonsSphere from "@/components/CommonsSphere";
 import CommonsGuide from "@/components/CommonsGuide";
@@ -16,6 +17,7 @@ import {
   fetchSignal,
   listCommunities,
   listThreads,
+  recordSignalEngagement,
   touchPresence,
   type Community,
   type CommonsThread,
@@ -52,6 +54,7 @@ export default function CommonsPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [mySkin, setMySkin] = useState(getSkin(null));
   const [stage, setStage] = useState<"entrance" | "home">("entrance");
   const [entranceStep, setEntranceStep] = useState(0);
   const [pendingQuery, setPendingQuery] = useState("");
@@ -98,6 +101,18 @@ export default function CommonsPage() {
       }
       setUserId(data.user.id);
       touchPresence(data.user.id); // fire-and-forget -- don't block the first paint on this
+      // Same Skin the Hub uses, carried over here -- previously the
+      // Commons was always the default palette no matter what someone
+      // picked on the Hub, which made the two feel like different
+      // products. One extra column read, no new state to manage.
+      supabase
+        .from("profiles")
+        .select("ship_skin")
+        .eq("id", data.user.id)
+        .single()
+        .then(({ data: skinRow }) => {
+          if (skinRow?.ship_skin) setMySkin(getSkin(skinRow.ship_skin));
+        });
       const seen = typeof window !== "undefined" && window.localStorage.getItem(SEEN_KEY);
       if (seen) setStage("home");
       setChecking(false);
@@ -400,7 +415,17 @@ export default function CommonsPage() {
   const showingSearch = searchResults !== null;
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--void)", color: "var(--ink)", padding: "40px 20px 90px" }}>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: mySkin.image
+          ? `linear-gradient(rgba(5,7,13,0.82), rgba(5,7,13,0.82)), url(${mySkin.image}) center / cover fixed no-repeat`
+          : "var(--void)",
+        color: "var(--ink)",
+        padding: "40px 20px 90px",
+        ...(mySkin.vars as React.CSSProperties),
+      }}
+    >
       <div style={{ maxWidth: "880px", margin: "0 auto" }}>
         <div
           style={{
@@ -452,7 +477,7 @@ export default function CommonsPage() {
           The world is talking.
         </h1>
 
-        {!showingSearch && signal.length > 0 && <SignalBubble articles={signal} />}
+        {!showingSearch && signal.length > 0 && <SignalBubble articles={signal} userId={userId} />}
 
         {/* Live presence bar -- every number here is real, queried fresh
             on load. Nothing simulated. */}
@@ -518,23 +543,42 @@ export default function CommonsPage() {
                 thread -- and it&rsquo;s weighed against the world&rsquo;s real problems.
               </p>
             </div>
-            <Link
-              href="/commons/roster"
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "9px",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "#7c9fd9",
-                textDecoration: "none",
-                border: "1px solid rgba(124,159,217,0.5)",
-                borderRadius: "999px",
-                padding: "8px 14px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              View the Roster &rarr;
-            </Link>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <Link
+                href="/commons/roster"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#7c9fd9",
+                  textDecoration: "none",
+                  border: "1px solid rgba(124,159,217,0.5)",
+                  borderRadius: "999px",
+                  padding: "8px 14px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                View the Roster &rarr;
+              </Link>
+              <Link
+                href="/commons/here"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#d9503f",
+                  textDecoration: "none",
+                  border: "1px solid rgba(217,80,63,0.5)",
+                  borderRadius: "999px",
+                  padding: "8px 14px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Who&rsquo;s Here &rarr;
+              </Link>
+            </div>
           </div>
 
           <form
@@ -801,6 +845,7 @@ export default function CommonsPage() {
                       href={article.url}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={() => userId && recordSignalEngagement(userId, article.id)}
                       style={{
                         display: "block",
                         borderRadius: "14px",
@@ -997,7 +1042,7 @@ export default function CommonsPage() {
   );
 }
 
-function SignalBubble({ articles }: { articles: NewsArticle[] }) {
+function SignalBubble({ articles, userId }: { articles: NewsArticle[]; userId: string | null }) {
   const [index, setIndex] = useState(0);
   const [fading, setFading] = useState(false);
 
@@ -1061,6 +1106,7 @@ function SignalBubble({ articles }: { articles: NewsArticle[] }) {
         href={article.url}
         target="_blank"
         rel="noreferrer"
+        onClick={() => userId && recordSignalEngagement(userId, article.id)}
         className="signal-bubble"
         style={{
           position: "relative",

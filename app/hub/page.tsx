@@ -16,8 +16,7 @@ import {
 } from "@/lib/commons";
 import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
-import { computeCheckIn, streakVisualTier, type StreakMilestone } from "@/lib/streak";
-import { getStanding } from "@/lib/standing";
+import { streakVisualTier, checkInWithServer, type StreakMilestone } from "@/lib/streak";
 
 type Profile = {
   display_name: string | null;
@@ -106,64 +105,32 @@ export default function HubPage() {
 
       // The return-engagement check-in: once per calendar day, showing up
       // to the Hub grows the streak, awards a little XP, and -- on real
-      // milestones -- shows a small, honest "you did this" moment. See
-      // lib/streak.ts for the actual rules.
-      const checkIn = computeCheckIn({
-        current_streak: currentProfile.current_streak ?? 0,
-        longest_streak: currentProfile.longest_streak ?? 0,
-        last_visit_date: currentProfile.last_visit_date ?? null,
-      });
+      // milestones -- shows a small, honest "you did this" moment. Moved
+      // fully server-side (app/api/streak/check-in/route.ts) -- this used
+      // to compute and write xp/standing/streak straight from the client,
+      // which meant those columns were only as trustworthy as whatever the
+      // browser sent. The server now re-derives everything itself from
+      // lib/streak.ts's same pure logic; this call just asks for it and
+      // applies whatever comes back.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const checkIn = accessToken ? await checkInWithServer(accessToken) : null;
 
-      if (checkIn.changed) {
-        const newXp = currentProfile.xp + checkIn.xpAwarded;
-        const newStanding = getStanding(newXp);
-        const description = checkIn.milestone
-          ? `Checked in -- day ${checkIn.streak.current_streak} streak. ${checkIn.milestone.label}.`
-          : `Checked in -- day ${checkIn.streak.current_streak} streak.`;
+      if (checkIn?.changed) {
+        currentProfile = {
+          ...currentProfile,
+          xp: checkIn.xp,
+          standing: checkIn.standing,
+          current_streak: checkIn.streak.current_streak,
+          longest_streak: checkIn.streak.longest_streak,
+          last_visit_date: checkIn.streak.last_visit_date,
+        };
 
-        const { error: streakUpdateError } = await supabase
-          .from("profiles")
-          .update({
-            xp: newXp,
-            standing: newStanding,
-            current_streak: checkIn.streak.current_streak,
-            longest_streak: checkIn.streak.longest_streak,
-            last_visit_date: checkIn.streak.last_visit_date,
-          })
-          .eq("id", userData.user.id);
-
-        if (streakUpdateError) {
-          // Non-fatal -- worst case, today's check-in just doesn't stick
-          // and tries again next visit. Never block the Hub over this.
-          console.error("streak check-in update failed:", streakUpdateError);
-        } else {
-          currentProfile = {
-            ...currentProfile,
-            xp: newXp,
-            standing: newStanding,
-            current_streak: checkIn.streak.current_streak,
-            longest_streak: checkIn.streak.longest_streak,
-            last_visit_date: checkIn.streak.last_visit_date,
-          };
-
-          const { data: logEntry, error: logInsertError } = await supabase
-            .from("log_entries")
-            .insert({
-              profile_id: userData.user.id,
-              description,
-              category: "system",
-              xp_awarded: checkIn.xpAwarded,
-            })
-            .select("id, occurred_at, description, xp_awarded")
-            .single();
-          if (logInsertError) {
-            console.error("streak log_entries insert failed:", logInsertError);
-          } else if (logEntry) {
-            currentLog = [logEntry as LogEntry, ...currentLog];
-          }
-
-          setMilestone(checkIn.milestone);
+        if (checkIn.logEntry) {
+          currentLog = [checkIn.logEntry as LogEntry, ...currentLog];
         }
+
+        setMilestone(checkIn.milestone);
       }
 
       const myKeys = await listMyKeys();

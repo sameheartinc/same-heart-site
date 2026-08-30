@@ -364,3 +364,67 @@ create or replace view public_profiles as
   from profiles;
 
 notify pgrst, 'reload schema';
+
+-- Keys, part 3 -- closing the trust gap the Green/Blue comments already
+-- flagged: xp, standing, current_streak, longest_streak, and
+-- last_visit_date used to be writable by any authenticated user through
+-- the anon client (RLS only checked row ownership, not which columns).
+-- app/api/streak/check-in/route.ts and app/api/commons/award-reply/route.ts
+-- are now the only two places that ever touch them -- both re-derive the
+-- result themselves from data they already trust, never from a client
+-- claim. This revoke is what makes that actually enforced, not just
+-- convention: even a valid session calling the anon client directly can
+-- no longer touch these columns at all. Same reasoning as the
+-- commons_accent revoke above; this just finally closes the older gap
+-- current_streak had.
+
+revoke update (xp, standing, current_streak, longest_streak, last_visit_date) on profiles from authenticated;
+
+-- Red: presence -- a real return streak, meaning two full weeks of
+-- actually showing up on separate days (longest_streak, not
+-- current_streak, since a key once earned is permanent even if the
+-- streak later breaks -- see PLAN.md). No new table: same profile_keys
+-- shape as Green and Blue.
+--
+-- Red's door is a live "who's actually here right now" view -- the first
+-- time last_seen (already tracked for the aggregate presence count in
+-- fetchCommonsStats) is exposed as an actual list rather than just a
+-- number, and only to people who've proven they show up. Deliberately
+-- not added to public_profiles: it's read only by
+-- app/api/presence/who-is-here/route.ts using the service role, after
+-- that route checks profile_keys for "red" itself -- never a client
+-- claim, and never broadened beyond that one gated route.
+
+notify pgrst, 'reload schema';
+
+-- Keys, part 4 -- Yellow's instrumentation: engagement with the Signal.
+-- PLAN.md named this the natural second-phase key because, unlike
+-- Red/Blue/Green, it needs real tracking that doesn't exist anywhere
+-- yet -- this table is that tracking, nothing more. One row per
+-- profile+article means re-clicking the same link never counts twice,
+-- so this can't be gamed by hammering one article; it only grows by
+-- actually engaging with different real stories. Client-inserted (like
+-- commons_replies) rather than server-only, since the claim itself
+-- ("I clicked through to this") takes genuine, real effort to fake at
+-- scale in a way that's meaningfully different from just... reading the
+-- news, and nothing here ever awards XP directly -- only the key
+-- evaluation route reads it, and it always re-derives eligibility
+-- itself rather than trusting a count from the client.
+
+create table if not exists signal_engagement (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  article_id uuid references news_articles(id) on delete cascade,
+  created_at timestamptz default now(),
+  unique (profile_id, article_id)
+);
+
+alter table signal_engagement enable row level security;
+
+drop policy if exists "Users record their own Signal engagement" on signal_engagement;
+create policy "Users record their own Signal engagement" on signal_engagement for insert with check (auth.uid() = profile_id);
+
+drop policy if exists "Users see their own Signal engagement" on signal_engagement;
+create policy "Users see their own Signal engagement" on signal_engagement for select using (auth.uid() = profile_id);
+
+notify pgrst, 'reload schema';

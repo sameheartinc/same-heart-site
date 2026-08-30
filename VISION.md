@@ -55,3 +55,50 @@ own personal work robot through third-party manufacturing partners
 This deepens, doesn't replace, the robotics-companion note above --
 same direction, more specific shape (an agency-model business,
 software-first, hardware via third parties down the line).
+
+## Addendum, Aug 30, 2026 -- why this, and why now (the historical case, not just the ambition)
+
+Every real jump in human problem-solving traces back to a small set of
+repeating structural moves, not to any one genius moment: lowering the
+cost of sharing true information across distance and time (writing, the
+printing press, the telegraph, the internet); keeping a durable, honest
+record so effort compounds instead of being silently repeated or lost
+(merchant ledgers, the scientific journal, the library); giving
+newcomers a real, legible path from novice to trusted contributor
+(apprenticeship, the guild's journeyman stage); making it possible for
+people to act together on problems no single person or institution
+owns (Elinor Ostrom's research on how commons are actually governed
+well, mutual-aid networks that moved faster than formal institutions in
+crisis); and taking a view longer than the current moment on purpose
+(the Iroquois Confederacy's seven-generations principle, cathedral
+builders who never saw their own work finished, the Svalbard Seed
+Vault). None of these are new ideas. That's the point, not a
+disappointment -- they're the patterns that have actually held up.
+
+Same Heart's real, current mechanics are small, unglamorous, working
+instances of exactly these five moves, in software instead of stone or
+parchment: the Exchange lowers the cost of surfacing something true
+that actually matters, and scores it instead of just amplifying
+whatever is loudest. `log_entries` is a durable, honest ledger of what
+a person actually did, the same instinct behind every merchant's tally
+and every lab notebook. Keys and Doors is a legible path from
+newcomer to trusted contributor, the same shape as an apprenticeship,
+without pretending status can be bought. The Commons is an attempt at
+a real commons in Ostrom's sense -- a shared resource that stays
+healthy because the people using it actually govern how it's used, not
+because it's locked down or given away for free with no structure at
+all. None of this is being built because it's fashionable. It's being
+built because these are the specific structural things that have
+reliably worked, across a lot of very different civilizations, for a
+very long time, and most of the modern internet quietly stopped doing
+most of them in favor of engagement metrics that don't compound into
+anything real.
+
+That's the actual, non-inflated case for why this matters: not that
+this app will change the world by itself, but that it's placing a
+real bet on the mechanisms that have always been how groups of humans
+actually get better at solving hard problems together -- and building
+that bet honestly, one working piece at a time, rather than promising
+it before it's real. See INSPIRATION.md for the concrete, buildable
+ideas this thinking points toward -- a reference library to draw from,
+not a task list.

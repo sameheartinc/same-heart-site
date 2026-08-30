@@ -9,7 +9,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 
-export type KeyColor = "green" | "blue"; // more colors join this union as they ship
+export type KeyColor = "green" | "blue" | "red" | "yellow"; // more colors join this union as they ship
 
 export interface ProfileKey {
   key_color: KeyColor;
@@ -26,6 +26,16 @@ export const KEY_INFO: Record<KeyColor, { name: string; accent: string; blurb: s
     name: "Blue Key",
     accent: "#4a8fe0",
     blurb: "Earned by showing up across several different communities, not just one.",
+  },
+  red: {
+    name: "Red Key",
+    accent: "#d9503f",
+    blurb: "Earned by actually showing up -- two real weeks of return visits.",
+  },
+  yellow: {
+    name: "Yellow Key",
+    accent: "#d9b23f",
+    blurb: "Earned by actually reading the Signal -- noticing real news, not just scrolling past it.",
   },
 };
 
@@ -87,5 +97,34 @@ export async function setCommonsAccent(color: string): Promise<boolean> {
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+// Red's door -- see app/api/presence/who-is-here/route.ts, which is the
+// one place this list is ever actually computed. Returns null on any
+// failure (not signed in, not held, server error) so the page can show a
+// locked state rather than an empty list that looks broken.
+export interface PresentProfile {
+  id: string;
+  display_name: string | null;
+  spark_id: number | null;
+  designation: string | null;
+}
+
+export async function fetchWhoIsHere(): Promise<PresentProfile[] | null> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return null;
+
+  try {
+    const res = await fetch("/api/presence/who-is-here", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => ({}));
+    return Array.isArray(json.present) ? json.present : null;
+  } catch {
+    return null;
   }
 }

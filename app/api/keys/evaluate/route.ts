@@ -12,6 +12,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 const GREEN_KEY_MIN_TRANSMISSIONS = 5;
 const GREEN_KEY_MIN_AVG_SCORE = 60;
 const BLUE_KEY_MIN_COMMUNITIES = 3;
+const RED_KEY_MIN_LONGEST_STREAK = 14;
+const YELLOW_KEY_MIN_ARTICLES = 10;
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -148,6 +150,86 @@ export async function POST(request: NextRequest) {
         await admin.from("log_entries").insert({
           profile_id: profileId,
           description: "Earned the Blue Key -- active across several different communities.",
+          category: "personal",
+          xp_awarded: 0,
+        });
+      }
+    }
+  }
+
+
+  // Red: presence -- a real return streak, at least two full weeks of
+  // actually showing up on separate days. Checked against longest_streak,
+  // not current_streak, since a key once earned should stay earned even
+  // if the streak later breaks -- current_streak is for the Hub's live
+  // display, longest_streak is the permanent record. Both columns are
+  // now only ever written by app/api/streak/check-in/route.ts (see the
+  // column-level revoke in supabase/schema.sql), so this read is trustworthy.
+  if (!alreadyHeld.has("red")) {
+    const { data: streakProfile, error: streakError } = await admin
+      .from("profiles")
+      .select("longest_streak")
+      .eq("id", profileId)
+      .single();
+
+    if (streakError) {
+      console.error("Red key eligibility check failed:", streakError.message);
+      return NextResponse.json({ error: "Couldn't check your keys right now." }, { status: 503 });
+    }
+
+    if ((streakProfile?.longest_streak ?? 0) >= RED_KEY_MIN_LONGEST_STREAK) {
+      const { error: insertError } = await admin
+        .from("profile_keys")
+        .insert({ profile_id: profileId, key_color: "red" });
+
+      if (insertError) {
+        if (insertError.code !== "23505") {
+          console.error("Red key insert failed:", insertError.message);
+        }
+      } else {
+        newlyEarned.push("red");
+        await admin.from("log_entries").insert({
+          profile_id: profileId,
+          description: "Earned the Red Key -- two real weeks of showing up.",
+          category: "personal",
+          xp_awarded: 0,
+        });
+      }
+    }
+  }
+
+
+  // Yellow: engagement with the Signal -- noticing and acting on real
+  // news, not just scrolling past it. Counted from signal_engagement
+  // (see supabase/schema.sql), which only ever records a real click
+  // through to a real article, one row per profile+article thanks to
+  // its unique constraint -- so this can't be gamed by re-clicking the
+  // same link.
+  if (!alreadyHeld.has("yellow")) {
+    const { count: engagementCount, error: engagementError } = await admin
+      .from("signal_engagement")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id", profileId);
+
+    if (engagementError) {
+      console.error("Yellow key eligibility check failed:", engagementError.message);
+      return NextResponse.json({ error: "Couldn't check your keys right now." }, { status: 503 });
+    }
+
+    if ((engagementCount ?? 0) >= YELLOW_KEY_MIN_ARTICLES) {
+      const { error: insertError } = await admin
+        .from("profile_keys")
+        .insert({ profile_id: profileId, key_color: "yellow" });
+
+      if (insertError) {
+        if (insertError.code !== "23505") {
+          console.error("Yellow key insert failed:", insertError.message);
+        }
+      } else {
+        newlyEarned.push("yellow");
+        await admin.from("log_entries").insert({
+          profile_id: profileId,
+          description: "Earned the Yellow Key -- real engagement with the Signal.",
           category: "personal",
           xp_awarded: 0,
         });

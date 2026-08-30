@@ -90,3 +90,29 @@ export function streakVisualTier(streak: number): { label: string; glow: 0 | 1 |
   if (streak >= 3) return { label: "Catching on", glow: 1 };
   return { label: "Just arrived", glow: 0 };
 }
+
+// Client-side call to the server-side check-in route (see
+// app/api/streak/check-in/route.ts) -- this is now the only way the
+// streak/xp/standing columns ever change. Returns null on any failure so
+// the caller can just skip updating its local state rather than crash.
+export interface ServerCheckInResult {
+  changed: boolean;
+  xp: number;
+  standing: string;
+  streak: StreakState;
+  milestone: StreakMilestone | null;
+  logEntry: { id: string; occurred_at: string; description: string; xp_awarded: number } | null;
+}
+
+export async function checkInWithServer(accessToken: string): Promise<ServerCheckInResult | null> {
+  try {
+    const res = await fetch("/api/streak/check-in", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as ServerCheckInResult;
+  } catch {
+    return null;
+  }
+}

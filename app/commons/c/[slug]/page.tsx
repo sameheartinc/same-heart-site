@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { getSkin } from "@/lib/skins";
 import PageLoading from "@/components/PageLoading";
 import {
   authorName,
@@ -23,6 +24,7 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [mySkin, setMySkin] = useState(getSkin(null));
   const [community, setCommunity] = useState<Community | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isMember, setIsMember] = useState(false);
@@ -46,6 +48,15 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
       }
       setUserId(data.user.id);
       touchPresence(data.user.id); // fire-and-forget -- don't block the first paint on this
+      // Same Skin as the Hub and the rest of the Commons -- see app/commons/page.tsx.
+      supabase
+        .from("profiles")
+        .select("ship_skin")
+        .eq("id", data.user.id)
+        .single()
+        .then(({ data: skinRow }) => {
+          if (skinRow?.ship_skin) setMySkin(getSkin(skinRow.ship_skin));
+        });
 
       const c = await getCommunityBySlug(params.slug);
       if (!c) {
@@ -107,7 +118,17 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const accent = community.accent || "#c9576a";
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--void)", color: "var(--ink)", padding: "40px 20px 90px" }}>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: mySkin.image
+          ? `linear-gradient(rgba(5,7,13,0.82), rgba(5,7,13,0.82)), url(${mySkin.image}) center / cover fixed no-repeat`
+          : "var(--void)",
+        color: "var(--ink)",
+        padding: "40px 20px 90px",
+        ...(mySkin.vars as React.CSSProperties),
+      }}
+    >
       <div style={{ maxWidth: "760px", margin: "0 auto" }}>
         <Link href="/commons" style={{ display: "inline-block", marginBottom: "22px", color: "var(--gold)", fontFamily: "var(--font-display)", fontSize: "0.82rem", textDecoration: "none" }}>
           &larr; Back to the Commons

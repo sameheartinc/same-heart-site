@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabaseClient";
-import { getStanding } from "@/lib/standing";
 
 // The Commons -- v1. This is the real, functional core of the much
 // bigger vision (see README): communities, discussions/questions, and
@@ -136,6 +135,19 @@ export async function fetchSignal(limit = 8): Promise<NewsArticle[]> {
     .limit(limit);
   if (error || !data) return [];
   return data as NewsArticle[];
+}
+
+// Yellow key instrumentation -- records that someone actually clicked
+// through to a real Signal article. Fire-and-forget on purpose: this
+// should never slow down or block someone actually opening the link.
+// The unique(profile_id, article_id) constraint means a second click on
+// the same article is a harmless no-op, not a duplicate count.
+export async function recordSignalEngagement(profileId: string, articleId: string) {
+  try {
+    await supabase.from("signal_engagement").insert({ profile_id: profileId, article_id: articleId });
+  } catch {
+    // Best-effort -- never worth surfacing an error over a click.
+  }
 }
 
 export async function listCommunities(): Promise<Community[]> {
@@ -300,10 +312,19 @@ export async function createReply(input: { threadId: string; profileId: string; 
 
   // A small Heartbeats reward for participating -- capped low and kept
   // separate from the Exchange, so replying is real but modest next to
-  // actually transmitting genuine impact. Best-effort: never let this
-  // block the reply itself from posting.
+  // actually transmitting genuine impact. Goes through a server route
+  // (app/api/commons/award-reply/route.ts) rather than writing xp/standing
+  // straight from here -- see that route's comment for why. Best-effort:
+  // never let this block the reply itself from posting.
   try {
-    await awardReplyHeartbeats(input.profileId);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (token) {
+      await fetch("/api/commons/award-reply", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
   } catch (err) {
     console.error("reply Heartbeats award failed:", err);
   }
@@ -331,32 +352,3 @@ export async function markNotificationsRead(ids: string[]) {
   await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", ids);
 }
 
-const REPLY_HEARTBEATS = 3;
-const DAILY_REPLY_HEARTBEATS_CAP = 15;
-
-async function awardReplyHeartbeats(profileId: string) {
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const { data: todaysLog } = await supabase
-    .from("log_entries")
-    .select("xp_awarded")
-    .eq("profile_id", profileId)
-    .eq("category", "commons")
-    .gte("occurred_at", startOfDay.toISOString());
-  const todaysTotal = (todaysLog ?? []).reduce((sum, r) => sum + (r.xp_awarded ?? 0), 0);
-  const award = Math.min(REPLY_HEARTBEATS, Math.max(0, DAILY_REPLY_HEARTBEATS_CAP - todaysTotal));
-  if (award <= 0) return;
-
-  const { data: profileRow } = await supabase.from("profiles").select("xp").eq("id", profileId).single();
-  const newXp = (profileRow?.xp ?? 0) + award;
-  await supabase
-    .from("profiles")
-    .update({ xp: newXp, standing: getStanding(newXp) })
-    .eq("id", profileId);
-  await supabase.from("log_entries").insert({
-    profile_id: profileId,
-    description: "Replied in the Commons.",
-    category: "commons",
-    xp_awarded: award,
-  });
-}
