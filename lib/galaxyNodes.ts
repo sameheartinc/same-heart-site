@@ -90,10 +90,14 @@ export const GALAXY_NODES: GalaxyNode[] = [
     // deliberately sized modestly (smaller than Commons/Shop, not dimmed
     // like Field Guide) so it reads as present but not asking for
     // anything. Sits in the widest open gap on the ring, between Field
-    // Guide and the Wallet. Links straight out to an existing Buy Me a
-    // Coffee page -- no payment code runs on Same Heart itself.
+    // Guide and the Wallet. Links straight out to a Stripe Payment Link
+    // (pay-what-you-want) -- no payment code runs on Same Heart itself,
+    // and no Buy Me a Coffee platform cut either. To change the amount
+    // options or copy, edit the Payment Link directly in the Stripe
+    // dashboard; to point this node somewhere else entirely, this href
+    // is the only line that needs to change.
     key: "hearth",
-    href: "https://buymeacoffee.com/robcmunro",
+    href: "https://buy.stripe.com/6oUfZhgKz9dmbh3dovcAo01",
     external: true,
     monogram: "♥",
     name: "The Hearth",
