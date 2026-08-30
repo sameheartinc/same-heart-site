@@ -78,10 +78,14 @@ export async function POST(request: NextRequest) {
     .eq("profile_id", profileId)
     .gte("created_at", startOfDay.toISOString());
 
-  if (countError) {
-    console.error("Guide daily lookup failed:", countError.message);
+  if (countError || todaysCount == null) {
+    console.error("Guide daily lookup failed:", countError?.message ?? "count was null");
+    return NextResponse.json(
+      { error: "The Guide's having trouble right now -- try again in a moment." },
+      { status: 503 }
+    );
   }
-  if ((todaysCount ?? 0) >= DAILY_MESSAGE_CAP) {
+  if (todaysCount >= DAILY_MESSAGE_CAP) {
     return NextResponse.json(
       { error: `You've asked the Guide ${DAILY_MESSAGE_CAP} things today -- come back tomorrow for more.` },
       { status: 429 }
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: { text: SYSTEM_INSTRUCTION } },
+        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
         contents,
         generationConfig: { maxOutputTokens: 300, temperature: 0.7 },
       }),

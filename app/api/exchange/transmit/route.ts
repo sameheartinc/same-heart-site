@@ -166,11 +166,15 @@ export async function POST(request: NextRequest) {
     .eq("profile_id", profileId)
     .gte("created_at", startOfDay.toISOString());
 
-  if (todaysError) {
-    console.error("Exchange daily lookup failed:", todaysError.message);
+  if (todaysError || todaysRows == null) {
+    console.error("Exchange daily lookup failed:", todaysError?.message ?? "rows were null");
+    return NextResponse.json(
+      { error: "Couldn't check your daily limit -- try again in a moment." },
+      { status: 503 }
+    );
   }
-  const todaysCount = todaysRows?.length ?? 0;
-  const todaysHeartbeats = (todaysRows ?? []).reduce(
+  const todaysCount = todaysRows.length;
+  const todaysHeartbeats = todaysRows.reduce(
     (sum, r) => sum + (r.heartbeats_awarded ?? 0),
     0
   );
