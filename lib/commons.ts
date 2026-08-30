@@ -16,6 +16,7 @@ export interface PublicProfile {
   path_key: string | null;
   ship_skin: string | null;
   designation: string | null;
+  commons_accent: string | null;
 }
 
 export interface Community {
@@ -49,6 +50,16 @@ export interface CommonsReply {
   created_at: string;
 }
 
+export interface CommonsNotification {
+  id: string;
+  actor_id: string | null;
+  kind: string;
+  thread_id: string | null;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+}
+
 // Batch-fetch just the public-safe fields for a set of authors, and
 // return them as a lookup map keyed by id. Threads/replies/communities
 // only store profile_id -- this is the one place author display data
@@ -59,7 +70,7 @@ export async function fetchProfilesByIds(ids: string[]): Promise<Record<string, 
   if (unique.length === 0) return {};
   const { data, error } = await supabase
     .from("public_profiles")
-    .select("id, display_name, spark_id, path_key, ship_skin, designation")
+    .select("id, display_name, spark_id, path_key, ship_skin, designation, commons_accent")
     .in("id", unique);
   if (error || !data) return {};
   const map: Record<string, PublicProfile> = {};
@@ -276,6 +287,17 @@ export async function createReply(input: { threadId: string; profileId: string; 
   // commons_threads.
   await supabase.rpc("bump_thread_activity", { thread_id: input.threadId });
 
+  // Let the thread's author know, unless they just replied to their own
+  // thread. Also a narrow RPC (see schema.sql) -- the same posture as
+  // bump_thread_activity, a controlled write into someone else's data,
+  // not an open one. Best-effort: a notification failing should never
+  // block the reply itself from posting.
+  try {
+    await supabase.rpc("notify_thread_reply", { p_thread_id: input.threadId });
+  } catch (err) {
+    console.error("notify_thread_reply failed:", err);
+  }
+
   // A small Heartbeats reward for participating -- capped low and kept
   // separate from the Exchange, so replying is real but modest next to
   // actually transmitting genuine impact. Best-effort: never let this
@@ -287,6 +309,26 @@ export async function createReply(input: { threadId: string; profileId: string; 
   }
 
   return data as CommonsReply;
+}
+
+// Notifications -- read is client-side (RLS: "your own notifications
+// only"); marking read is a direct client update too, the same pattern
+// already used for Skin selection -- no server route needed since the
+// RLS policy already restricts it to your own rows, and nothing of real
+// value (XP, keys, money) rides on this table.
+export async function listMyNotifications(limit = 20): Promise<CommonsNotification[]> {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, actor_id, kind, thread_id, body, read_at, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as CommonsNotification[];
+}
+
+export async function markNotificationsRead(ids: string[]) {
+  if (ids.length === 0) return;
+  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", ids);
 }
 
 const REPLY_HEARTBEATS = 3;

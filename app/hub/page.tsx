@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { SKINS, getSkin, type SkinKey } from "@/lib/skins";
-import { listMyKeys, evaluateKeys, KEY_INFO, type ProfileKey } from "@/lib/keys";
+import { listMyKeys, evaluateKeys, setCommonsAccent, KEY_INFO, COMMONS_ACCENT_PALETTE, type ProfileKey } from "@/lib/keys";
+import {
+  listMyNotifications,
+  markNotificationsRead,
+  fetchProfilesByIds,
+  authorName,
+  type CommonsNotification,
+  type PublicProfile,
+} from "@/lib/commons";
 import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
 import { computeCheckIn, streakVisualTier, type StreakMilestone } from "@/lib/streak";
@@ -25,6 +33,7 @@ type Profile = {
   current_streak: number;
   longest_streak: number;
   last_visit_date: string | null;
+  commons_accent: string | null;
 };
 
 type LogEntry = {
@@ -46,6 +55,7 @@ export default function HubPage() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [skinSaving, setSkinSaving] = useState(false);
+  const [accentSaving, setAccentSaving] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [logDraft, setLogDraft] = useState("");
@@ -53,6 +63,9 @@ export default function HubPage() {
   const [logError, setLogError] = useState<string | null>(null);
   const [milestone, setMilestone] = useState<StreakMilestone | null>(null);
   const [keys, setKeys] = useState<ProfileKey[]>([]);
+  const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
+  const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
+  const [notifOpen, setNotifOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -65,7 +78,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent"
         )
         .eq("id", userData.user.id)
         .single();
@@ -154,11 +167,17 @@ export default function HubPage() {
       }
 
       const myKeys = await listMyKeys();
+      const myNotifications = await listMyNotifications();
+      const notifAuthorProfiles = await fetchProfilesByIds(
+        myNotifications.map((n) => n.actor_id).filter((id): id is string => Boolean(id))
+      );
 
       setUserId(userData.user.id);
       setProfile(currentProfile);
       setLog(currentLog);
       setKeys(myKeys);
+      setNotifications(myNotifications);
+      setNotifAuthors(notifAuthorProfiles);
       setIsAnonymous(Boolean((userData.user as { is_anonymous?: boolean }).is_anonymous));
       // A fresh line every visit -- leans toward their archetype's own
       // lines when it has any, but never runs out either way.
@@ -180,6 +199,22 @@ export default function HubPage() {
     router.replace("/login");
   }
 
+  const unreadNotifications = notifications.filter((n) => !n.read_at);
+
+  async function toggleNotifications() {
+    const opening = !notifOpen;
+    setNotifOpen(opening);
+    if (opening && unreadNotifications.length > 0) {
+      const ids = unreadNotifications.map((n) => n.id);
+      // Optimistic -- the badge should clear the moment you open the
+      // panel, not after a round trip.
+      setNotifications((prev) =>
+        prev.map((n) => (ids.includes(n.id) ? { ...n, read_at: new Date().toISOString() } : n))
+      );
+      await markNotificationsRead(ids);
+    }
+  }
+
   async function chooseSkin(key: SkinKey) {
     if (!userId || !profile || profile.ship_skin === key) return;
     const previous = profile.ship_skin;
@@ -192,6 +227,22 @@ export default function HubPage() {
     if (error) {
       // Quietly revert -- this is cosmetic, not worth a scary error banner.
       setProfile((p) => (p ? { ...p, ship_skin: previous } : p));
+    }
+  }
+
+  // Blue key's door -- see app/api/keys/set-accent/route.ts, the only
+  // place this column is ever actually written. This function just calls
+  // it and reverts the optimistic update if the server says no (e.g. the
+  // key was somehow lost, or the session expired mid-click).
+  async function chooseAccent(color: string) {
+    if (!userId || !profile || profile.commons_accent === color) return;
+    const previous = profile.commons_accent;
+    setProfile({ ...profile, commons_accent: color });
+    setAccentSaving(true);
+    const ok = await setCommonsAccent(color);
+    setAccentSaving(false);
+    if (!ok) {
+      setProfile((p) => (p ? { ...p, commons_accent: previous } : p));
     }
   }
 
@@ -469,6 +520,100 @@ export default function HubPage() {
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)" }}>STREAK</div>
             </div>
+
+            {/* Notifications -- v1 is just "someone replied to your
+                thread." Always present (it's a mailbox, not an
+                achievement), but only calls attention to itself with a
+                real unread count. See lib/commons.ts and PLAN.md. */}
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={toggleNotifications}
+                aria-label="Notifications"
+                aria-expanded={notifOpen}
+                style={{
+                  textAlign: "center",
+                  padding: "12px 20px",
+                  border: `1px solid ${unreadNotifications.length > 0 ? "var(--gold)" : "var(--border)"}`,
+                  borderRadius: "12px",
+                  background: "none",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  position: "relative",
+                }}
+              >
+                {unreadNotifications.length > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "6px",
+                      right: "6px",
+                      minWidth: "16px",
+                      height: "16px",
+                      padding: "0 4px",
+                      borderRadius: "8px",
+                      background: "var(--rose)",
+                      color: "#fff",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "9px",
+                      lineHeight: "16px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {unreadNotifications.length}
+                  </span>
+                )}
+                <div style={{ fontSize: "1.4rem", lineHeight: 1 }}>&#128276;</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)", marginTop: "6px" }}>
+                  NOTICES
+                </div>
+              </button>
+
+              {notifOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 8px)",
+                    right: 0,
+                    zIndex: 5,
+                    width: "min(320px, 80vw)",
+                    maxHeight: "320px",
+                    overflowY: "auto",
+                    background: "var(--panel)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "12px",
+                    boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+                    padding: "10px",
+                  }}
+                >
+                  {notifications.length === 0 ? (
+                    <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--ink-faint)" }}>
+                      Nothing yet -- replies to your threads show up here.
+                    </p>
+                  ) : (
+                    notifications.map((n) => (
+                      <Link
+                        key={n.id}
+                        href={n.thread_id ? `/commons/t/${n.thread_id}` : "/commons"}
+                        onClick={() => setNotifOpen(false)}
+                        style={{
+                          display: "block",
+                          padding: "8px",
+                          borderRadius: "8px",
+                          textDecoration: "none",
+                          color: "var(--ink)",
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.82rem",
+                          background: n.read_at ? "transparent" : "rgba(201,161,90,0.08)",
+                        }}
+                      >
+                        {authorName(notifAuthors[n.actor_id ?? ""])} {n.body}
+                      </Link>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -536,6 +681,72 @@ export default function HubPage() {
             saving&hellip;
           </span>
         </div>
+
+        {/* Commons accent -- the Blue Key's door. Only ever appears once
+            the key's actually held; the picker itself is the reward, not
+            a setting anyone can reach on their own. See lib/keys.ts and
+            app/api/keys/set-accent/route.ts. */}
+        {keys.some((k) => k.key_color === "blue") && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginBottom: "22px",
+              padding: "0 4px",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--ink-faint)",
+              }}
+            >
+              Accent
+            </span>
+            <div style={{ display: "flex", gap: "8px" }}>
+              {COMMONS_ACCENT_PALETTE.map((c) => {
+                const isActive = profile?.commons_accent === c.value;
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    title={c.label}
+                    aria-label={c.label}
+                    aria-pressed={isActive}
+                    onClick={() => chooseAccent(c.value)}
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      cursor: isActive ? "default" : "pointer",
+                      padding: 0,
+                      background: c.value,
+                      border: isActive ? "2px solid var(--gold)" : "2px solid transparent",
+                      boxShadow: isActive ? "0 0 0 2px var(--void), 0 0 0 3px rgba(201,161,90,0.4)" : "none",
+                      transition: "box-shadow 0.2s ease",
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                color: "var(--ink-faint)",
+                opacity: accentSaving ? 1 : 0,
+                transition: "opacity 0.3s ease",
+              }}
+            >
+              saving&hellip;
+            </span>
+          </div>
+        )}
 
         {/* Keys -- silent until you've actually earned one. Nothing to
             configure, nothing to nag about; it just appears the first

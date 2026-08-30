@@ -11,6 +11,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const GREEN_KEY_MIN_TRANSMISSIONS = 5;
 const GREEN_KEY_MIN_AVG_SCORE = 60;
+const BLUE_KEY_MIN_COMMUNITIES = 3;
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -75,6 +76,79 @@ export async function POST(request: NextRequest) {
           profile_id: profileId,
           description: "Earned the Green Key -- real, sustained impact through the Exchange.",
           category: "humanitarian",
+          xp_awarded: 0,
+        });
+      }
+    }
+  }
+
+
+  // Blue: breadth in the Commons -- posting or replying across several
+  // different communities rather than living in just one. Counted from
+  // commons_threads and commons_replies directly (both server-truthful:
+  // profile_id is set from the authenticated caller at insert time, and
+  // community_id is a real foreign key), never from a client-supplied
+  // count.
+  if (!alreadyHeld.has("blue")) {
+    const { data: ownThreads, error: ownThreadsError } = await admin
+      .from("commons_threads")
+      .select("community_id")
+      .eq("profile_id", profileId);
+
+    if (ownThreadsError) {
+      console.error("Blue key eligibility check failed:", ownThreadsError.message);
+      return NextResponse.json({ error: "Couldn't check your keys right now." }, { status: 503 });
+    }
+
+    const { data: ownReplies, error: ownRepliesError } = await admin
+      .from("commons_replies")
+      .select("thread_id")
+      .eq("profile_id", profileId);
+
+    if (ownRepliesError) {
+      console.error("Blue key eligibility check failed:", ownRepliesError.message);
+      return NextResponse.json({ error: "Couldn't check your keys right now." }, { status: 503 });
+    }
+
+    const communityIds = new Set<string>();
+    for (const t of ownThreads ?? []) {
+      if (t.community_id) communityIds.add(t.community_id);
+    }
+
+    const replyThreadIds = Array.from(
+      new Set((ownReplies ?? []).map((r) => r.thread_id).filter((id): id is string => Boolean(id)))
+    );
+
+    if (replyThreadIds.length > 0) {
+      const { data: repliedThreads, error: repliedThreadsError } = await admin
+        .from("commons_threads")
+        .select("community_id")
+        .in("id", replyThreadIds);
+
+      if (repliedThreadsError) {
+        console.error("Blue key eligibility check failed:", repliedThreadsError.message);
+        return NextResponse.json({ error: "Couldn't check your keys right now." }, { status: 503 });
+      }
+      for (const t of repliedThreads ?? []) {
+        if (t.community_id) communityIds.add(t.community_id);
+      }
+    }
+
+    if (communityIds.size >= BLUE_KEY_MIN_COMMUNITIES) {
+      const { error: insertError } = await admin
+        .from("profile_keys")
+        .insert({ profile_id: profileId, key_color: "blue" });
+
+      if (insertError) {
+        if (insertError.code !== "23505") {
+          console.error("Blue key insert failed:", insertError.message);
+        }
+      } else {
+        newlyEarned.push("blue");
+        await admin.from("log_entries").insert({
+          profile_id: profileId,
+          description: "Earned the Blue Key -- active across several different communities.",
+          category: "personal",
           xp_awarded: 0,
         });
       }

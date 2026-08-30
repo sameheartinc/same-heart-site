@@ -101,7 +101,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     external: true,
     monogram: "♥",
     name: "The Hearth",
-    tagline: "Keep it running",
+    tagline: "Feed. Water. Teach.",
     accent: "#ff6f91",
     angleDeg: 95,
     radiusPct: 44,

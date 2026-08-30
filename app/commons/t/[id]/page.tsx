@@ -98,7 +98,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         </Link>
 
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase", color: ACCENT, margin: "0 0 8px" }}>
-          {thread.kind === "question" ? "Question" : "Discussion"} &middot; {authorName(authors[thread.profile_id])}
+          {thread.kind === "question" ? "Question" : "Discussion"} &middot; <span style={{ color: authors[thread.profile_id]?.commons_accent || undefined }}>{authorName(authors[thread.profile_id])}</span>
         </p>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "0 0 16px", lineHeight: 1.3 }}>
           {thread.title}
@@ -114,7 +114,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         <ul style={{ listStyle: "none", padding: 0, margin: "0 0 26px", display: "flex", flexDirection: "column", gap: "14px" }}>
           {replies.map((r) => (
             <li key={r.id} style={{ padding: "14px 16px", borderRadius: "12px", background: "var(--panel)", border: "1px solid var(--border)" }}>
-              <p style={{ margin: "0 0 6px", fontFamily: "var(--font-mono)", fontSize: "9px", color: ACCENT }}>
+              <p style={{ margin: "0 0 6px", fontFamily: "var(--font-mono)", fontSize: "9px", color: authors[r.profile_id]?.commons_accent || ACCENT }}>
                 {authorName(authors[r.profile_id])}
               </p>
               <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "0.92rem", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>

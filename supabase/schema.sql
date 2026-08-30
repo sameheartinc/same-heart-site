@@ -280,3 +280,87 @@ drop policy if exists "Users see their own keys" on profile_keys;
 create policy "Users see their own keys" on profile_keys for select using (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';
+
+-- Notifications, v1: the first real notification is "someone replied to
+-- your thread." Deliberately its own table rather than folding into
+-- log_entries -- log_entries is "things you did or earned," this is
+-- "things that happened to you that you might not have seen yet," which
+-- needs a read/unread state log_entries was never built to carry. `kind`
+-- is the seam for more notification types later (a reply to your reply,
+-- someone joining a community you started, etc.) without a reshape. Safe
+-- to run more than once.
+
+create table if not exists notifications (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  actor_id uuid references profiles(id) on delete set null,
+  kind text not null default 'reply',
+  thread_id uuid references commons_threads(id) on delete cascade,
+  body text not null,
+  read_at timestamptz,
+  created_at timestamptz default now()
+);
+
+alter table notifications enable row level security;
+
+drop policy if exists "Users see their own notifications" on notifications;
+create policy "Users see their own notifications" on notifications for select using (auth.uid() = profile_id);
+
+drop policy if exists "Users mark their own notifications read" on notifications;
+create policy "Users mark their own notifications read" on notifications for update using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
+
+-- No insert policy for anyone -- a notification is only ever created by
+-- the narrow function below, the same posture as bump_thread_activity: a
+-- controlled cross-user write (the replier creates a row owned by the
+-- thread's author), not an open one. security definer so it can insert
+-- despite that, but it only ever does this one specific thing, and it
+-- quietly no-ops on your own thread so replying to yourself never
+-- notifies you.
+create or replace function public.notify_thread_reply(p_thread_id uuid)
+returns void as $$
+declare
+  v_owner uuid;
+  v_title text;
+  v_actor uuid := auth.uid();
+begin
+  select profile_id, title into v_owner, v_title from commons_threads where id = p_thread_id;
+  if v_owner is null or v_owner = v_actor then
+    return;
+  end if;
+  insert into notifications (profile_id, actor_id, kind, thread_id, body)
+  values (v_owner, v_actor, 'reply', p_thread_id, 'replied to your thread "' || left(v_title, 60) || '."');
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function public.notify_thread_reply(uuid) to authenticated;
+
+notify pgrst, 'reload schema';
+
+-- Keys, part 2 -- Blue: breadth in the Commons, earned by posting or
+-- replying across several different communities rather than living in
+-- just one. See PLAN.md and the comment above profile_keys for the
+-- shape. Also fixes public_profiles, which was already serving
+-- `designation` to lib/commons.ts's fetchProfilesByIds without this
+-- file ever recording that column being added to the view -- a
+-- pre-existing gap, not something introduced here.
+--
+-- commons_accent is Blue's door: a personal accent color that marks
+-- someone's name across the Commons, chosen from a small curated
+-- palette (lib/keys.ts) rather than free text. It's only ever written
+-- by app/api/keys/set-accent/route.ts, which checks profile_keys for
+-- "blue" before touching it -- the column-level revoke below is a
+-- second, database-level lock making that the *only* way to set it,
+-- even for someone calling the anon client directly with their own
+-- valid session (the same gap current_streak/longest_streak still
+-- have -- this closes it for the one new column this feature adds,
+-- rather than leaving a second earned-and-spoofable field).
+
+alter table profiles add column if not exists commons_accent text;
+
+revoke update (commons_accent) on profiles from authenticated;
+
+create or replace view public_profiles as
+  select id, display_name, spark_id, path_key, ship_skin, designation, commons_accent
+  from profiles;
+
+notify pgrst, 'reload schema';
