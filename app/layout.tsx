@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
+import GlobalPlayer from "@/components/GlobalPlayer";
 import "./globals.css";
 
 const SITE_URL = "https://sameheart.ca";
@@ -45,6 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <GlobalPlayer />
         {children}
         <Analytics />
       </body>

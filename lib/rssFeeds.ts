@@ -4,18 +4,33 @@
 // npm package) rather than pulling in a parsing library, since these
 // feeds are simple RSS 2.0 and a real parser would be overkill.
 //
-// Picked deliberately, not just "whatever's popular": a couple of major
-// wire-style outlets for general "what's happening" coverage, plus one
-// solutions-journalism source (Yes! Magazine) that actually fits Same
-// Heart's own point better than breaking news does. Each feed fails
-// independently -- one dead feed in an hour never blocks the others.
+// Picked deliberately, not just "whatever's popular": a spread of major
+// wire-style outlets across several countries for general "what's
+// happening" coverage, plus one solutions-journalism source (Yes!
+// Magazine) that actually fits Same Heart's own point better than
+// breaking news does. Each feed fails independently -- one dead feed in
+// an hour never blocks the others. BBC News and The Guardian are
+// already UK sources; ABC News (Australia) and CBC News (Canada) round
+// out the spread so no one country or outlet dominates the Signal.
 export const RSS_FEEDS: Array<{ name: string; url: string; topic: string }> = [
   { name: "NPR", url: "https://feeds.npr.org/1001/rss.xml", topic: "world" },
   { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml", topic: "world" },
   { name: "BBC News", url: "http://feeds.bbci.co.uk/news/world/rss.xml", topic: "world" },
   { name: "The Guardian", url: "https://www.theguardian.com/world/rss", topic: "world" },
+  { name: "ABC News Australia", url: "https://www.abc.net.au/news/feed/51120/rss.xml", topic: "world" },
+  { name: "CBC News", url: "https://www.cbc.ca/webfeed/rss/rss-topstories", topic: "world" },
   { name: "Yes! Magazine", url: "https://www.yesmagazine.org/feed", topic: "solutions" },
 ];
+
+// Cap on how many items any single feed contributes per hourly fetch.
+// RSS feeds are newest-first by convention, so this keeps only each
+// source's freshest items -- without it, a high-volume outlet (Al
+// Jazeera in practice) can dump 30-40 items in one fetch while a
+// lower-volume one contributes 5, and since the Signal displays the
+// most recent N articles overall, the high-volume source quietly
+// crowds out everyone else. This is the actual fix for that, not just
+// adding more sources next to the same unbounded one.
+const MAX_ITEMS_PER_FEED = 10;
 
 export interface FeedArticle {
   source_name: string | null;
@@ -80,7 +95,7 @@ export async function fetchRssFeed(feed: { name: string; url: string; topic: str
       return [];
     }
     const xml = await res.text();
-    const items = xml.match(/<item[^>]*>[\s\S]*?<\/item>/gi) || [];
+    const items = (xml.match(/<item[^>]*>[\s\S]*?<\/item>/gi) || []).slice(0, MAX_ITEMS_PER_FEED);
     const articles: FeedArticle[] = [];
     for (const block of items) {
       const title = extractTag(block, "title");

@@ -61,6 +61,7 @@ export default function CommonsPage() {
 
   const [stats, setStats] = useState({ humansPresent: 0, communitiesActive: 0, activeConversations: 0 });
   const [signal, setSignal] = useState<NewsArticle[]>([]);
+  const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
   const [communities, setCommunities] = useState<Community[]>([]);
   const [liveThreads, setLiveThreads] = useState<CommonsThread[]>([]);
   const [questionThreads, setQuestionThreads] = useState<CommonsThread[]>([]);
@@ -165,6 +166,34 @@ export default function CommonsPage() {
   useEffect(() => {
     if (stage === "home") loadHome();
   }, [stage, loadHome]);
+
+  // Verify each Signal article's image actually loads before trusting it --
+  // a URL can be present but still 404 or get blocked by hotlink
+  // protection, and CSS background-image fails silently in that case (no
+  // broken-image icon, but no "No image" placeholder either). This
+  // preloads each one and falls back to the placeholder gradient for any
+  // that fail to load, so a bad image never just leaves a blank panel.
+  useEffect(() => {
+    let cancelled = false;
+    const withImages = signal.filter((a) => a.image_url);
+    if (withImages.length === 0) return;
+    for (const article of withImages) {
+      const img = new Image();
+      img.onerror = () => {
+        if (cancelled) return;
+        setBrokenImageIds((prev) => {
+          if (prev.has(article.id)) return prev;
+          const next = new Set(prev);
+          next.add(article.id);
+          return next;
+        });
+      };
+      img.src = article.image_url as string;
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [signal]);
 
   function enterCommons(query?: string) {
     if (typeof window !== "undefined") window.localStorage.setItem(SEEN_KEY, "1");
@@ -477,7 +506,9 @@ export default function CommonsPage() {
           The world is talking.
         </h1>
 
-        {!showingSearch && signal.length > 0 && <SignalBubble articles={signal} userId={userId} />}
+        {!showingSearch && signal.length > 0 && (
+          <SignalBubble articles={signal} userId={userId} brokenImageIds={brokenImageIds} />
+        )}
 
         {/* Live presence bar -- every number here is real, queried fresh
             on load. Nothing simulated. */}
@@ -839,7 +870,9 @@ export default function CommonsPage() {
                     gap: "14px",
                   }}
                 >
-                  {signal.map((article) => (
+                  {signal.map((article) => {
+                    const imageOk = Boolean(article.image_url) && !brokenImageIds.has(article.id);
+                    return (
                     <a
                       key={article.id}
                       href={article.url}
@@ -860,7 +893,7 @@ export default function CommonsPage() {
                         style={{
                           width: "100%",
                           aspectRatio: "16 / 9",
-                          background: article.image_url
+                          background: imageOk
                             ? `center/cover no-repeat url(${article.image_url})`
                             : "linear-gradient(135deg, var(--void), var(--panel))",
                           display: "flex",
@@ -868,7 +901,7 @@ export default function CommonsPage() {
                           justifyContent: "center",
                         }}
                       >
-                        {!article.image_url && (
+                        {!imageOk && (
                           <span
                             style={{
                               fontFamily: "var(--font-mono)",
@@ -908,7 +941,8 @@ export default function CommonsPage() {
                         </p>
                       </div>
                     </a>
-                  ))}
+                    );
+                  })}
                 </div>
               </Section>
             )}
@@ -1042,27 +1076,43 @@ export default function CommonsPage() {
   );
 }
 
-function SignalBubble({ articles, userId }: { articles: NewsArticle[]; userId: string | null }) {
+function SignalBubble({
+  articles,
+  userId,
+  brokenImageIds,
+}: {
+  articles: NewsArticle[];
+  userId: string | null;
+  brokenImageIds: Set<string>;
+}) {
   const [index, setIndex] = useState(0);
   const [fading, setFading] = useState(false);
+
+  // Both the auto-advance timer and the manual arrows below share this
+  // one transition -- the functional setIndex form means neither one
+  // depends on a possibly-stale `index` closure, so clicking an arrow
+  // mid-auto-advance (or the reverse) always lands on the right story.
+  function goTo(step: 1 | -1) {
+    if (articles.length <= 1) return;
+    setFading(true);
+    setTimeout(() => {
+      setIndex((i) => (i + step + articles.length) % articles.length);
+      setFading(false);
+    }, 380);
+  }
 
   useEffect(() => {
     if (articles.length <= 1) return;
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
-    const id = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setIndex((i) => (i + 1) % articles.length);
-        setFading(false);
-      }, 380);
-    }, 6500);
+    const id = setInterval(() => goTo(1), 6500);
     return () => clearInterval(id);
   }, [articles.length]);
 
   if (articles.length === 0) return null;
   const article = articles[Math.min(index, articles.length - 1)];
+  const imageOk = Boolean(article.image_url) && !brokenImageIds.has(article.id);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "38px" }}>
@@ -1102,6 +1152,7 @@ function SignalBubble({ articles, userId }: { articles: NewsArticle[]; userId: s
         </p>
       </div>
 
+      <div style={{ position: "relative", width: "min(230px, 62vw)" }}>
       <a
         href={article.url}
         target="_blank"
@@ -1110,13 +1161,13 @@ function SignalBubble({ articles, userId }: { articles: NewsArticle[]; userId: s
         className="signal-bubble"
         style={{
           position: "relative",
-          width: "min(230px, 62vw)",
+          width: "100%",
           aspectRatio: "4 / 3",
           borderRadius: "20px",
           overflow: "hidden",
           textDecoration: "none",
           display: "block",
-          background: article.image_url
+          background: imageOk
             ? `center/cover no-repeat url(${article.image_url})`
             : "radial-gradient(circle at 35% 30%, rgba(201,87,106,0.35), var(--void))",
           border: "1px solid rgba(201,87,106,0.55)",
@@ -1179,6 +1230,58 @@ function SignalBubble({ articles, userId }: { articles: NewsArticle[]; userId: s
           </p>
         </div>
       </a>
+
+      {articles.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => goTo(-1)}
+            aria-label="Previous story"
+            style={{
+              position: "absolute",
+              left: "6px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: "30px",
+              height: "30px",
+              borderRadius: "50%",
+              border: "1px solid rgba(201,87,106,0.6)",
+              background: "rgba(8,10,18,0.55)",
+              color: ACCENT,
+              fontSize: "16px",
+              lineHeight: 1,
+              cursor: "pointer",
+              boxShadow: "0 0 14px rgba(201,87,106,0.55)",
+            }}
+          >
+            &lsaquo;
+          </button>
+          <button
+            type="button"
+            onClick={() => goTo(1)}
+            aria-label="Next story"
+            style={{
+              position: "absolute",
+              right: "6px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: "30px",
+              height: "30px",
+              borderRadius: "50%",
+              border: "1px solid rgba(201,87,106,0.6)",
+              background: "rgba(8,10,18,0.55)",
+              color: ACCENT,
+              fontSize: "16px",
+              lineHeight: 1,
+              cursor: "pointer",
+              boxShadow: "0 0 14px rgba(201,87,106,0.55)",
+            }}
+          >
+            &rsaquo;
+          </button>
+        </>
+      )}
+      </div>
 
       {articles.length > 1 && (
         <div style={{ display: "flex", gap: "6px", marginTop: "16px" }}>
