@@ -191,8 +191,8 @@ export default function GalaxyPage() {
         href="/hub"
         style={{
           position: "absolute",
-          top: "22px",
-          left: "22px",
+          top: "30px",
+          left: "250px",
           zIndex: 2,
           color: "var(--ink-faint, #5c6684)",
           fontFamily: "var(--font-mono)",

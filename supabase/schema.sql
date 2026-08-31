@@ -428,3 +428,15 @@ drop policy if exists "Users see their own Signal engagement" on signal_engageme
 create policy "Users see their own Signal engagement" on signal_engagement for select using (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';
+
+-- White-theme pass, Aug 31 2026: added a "white-signal" Skin (see
+-- lib/skins.ts) alongside the existing cosmic-gold / earth-tones /
+-- pastel-dream palettes, and made it the new default so the site reads
+-- bright/white out of the box instead of the original dark navy. This
+-- moves every existing profile still on the old implicit default over to
+-- it, and moves the column default forward for new signups -- mirrors
+-- the cosmic-gold migration above. Cosmic Gold itself is untouched and
+-- stays one click away in the Hub's Skin picker for anyone who wants the
+-- original dark look back. Safe to run more than once.
+update profiles set ship_skin = 'white-signal' where ship_skin = 'cosmic-gold';
+alter table profiles alter column ship_skin set default 'white-signal';

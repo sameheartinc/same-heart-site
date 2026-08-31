@@ -17,42 +17,49 @@ export interface WorldDef extends WorldVisual {
   key: PathKey;
 }
 
+// White-theme pass, Aug 31 2026 -- these were near-black night skies
+// (e.g. onboarding was #05060f to #171226). Same five worlds, same
+// particle motion per style, but each sky is now a pale, barely-tinted
+// gradient reading as "bright atmosphere" rather than "night sky," and
+// each particleColor is deepened/saturated enough to still show up as
+// visible motion against a light background instead of washing out.
+
 // The universal starfield shown before anyone's path is known -- the same
 // for every visitor, regardless of which world they land in afterward.
 export const ONBOARDING_WORLD: WorldVisual = {
-  skyTop: "#05060f",
-  skyBottom: "#171226",
-  particleColor: "#c9a15a",
+  skyTop: "#fdfcf9",
+  skyBottom: "#f2ebda",
+  particleColor: "#a8783a",
   particleStyle: "stars",
 };
 
 export const WORLDS: Record<PathKey, WorldDef> = {
   guardian: {
     key: "guardian",
-    skyTop: "#0a0e1a",
-    skyBottom: "#3a2a12",
-    particleColor: "#c9a15a",
+    skyTop: "#fdfcf9",
+    skyBottom: "#f0e2c4",
+    particleColor: "#a8783a",
     particleStyle: "dust",
   },
   seeker: {
     key: "seeker",
-    skyTop: "#05060f",
-    skyBottom: "#141a33",
-    particleColor: "#a9c1f2",
+    skyTop: "#fbfcff",
+    skyBottom: "#e4eaf7",
+    particleColor: "#3d5fb0",
     particleStyle: "stars",
   },
   weaver: {
     key: "weaver",
-    skyTop: "#06121a",
-    skyBottom: "#123240",
-    particleColor: "#c9576a",
+    skyTop: "#f7fdfc",
+    skyBottom: "#d9f0ee",
+    particleColor: "#b8425a",
     particleStyle: "current",
   },
   flame: {
     key: "flame",
-    skyTop: "#0d0603",
-    skyBottom: "#3a1608",
-    particleColor: "#e0703a",
+    skyTop: "#fffaf6",
+    skyBottom: "#fbdcc7",
+    particleColor: "#c25a2a",
     particleStyle: "embers",
   },
 };

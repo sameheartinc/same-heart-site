@@ -228,7 +228,7 @@ const selectStyle: React.CSSProperties = {
   fontSize: "0.95rem",
   background: "var(--panel)",
   color: "var(--ink)",
-  border: "1px solid #313f5e",
+  border: "1px solid var(--border)",
   borderRadius: "10px",
   padding: "11px 12px",
 };

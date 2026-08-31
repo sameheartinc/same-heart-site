@@ -20,7 +20,7 @@
 // user-uploaded, on purpose: no upload flow, no moderation surface, no new
 // privacy question to answer for a purely cosmetic feature.
 
-export type SkinKey = "cosmic-gold" | "earth-tones" | "pastel-dream";
+export type SkinKey = "white-signal" | "cosmic-gold" | "earth-tones" | "pastel-dream";
 
 export type SkinKind = "palette" | "artwork";
 
@@ -44,6 +44,27 @@ export type Skin = {
 };
 
 export const SKINS: Skin[] = [
+  {
+    // Aug 31 2026 -- the site's white-theme pass: this is now what
+    // app/globals.css's :root also carries, so a page renders the same
+    // whether or not it wraps itself in a skin. Kept as a real, separate
+    // skin (not baked into cosmic-gold's own entry) so the original dark
+    // look stays one click away in the Skins picker instead of being lost.
+    key: "white-signal",
+    kind: "palette",
+    name: "White Signal",
+    blurb: "Open and bright. Same signal, daylight now.",
+    vars: {
+      "--void": "#ffffff",
+      "--panel": "#f6f4ee",
+      "--ink": "#1b1a2e",
+      "--ink-dim": "#5c6674",
+      "--ink-faint": "#8b8fa3",
+      "--gold": "#a8783a",
+      "--rose": "#b8425a",
+      "--border": "#e4e0d4",
+    },
+  },
   {
     key: "cosmic-gold",
     kind: "palette",
@@ -94,10 +115,10 @@ export const SKINS: Skin[] = [
   },
 ];
 
-export const DEFAULT_SKIN_KEY: SkinKey = "cosmic-gold";
+export const DEFAULT_SKIN_KEY: SkinKey = "white-signal";
 
 export function getSkin(key: string | null | undefined): Skin {
-  return SKINS.find((s) => s.key === key) ?? SKINS[0];
+  return SKINS.find((s) => s.key === key) ?? SKINS.find((s) => s.key === DEFAULT_SKIN_KEY)!;
 }
 
 // Cast to React.CSSProperties at the call site -- custom properties aren't

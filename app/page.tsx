@@ -231,7 +231,7 @@ export default function Home() {
               placeholder="your@email.com"
               style={{
                 background: "var(--panel)",
-                border: "1px solid #313f5e",
+                border: "1px solid var(--border)",
                 borderRadius: "999px",
                 padding: "9px 14px",
                 color: "var(--ink)",

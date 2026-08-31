@@ -1,14 +1,21 @@
 @import url("https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Literata:ital,opsz,wght@0,18..144,400;0,18..144,500;1,18..144,400&display=swap");
 
 :root {
-  --void: #0a0e1a;
-  --panel: #121a2c;
-  --ink: #ece7dc;
-  --ink-dim: #9aa3b8;
-  --ink-faint: #5c6684;
-  --gold: #c9a15a;
-  --rose: #c9576a;
-  --border: #313f5e;
+  /* White-theme pass, Aug 31 2026 -- was a dark navy site (--void: #0a0e1a,
+     --ink: #ece7dc off-white text). Same eight tokens, values flipped to
+     light: --void/--panel now carry the page, --ink/--ink-dim/--ink-faint
+     darkened for real contrast on white rather than just inverted 1:1.
+     --gold/--rose deepened slightly from their dark-theme values for the
+     same reason -- they're used as small mono-label text in places, not
+     just glows, and the original tones read too pale on white. */
+  --void: #ffffff;
+  --panel: #f6f4ee;
+  --ink: #1b1a2e;
+  --ink-dim: #5c6674;
+  --ink-faint: #8b8fa3;
+  --gold: #a8783a;
+  --rose: #b8425a;
+  --border: #e4e0d4;
 
   --font-display: "Unbounded", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Literata", Georgia, serif;
