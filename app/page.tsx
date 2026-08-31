@@ -17,6 +17,23 @@ const STARS = Array.from({ length: 110 }, (_, i) => ({
   duration: seeded(i * 9.123 + 4) * 3 + 4,
 }));
 
+// A one-page "heavenly" palette -- a light, warm alternative to the
+// site's dark default, scoped to just this landing page the same way a
+// Skin scopes its palette to the Hub (see lib/skins.ts). Every element
+// below already reads its colors through var(--void)/var(--gold)/etc.,
+// so overriding these on the page's own root is enough to relight the
+// whole page without touching app/globals.css or any other route.
+const HEAVENLY_VARS = {
+  "--void": "#fdfbf5",
+  "--panel": "#ffffff",
+  "--ink": "#2e2a45",
+  "--ink-dim": "#6f6a85",
+  "--ink-faint": "#a29cb0",
+  "--gold": "#b8863f",
+  "--rose": "#c9576a",
+  "--border": "#ece6d8",
+};
+
 export default function Home() {
   const chimeRef = useRef<HTMLAudioElement>(null);
 
@@ -32,6 +49,7 @@ export default function Home() {
   return (
     <main
       style={{
+        ...(HEAVENLY_VARS as React.CSSProperties),
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
@@ -42,7 +60,7 @@ export default function Home() {
         position: "relative",
         overflow: "hidden",
         background:
-          "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(201,161,90,0.10), transparent 65%), var(--void)",
+          "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(201,161,90,0.14), transparent 65%), var(--void)",
       }}
     >
       <style>{`
@@ -55,7 +73,7 @@ export default function Home() {
         }
         .stars span {
           position: absolute; border-radius: 50%;
-          background: var(--ink, #ece7dc);
+          background: var(--gold);
           animation: twinkle ease-in-out infinite;
         }
         @media (prefers-reduced-motion: reduce) {

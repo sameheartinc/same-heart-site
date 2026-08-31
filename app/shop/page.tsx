@@ -45,7 +45,7 @@ export default function ShopPage() {
     >
       <div style={{ maxWidth: "900px", margin: "0 auto", textAlign: "center" }}>
         <Link
-          href="/"
+          href="/galaxy"
           style={{
             display: "inline-flex",
             width: "64px",

@@ -94,7 +94,7 @@ function LoginPageInner() {
       .single();
 
     if (profileData?.archetype) {
-      setArrivalMessage("Welcome back to the frequency.");
+      setArrivalMessage("Welcome back.");
       setStage("arriving");
       setTimeout(() => router.push("/hub"), 1400);
       return;
@@ -218,7 +218,7 @@ function LoginPageInner() {
     }
 
     setArrivalMessage(
-      mode === "signup" ? "Something in you just answered." : "Welcome back to the frequency."
+      mode === "signup" ? "Something in you just answered." : "Welcome back."
     );
     setStage("arriving");
     setTimeout(() => router.push("/star-day"), 1400);
@@ -468,7 +468,7 @@ function LoginPageInner() {
               gap: "14px",
             }}
           >
-            <Link href="/" style={{ display: "block", margin: "0 auto 4px", width: "56px" }}>
+            <Link href="/galaxy" style={{ display: "block", margin: "0 auto 4px", width: "56px" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/mark.png"

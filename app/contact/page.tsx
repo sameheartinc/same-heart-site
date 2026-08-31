@@ -19,7 +19,7 @@ export default function ContactPage() {
       }}
     >
       <div style={{ maxWidth: "520px", textAlign: "center" }}>
-        <Link href="/" style={{ display: "inline-block" }}>
+        <Link href="/galaxy" style={{ display: "inline-block" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/mark.png"
