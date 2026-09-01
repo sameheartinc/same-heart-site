@@ -20,6 +20,7 @@ import { PATHS, type PathKey } from "@/lib/paths";
 import { streakVisualTier, checkInWithServer, type StreakMilestone } from "@/lib/streak";
 import { listMyUnlocks, evaluateEvolution } from "@/lib/evolution";
 import { getMyMonetizationStatus, applyForMonetization, type MonetizationStatus } from "@/lib/monetization";
+import { findKindredSparks, setKindredOptOut, type KindredMatch } from "@/lib/kindredSparks";
 import { FALLBACK_SKINS, loadWidgetSkins, type WidgetSkin, type WidgetSkinKey } from "@/lib/widgetSkins";
 import WidgetFrame from "@/components/WidgetFrame";
 
@@ -39,6 +40,7 @@ type Profile = {
   last_visit_date: string | null;
   commons_accent: string | null;
   hub_background_url: string | null;
+  kindred_opt_out: boolean;
 };
 
 type LogEntry = {
@@ -72,6 +74,8 @@ export default function HubPage() {
   const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [keys, setKeys] = useState<ProfileKey[]>([]);
+  const [kindredMatches, setKindredMatches] = useState<KindredMatch[]>([]);
+  const [kindredOptOutSaving, setKindredOptOutSaving] = useState(false);
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
   const [notifOpen, setNotifOpen] = useState(false);
@@ -96,7 +100,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out"
         )
         .eq("id", userData.user.id)
         .single();
@@ -228,8 +232,32 @@ export default function HubPage() {
       // can be computed against the real list, not just the 4 fallback
       // skins baked into the bundle.
       loadWidgetSkins().then(setSkinCatalog);
+
+      // Kindred Sparks -- see lib/kindredSparks.ts. Computed fresh from
+      // already-public signals every time the Hub loads; if this person
+      // opted out, findKindredSparks itself returns nothing.
+      if (!currentProfile.kindred_opt_out) {
+        findKindredSparks(userData.user.id).then(setKindredMatches);
+      }
     })();
   }, [router]);
+
+  // Kindred Sparks opt-out -- flips profiles.kindred_opt_out and clears
+  // (or reloads) the widget's matches to match the new state immediately,
+  // rather than waiting for the next visit.
+  async function toggleKindredOptOut() {
+    if (!profile || !userId) return;
+    const next = !profile.kindred_opt_out;
+    setKindredOptOutSaving(true);
+    await setKindredOptOut(next);
+    setProfile({ ...profile, kindred_opt_out: next });
+    if (next) {
+      setKindredMatches([]);
+    } else {
+      findKindredSparks(userId).then(setKindredMatches);
+    }
+    setKindredOptOutSaving(false);
+  }
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -1516,6 +1544,109 @@ export default function HubPage() {
                 </p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Kindred Sparks -- people you might have something in common
+            with, matched only on signals already public elsewhere on the
+            site (Path, World Issues raised in the Exchange). See
+            lib/kindredSparks.ts and IDEAS.md's "Kindred Sparks -- defined"
+            entry. Every match always shows its plain-language reason;
+            nothing here is ever a bare score. Sits right below Heart
+            Strings, shown whenever there's at least one real match or the
+            person has opted out (so the opt-out control is always
+            reachable, not just when matches happen to exist). */}
+        {(kindredMatches.length > 0 || profile?.kindred_opt_out) && (
+          <div
+            style={{
+              marginBottom: "22px",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel, transparent)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginBottom: kindredMatches.length > 0 ? "10px" : 0,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Kindred Sparks
+              </span>
+              <button
+                onClick={toggleKindredOptOut}
+                disabled={kindredOptOutSaving}
+                style={{
+                  padding: "3px 9px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--widget-border)",
+                  background: "none",
+                  color: "var(--widget-text-faint)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "8px",
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {kindredOptOutSaving
+                  ? "..."
+                  : profile?.kindred_opt_out
+                  ? "Opted out -- turn back on"
+                  : "Don't include me"}
+              </button>
+            </div>
+            {kindredMatches.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {kindredMatches.map((m) => (
+                  <div
+                    key={m.profile.id}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      background: "var(--widget-panel-soft, rgba(255,255,255,0.03))",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: "0 0 3px",
+                        fontFamily: "var(--font-display)",
+                        fontWeight: 700,
+                        fontSize: "0.85rem",
+                        color: "var(--widget-text)",
+                      }}
+                    >
+                      {authorName(m.profile)}
+                    </p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "9px",
+                        letterSpacing: "0.02em",
+                        color: "var(--widget-text-faint)",
+                      }}
+                    >
+                      {m.reasons.join(" ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

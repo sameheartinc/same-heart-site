@@ -879,3 +879,22 @@ create policy "Users can upload their own exchange photos" on storage.objects fo
   with check (bucket_id = 'exchange-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
 notify pgrst, 'reload schema';
+
+-- Kindred Sparks -- see IDEAS.md's full definition. Only ever matches on
+-- signals already visible elsewhere on the site (path_key is already in
+-- public_profiles; issue_key is already public via exchange_transmissions)
+-- -- nothing new is collected here, so no new table for the matching
+-- itself. The one real addition is an opt-out, because pointing two
+-- specific people at each other is a step beyond just displaying each of
+-- their own public info, and that step gets its own off-switch even
+-- though nothing new is being read. kindred_opt_out has to join
+-- public_profiles (not just profiles) since checking "is this candidate
+-- opted out" has to work across every profile, not just your own row --
+-- same reasoning as every other column already in this view.
+alter table profiles add column if not exists kindred_opt_out boolean not null default false;
+
+create or replace view public_profiles as
+  select id, display_name, spark_id, path_key, ship_skin, designation, commons_accent, kindred_opt_out
+  from profiles;
+
+notify pgrst, 'reload schema';

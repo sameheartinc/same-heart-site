@@ -145,6 +145,9 @@ export default function GalaxyPage() {
           position: relative;
           overflow: hidden;
           isolation: isolate;
+          /* Lets the icon's rotateY/rotateX spin (see .galaxy-node-icon
+             below) read as real depth rather than a flat squash. */
+          perspective: 600px;
         }
         .galaxy-node-star::before {
           content: "";
@@ -173,7 +176,12 @@ export default function GalaxyPage() {
 
         /* The polyhedron glyphs (dodecahedron/icosahedron) inside each
            node's orb -- a slow, continuous spin for as long as the
-           pointer stays over the node, not just a one-time flip. */
+           pointer stays over the node, not just a one-time flip. Uses
+           rotateY/rotateX (paired with the perspective on
+           .galaxy-node-star above) rather than a flat 2D rotate(), so
+           the shape actually tumbles in depth -- the back face mirrors
+           through by default (no separate back-face art needed), which
+           reads fine for a simple line-art glyph like this. */
         .galaxy-node-icon {
           transform-origin: 50% 50%;
         }
@@ -181,8 +189,9 @@ export default function GalaxyPage() {
           animation: galaxyIconSpin 2.4s linear infinite;
         }
         @keyframes galaxyIconSpin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+          0%   { transform: rotateY(0deg) rotateX(0deg); }
+          50%  { transform: rotateY(180deg) rotateX(18deg); }
+          100% { transform: rotateY(360deg) rotateX(0deg); }
         }
 
         /* Smaller hit-boxes on phones so nodes have real breathing room
@@ -385,8 +394,8 @@ export default function GalaxyPage() {
                         className="galaxy-node-icon"
                         aria-hidden="true"
                         viewBox="0 0 24 24"
-                        width="26"
-                        height="26"
+                        width="34"
+                        height="34"
                         style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent }}
                       >
                         {/* A flat dodecahedron glyph: an outer and inner
@@ -421,8 +430,8 @@ export default function GalaxyPage() {
                         className="galaxy-node-icon"
                         aria-hidden="true"
                         viewBox="0 0 24 24"
-                        width="26"
-                        height="26"
+                        width="34"
+                        height="34"
                         style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent }}
                       >
                         {/* Same "outer shape + inner shape + joined

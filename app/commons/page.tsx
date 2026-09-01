@@ -579,7 +579,12 @@ export default function CommonsPage() {
         >
           <StatCard label="Humans present" value={stats.humansPresent} sub="last 5 min" />
           <StatCard label="Active conversations" value={stats.activeConversations} sub="last 24h" />
-          <StatCard label="Communities" value={stats.communitiesActive} sub="" />
+          {/* The forums main page (app/commons/communities/page.tsx) --
+              every community, plus a way to start one. This card used
+              to just be a number; now it's a real front door. */}
+          <Link href="/commons/communities" style={{ textDecoration: "none", color: "inherit" }}>
+            <StatCard label="Communities" value={stats.communitiesActive} sub="" />
+          </Link>
           <StatCard label="Projects" value="Not open yet" sub="" muted />
         </div>
 

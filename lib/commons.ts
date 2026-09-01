@@ -16,6 +16,7 @@ export interface PublicProfile {
   ship_skin: string | null;
   designation: string | null;
   commons_accent: string | null;
+  kindred_opt_out: boolean;
 }
 
 export interface Community {
@@ -69,7 +70,7 @@ export async function fetchProfilesByIds(ids: string[]): Promise<Record<string, 
   if (unique.length === 0) return {};
   const { data, error } = await supabase
     .from("public_profiles")
-    .select("id, display_name, spark_id, path_key, ship_skin, designation, commons_accent")
+    .select("id, display_name, spark_id, path_key, ship_skin, designation, commons_accent, kindred_opt_out")
     .in("id", unique);
   if (error || !data) return {};
   const map: Record<string, PublicProfile> = {};

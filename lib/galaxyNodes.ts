@@ -116,7 +116,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     tagline: "Quick games, real code",
     accent: "#9b6fe0",
     angleDeg: 180,
-    radiusPct: 40,
+    radiusPct: 50,
     scale: 0.95,
   },
   {
