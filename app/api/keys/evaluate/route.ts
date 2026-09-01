@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         newlyEarned.push("green");
         await admin.from("log_entries").insert({
           profile_id: profileId,
-          description: "Earned the Green Key -- real, sustained impact through the Exchange.",
+          description: "Earned the Green Heart String -- real, sustained impact through the Exchange.",
           category: "humanitarian",
           xp_awarded: 0,
         });
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
         newlyEarned.push("blue");
         await admin.from("log_entries").insert({
           profile_id: profileId,
-          description: "Earned the Blue Key -- active across several different communities.",
+          description: "Earned the Blue Heart String -- active across several different communities.",
           category: "personal",
           xp_awarded: 0,
         });
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
         newlyEarned.push("red");
         await admin.from("log_entries").insert({
           profile_id: profileId,
-          description: "Earned the Red Key -- two real weeks of showing up.",
+          description: "Earned the Red Heart String -- two real weeks of showing up.",
           category: "personal",
           xp_awarded: 0,
         });
@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
         newlyEarned.push("yellow");
         await admin.from("log_entries").insert({
           profile_id: profileId,
-          description: "Earned the Yellow Key -- real engagement with the Signal.",
+          description: "Earned the Yellow Heart String -- real engagement with the Signal.",
           category: "personal",
           xp_awarded: 0,
         });

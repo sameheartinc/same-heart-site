@@ -3,7 +3,7 @@ import Link from "next/link";
 export const metadata = {
   title: "About — Same Heart",
   description:
-    "Same Heart is a personal growth and community platform: a personality/self-discovery system (Star Day, Path), community discussion spaces (the Commons), a curated feed of real news (the Signal), and permanent earned recognition for real engagement (Keys), wrapped in a space-and-signal metaphor.",
+    "Same Heart is a personal growth and community platform: a personality/self-discovery system (Star Day, Path), community discussion spaces (the Commons), a curated feed of real news (the Signal), and permanent earned recognition for real engagement (Heart Strings), wrapped in a space-and-signal metaphor.",
 };
 
 export default function AboutPage() {
@@ -113,8 +113,8 @@ export default function AboutPage() {
             positive impact.
           </p>
           <p>
-            <strong>Keys</strong> are permanent, earned badges that recognize different kinds
-            of real engagement &mdash; presence, breadth, real-world impact, and more. A key
+            <strong>Heart Strings</strong> are permanent, earned badges that recognize different kinds
+            of real engagement &mdash; presence, breadth, real-world impact, and more. A Heart String
             is never bought and never lost once earned.
           </p>
           <p>

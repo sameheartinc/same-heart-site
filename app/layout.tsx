@@ -13,7 +13,7 @@ const SITE_DESCRIPTION =
 // voice used for social-share previews. See app/about/page.tsx for the
 // full version of this same description.
 const ORG_DESCRIPTION =
-  "Same Heart is a personal growth and community platform: a personality/self-discovery system (Star Day, Path), community discussion spaces (the Commons), a curated feed of real news (the Signal), and permanent earned recognition for real engagement (Keys).";
+  "Same Heart is a personal growth and community platform: a personality/self-discovery system (Star Day, Path), community discussion spaces (the Commons), a curated feed of real news (the Signal), and permanent earned recognition for real engagement (Heart Strings).";
 
 // Organization + WebSite structured data (JSON-LD) -- gives search
 // engines and AI systems a plain, machine-readable fact sheet instead of

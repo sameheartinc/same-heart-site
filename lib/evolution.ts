@@ -65,7 +65,7 @@ export const UNLOCKABLES: Unlockable[] = [
     id: "widget-skin-aurora",
     kind: "widget-skin",
     name: "Aurora",
-    description: "Hold at least 2 Keys and keep your capsule for 30 days.",
+    description: "Hold at least 2 Heart Strings and keep your capsule for 30 days.",
     isEligible: (s) => s.keysHeld >= 2 && s.tenureDays >= 30,
   },
 ];

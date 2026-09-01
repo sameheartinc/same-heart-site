@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { fetchAllRssFeeds, type FeedArticle } from "@/lib/rssFeeds";
+import { fetchAllRssFeeds, RSS_FEEDS, type FeedArticle } from "@/lib/rssFeeds";
 
 // Hourly news fetch for The Signal -- triggered by Vercel Cron (see
 // vercel.json: "0 * * * *"). Not reachable by normal site traffic; only
@@ -9,8 +9,12 @@ import { fetchAllRssFeeds, type FeedArticle } from "@/lib/rssFeeds";
 //
 // Two independent sources feed this, and neither one failing blocks the
 // other:
-//   1. Free RSS feeds (lib/rssFeeds.ts) -- always on, no API key, no
-//      cost, no production-use restriction. This is the primary source.
+//   1. Free RSS feeds, read from the feed_sources table (see
+//      supabase/schema.sql and /admin/signal) -- always on, no API key,
+//      no cost, no production-use restriction. This is the primary
+//      source. Falls back to lib/rssFeeds.ts's hardcoded RSS_FEEDS if
+//      the table is empty or the query fails, so a database hiccup
+//      never silences the Signal.
 //   2. NewsAPI.org -- only runs if NEWSAPI_KEY is set. See README for
 //      why its free tier isn't safe to run here in production; this
 //      stays off until that key is a paid, production-eligible one.
@@ -24,6 +28,32 @@ interface NewsApiArticle {
   url: string;
   urlToImage: string | null;
   publishedAt: string;
+}
+
+// Reads the active, ordered list from feed_sources -- the whole point
+// of the Yellow Heart String's door: adding or retiring a source is now
+// a form submission in /admin/signal, not a code change and a deploy.
+// Any failure (table missing, query error, or genuinely zero active
+// rows) falls back to the hardcoded RSS_FEEDS list from lib/rssFeeds.ts,
+// so the Signal's coverage is never worse than it is today.
+async function getFeedSources(): Promise<Array<{ name: string; url: string; topic: string }>> {
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from("feed_sources")
+      .select("name, url, topic")
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
+
+    if (error) {
+      console.error("feed_sources lookup failed, falling back to RSS_FEEDS:", error.message);
+      return RSS_FEEDS;
+    }
+    if (!data || data.length === 0) return RSS_FEEDS;
+    return data;
+  } catch (err) {
+    console.error("feed_sources lookup threw, falling back to RSS_FEEDS:", err instanceof Error ? err.message : err);
+    return RSS_FEEDS;
+  }
 }
 
 async function fetchNewsApi(): Promise<{ rows: FeedArticle[]; note: string }> {
@@ -66,7 +96,8 @@ export async function GET(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const [rssRows, newsApiResult] = await Promise.all([fetchAllRssFeeds(), fetchNewsApi()]);
+  const feedSources = await getFeedSources();
+  const [rssRows, newsApiResult] = await Promise.all([fetchAllRssFeeds(feedSources), fetchNewsApi()]);
   const rows = [...rssRows, ...newsApiResult.rows];
 
   if (rows.length === 0) {

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { SKINS, getSkin, type SkinKey } from "@/lib/skins";
 import { listMyKeys, evaluateKeys, setCommonsAccent, KEY_INFO, COMMONS_ACCENT_PALETTE, type ProfileKey } from "@/lib/keys";
+import { getLevel, nextPrimeThreshold } from "@/lib/primeLevels";
 import {
   listMyNotifications,
   markNotificationsRead,
@@ -64,6 +65,7 @@ export default function HubPage() {
   const [logSaving, setLogSaving] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const [milestone, setMilestone] = useState<StreakMilestone | null>(null);
+  const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);
   const [keys, setKeys] = useState<ProfileKey[]>([]);
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
@@ -152,6 +154,26 @@ export default function HubPage() {
       setUserId(userData.user.id);
       setProfile(currentProfile);
       setLog(currentLog);
+
+      // Prime Levels (see lib/primeLevels.ts) -- a one-time "Level up"
+      // banner the first time this browser sees a higher level than it
+      // last recorded. Purely a client-side courtesy: Level itself is
+      // just a pure function of XP, recomputed fresh on every visit, so
+      // there's nothing to lose here even if this check is ever missed
+      // (a different device, cleared browser storage) -- only the
+      // one-time celebration of crossing it would be, not the level.
+      try {
+        const currentLevel = getLevel(currentProfile.xp);
+        const lastSeenRaw = window.localStorage.getItem("same-heart-last-seen-level");
+        const lastSeen = lastSeenRaw ? parseInt(lastSeenRaw, 10) : 0;
+        if (currentLevel > lastSeen) {
+          setLeveledUpTo(currentLevel);
+        }
+        window.localStorage.setItem("same-heart-last-seen-level", String(currentLevel));
+      } catch {
+        /* localStorage can throw in some private-browsing contexts -- a
+           missed celebration banner isn't worth surfacing an error for. */
+      }
       setKeys(myKeys);
       setUnlockedIds(new Set(myUnlocks));
       setNotifications(myNotifications);
@@ -321,6 +343,11 @@ export default function HubPage() {
     : "var(--void)";
   const path = profile.path_key ? PATHS[profile.path_key as PathKey] : null;
   const spark = sparkLabel(profile.spark_id);
+  // Prime Levels -- see lib/primeLevels.ts. A pure function of XP, so no
+  // fetch or server round-trip needed: it's just as trustworthy as the
+  // XP number itself.
+  const level = getLevel(profile.xp);
+  const nextLevelAt = nextPrimeThreshold(profile.xp);
   const streakTier = streakVisualTier(profile.current_streak ?? 0);
   const shipName = profile.display_name?.trim() || profile.archetype || "Unnamed Vessel";
   // Skins with an unlockId only join the Capsule's cycle once this
@@ -420,6 +447,44 @@ export default function HubPage() {
               }}
             >
               +{milestone.bonusXp} XP for showing up, day after day.
+            </p>
+          </div>
+        )}
+
+        {leveledUpTo !== null && (
+          <div
+            className="hub-quote"
+            style={{
+              background: "var(--panel)",
+              border: "1px solid var(--gold)",
+              borderRadius: "14px",
+              padding: "16px 20px",
+              marginBottom: "22px",
+              textAlign: "center",
+              boxShadow: "0 0 24px rgba(201,161,90,0.25)",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                color: "var(--gold)",
+              }}
+            >
+              Level {leveledUpTo}
+            </p>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontFamily: "var(--font-body)",
+                fontStyle: "italic",
+                color: "var(--ink-dim)",
+                fontSize: "0.85rem",
+              }}
+            >
+              Your Heartbeats just crossed a prime number -- that's what a level is here.
             </p>
           </div>
         )}
@@ -620,7 +685,21 @@ export default function HubPage() {
               {profile.archetype}
             </h1>
             <p style={{ fontFamily: "var(--font-body)", fontStyle: "italic", color: "var(--widget-text-dim)", margin: 0 }}>
-              {profile.frequency}Hz &middot; {profile.standing} &middot; {profile.xp} XP
+              {profile.frequency}Hz &middot; {profile.standing} &middot; {profile.xp} XP &middot; Level {level}
+            </p>
+            <p
+              title="A level is how many prime numbers your Heartbeats total has passed -- 2, 3, 5, 7, 11, and so on. They thin out the higher you go, on purpose."
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.04em",
+                color: "var(--widget-text-faint)",
+                margin: "2px 0 0",
+              }}
+            >
+              {nextLevelAt !== null
+                ? `${nextLevelAt - profile.xp} XP to Level ${level + 1}`
+                : "Every prime reached so far"}
             </p>
             {path && (
               <p
@@ -934,7 +1013,7 @@ export default function HubPage() {
                 color: "var(--widget-text-faint)",
               }}
             >
-              Keys
+              Heart Strings
             </span>
             <div style={{ display: "flex", gap: "8px" }}>
               {keys.map((k) => {

@@ -861,6 +861,82 @@ export default function CommonsPage() {
           </Section>
         ) : (
           <>
+            <Section
+              title="Communities"
+              action={
+                <button onClick={() => setNewCommunityOpen((v) => !v)} style={communityActionStyle}>
+                  {newCommunityOpen ? "Cancel" : "+ Start a community"}
+                </button>
+              }
+            >
+              <p
+                style={{
+                  margin: "0 0 16px",
+                  fontFamily: "var(--font-body)",
+                  fontStyle: "italic",
+                  color: "var(--ink-dim)",
+                  fontSize: "0.85rem",
+                  maxWidth: "60ch",
+                }}
+              >
+                A space inside the Commons built around one shared interest -- anyone can start
+                one, and you become its first member the moment you do.
+              </p>
+              {newCommunityOpen && (
+                <form onSubmit={handleCreateCommunity} style={{ marginBottom: "18px" }}>
+                  <input
+                    value={newCommunityName}
+                    onChange={(e) => setNewCommunityName(e.target.value)}
+                    placeholder="Community name"
+                    required
+                    style={{ ...inputStyle, marginBottom: "8px" }}
+                  />
+                  <textarea
+                    value={newCommunityDesc}
+                    onChange={(e) => setNewCommunityDesc(e.target.value)}
+                    placeholder="What's it about?"
+                    rows={2}
+                    style={{ ...inputStyle, marginBottom: "8px", resize: "vertical" as const }}
+                  />
+                  {newCommunityError && <p style={errorStyle}>{newCommunityError}</p>}
+                  <button type="submit" disabled={newCommunityBusy} style={submitButtonStyle}>
+                    {newCommunityBusy ? "Creating..." : "Create community"}
+                  </button>
+                </form>
+              )}
+              {communities.length === 0 ? (
+                <EmptyState>No communities yet -- start the first one.</EmptyState>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "12px" }}>
+                  {communities.map((c) => (
+                    <Link
+                      key={c.id}
+                      href={`/commons/c/${c.slug}`}
+                      style={{
+                        display: "block",
+                        padding: "16px",
+                        borderRadius: "14px",
+                        background: "var(--panel)",
+                        border: `1px solid ${c.accent}44`,
+                        textDecoration: "none",
+                        color: "var(--ink)",
+                      }}
+                    >
+                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.95rem" }}>
+                        {c.name}
+                      </p>
+                      <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.8rem", color: "var(--ink-dim)" }}>
+                        {c.description || "No description yet."}
+                      </p>
+                      <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: c.accent }}>
+                        {c.member_count} {c.member_count === 1 ? "member" : "members"}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </Section>
+
             {signal.length > 0 && (
               <Section title="The Signal">
                 <div
@@ -983,68 +1059,6 @@ export default function CommonsPage() {
               )}
             </Section>
 
-            <Section
-              title="Communities"
-              action={
-                <button onClick={() => setNewCommunityOpen((v) => !v)} style={smallActionStyle}>
-                  {newCommunityOpen ? "Cancel" : "+ Start a community"}
-                </button>
-              }
-            >
-              {newCommunityOpen && (
-                <form onSubmit={handleCreateCommunity} style={{ marginBottom: "18px" }}>
-                  <input
-                    value={newCommunityName}
-                    onChange={(e) => setNewCommunityName(e.target.value)}
-                    placeholder="Community name"
-                    required
-                    style={{ ...inputStyle, marginBottom: "8px" }}
-                  />
-                  <textarea
-                    value={newCommunityDesc}
-                    onChange={(e) => setNewCommunityDesc(e.target.value)}
-                    placeholder="What's it about?"
-                    rows={2}
-                    style={{ ...inputStyle, marginBottom: "8px", resize: "vertical" as const }}
-                  />
-                  {newCommunityError && <p style={errorStyle}>{newCommunityError}</p>}
-                  <button type="submit" disabled={newCommunityBusy} style={submitButtonStyle}>
-                    {newCommunityBusy ? "Creating..." : "Create community"}
-                  </button>
-                </form>
-              )}
-              {communities.length === 0 ? (
-                <EmptyState>No communities yet -- start the first one.</EmptyState>
-              ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "12px" }}>
-                  {communities.map((c) => (
-                    <Link
-                      key={c.id}
-                      href={`/commons/c/${c.slug}`}
-                      style={{
-                        display: "block",
-                        padding: "16px",
-                        borderRadius: "14px",
-                        background: "var(--panel)",
-                        border: `1px solid ${c.accent}44`,
-                        textDecoration: "none",
-                        color: "var(--ink)",
-                      }}
-                    >
-                      <p style={{ margin: "0 0 6px", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.95rem" }}>
-                        {c.name}
-                      </p>
-                      <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.8rem", color: "var(--ink-dim)" }}>
-                        {c.description || "No description yet."}
-                      </p>
-                      <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: c.accent }}>
-                        {c.member_count} {c.member_count === 1 ? "member" : "members"}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Section>
           </>
         )}
 
@@ -1469,6 +1483,19 @@ const submitButtonStyle: React.CSSProperties = {
   fontFamily: "var(--font-display)",
   fontWeight: 700,
   fontSize: "0.8rem",
+  cursor: "pointer",
+};
+
+const communityActionStyle: React.CSSProperties = {
+  padding: "10px 18px",
+  borderRadius: "10px",
+  border: "1px solid var(--gold)",
+  background: "rgba(184,134,63,0.12)",
+  color: "var(--gold)",
+  fontFamily: "var(--font-display)",
+  fontWeight: 700,
+  fontSize: "0.8rem",
+  letterSpacing: "0.04em",
   cursor: "pointer",
 };
 

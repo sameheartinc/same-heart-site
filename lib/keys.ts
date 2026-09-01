@@ -18,22 +18,22 @@ export interface ProfileKey {
 
 export const KEY_INFO: Record<KeyColor, { name: string; accent: string; blurb: string }> = {
   green: {
-    name: "Green Key",
+    name: "Green Heart String",
     accent: "#3fae62",
     blurb: "Earned through real, sustained impact on the Exchange.",
   },
   blue: {
-    name: "Blue Key",
+    name: "Blue Heart String",
     accent: "#4a8fe0",
     blurb: "Earned by showing up across several different communities, not just one.",
   },
   red: {
-    name: "Red Key",
+    name: "Red Heart String",
     accent: "#d9503f",
     blurb: "Earned by actually showing up -- two real weeks of return visits.",
   },
   yellow: {
-    name: "Yellow Key",
+    name: "Yellow Heart String",
     accent: "#d9b23f",
     blurb: "Earned by actually reading the Signal -- noticing real news, not just scrolling past it.",
   },

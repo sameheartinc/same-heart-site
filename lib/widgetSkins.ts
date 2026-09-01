@@ -146,7 +146,7 @@ export const FALLBACK_SKINS: WidgetSkin[] = [
   {
     key: "aurora",
     name: "Aurora",
-    description: "Earned by holding at least 2 Keys and staying 30 days.",
+    description: "Earned by holding at least 2 Heart Strings and staying 30 days.",
     headerLabel: "SIGNAL_AURORA",
     kind: "palette",
     unlockId: "widget-skin-aurora",

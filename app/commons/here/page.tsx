@@ -72,7 +72,7 @@ export default function WhoIsHerePage() {
             color: ACCENT,
           }}
         >
-          Red Key
+          Red Heart String
         </p>
         <h1
           style={{
@@ -111,7 +111,7 @@ export default function WhoIsHerePage() {
               This one&rsquo;s locked.
             </p>
             <p style={{ margin: 0, fontFamily: "var(--font-body)", color: "var(--ink-dim)", fontSize: "0.88rem", lineHeight: 1.6 }}>
-              {KEY_INFO.red.blurb} Once the Red Key is yours, this page turns into a real,
+              {KEY_INFO.red.blurb} Once the Red Heart String is yours, this page turns into a real,
               live view of who else is around right now.
             </p>
           </div>

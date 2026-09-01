@@ -88,7 +88,7 @@ export default function ImpactHistoryPage() {
               margin: "0 0 14px",
             }}
           >
-            This page opens with the Green Key
+            This page opens with the Green Heart String
           </h1>
           <p style={{ color: "var(--ink-dim)", lineHeight: 1.6, margin: "0 0 22px" }}>
             {KEY_INFO.green.blurb} Transmit a handful of links through the Exchange in Commons
@@ -163,7 +163,7 @@ export default function ImpactHistoryPage() {
           }}
         >
           Every link you&rsquo;ve transmitted through the Exchange, and what it actually scored.
-          Earned by holding the Green Key -- for your eyes only.
+          Earned by holding the Green Heart String -- for your eyes only.
         </p>
 
         <div
@@ -185,7 +185,7 @@ export default function ImpactHistoryPage() {
 
         {transmissions.length === 0 ? (
           <p style={{ color: "var(--ink-faint, #a29cb0)", fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}>
-            Nothing recorded yet -- the transmission that earned this key should be right here
+            Nothing recorded yet -- the transmission that earned this Heart String should be right here
             once the page catches up. Try reloading in a moment.
           </p>
         ) : (

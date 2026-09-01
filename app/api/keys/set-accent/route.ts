@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Couldn't verify your keys right now." }, { status: 503 });
   }
   if (!heldKey) {
-    return NextResponse.json({ error: "The Blue Key unlocks this -- you don't hold it yet." }, { status: 403 });
+    return NextResponse.json({ error: "The Blue Heart String unlocks this -- you don't hold it yet." }, { status: 403 });
   }
 
   const { error: updateError } = await admin

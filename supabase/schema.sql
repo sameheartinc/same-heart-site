@@ -721,3 +721,47 @@ insert into widget_skins (key, name, description, header_label, kind, unlock_id,
 on conflict (key) do nothing;
 
 notify pgrst, 'reload schema';
+
+-- The Yellow Heart String's door, part 1 -- feed_sources moves the
+-- Signal's RSS list from a hardcoded array (lib/rssFeeds.ts) into the
+-- database, same reasoning as widget_skins: adding or retiring a source
+-- becomes a form submission in /admin/signal, not a code change and a
+-- deploy. Public read (a list of news outlets isn't sensitive -- same
+-- posture as widget_skins); write restricted to admins. The 7 feeds
+-- already live in code today are seeded below unchanged, so nothing
+-- about the Signal's actual coverage changes because of this migration.
+-- lib/rssFeeds.ts's hardcoded RSS_FEEDS array stays in place as a
+-- fallback: if this table is ever empty or unreachable, the cron fetch
+-- (app/api/cron/fetch-news/route.ts) falls back to it automatically, so
+-- the Signal never goes quiet because of a database hiccup.
+create table if not exists feed_sources (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  url text not null unique,
+  topic text not null default 'world',
+  active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz default now()
+);
+
+alter table feed_sources enable row level security;
+
+drop policy if exists "Anyone can see feed sources" on feed_sources;
+create policy "Anyone can see feed sources" on feed_sources for select using (true);
+
+drop policy if exists "Admins manage feed sources" on feed_sources;
+create policy "Admins manage feed sources" on feed_sources for all
+  using (auth.uid() in (select id from profiles where is_admin = true))
+  with check (auth.uid() in (select id from profiles where is_admin = true));
+
+insert into feed_sources (name, url, topic, active, sort_order) values
+('NPR', 'https://feeds.npr.org/1001/rss.xml', 'world', true, 0),
+('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml', 'world', true, 1),
+('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml', 'world', true, 2),
+('The Guardian', 'https://www.theguardian.com/world/rss', 'world', true, 3),
+('ABC News Australia', 'https://www.abc.net.au/news/feed/51120/rss.xml', 'world', true, 4),
+('CBC News', 'https://www.cbc.ca/webfeed/rss/rss-topstories', 'world', true, 5),
+('Yes! Magazine', 'https://www.yesmagazine.org/feed', 'solutions', true, 6)
+on conflict (url) do nothing;
+
+notify pgrst, 'reload schema';

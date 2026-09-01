@@ -26,6 +26,12 @@ export interface GalaxyNode {
   // donation page) -- tells the Galaxy page to open it in a new tab
   // instead of navigating away from Same Heart.
   external?: boolean;
+  // Opt-in glyph rendered inside the node's glowing orb -- every node's
+  // orb is plain today (see app/galaxy/page.tsx's redesign notes: the
+  // old spinning rainbow disc read as busy, so it became a calm color
+  // pulse with no icon at all), so this only draws something when a node
+  // actually asks for it. Currently just "dodecahedron", for the Hearth.
+  icon?: "dodecahedron";
 }
 
 export const GALAXY_NODES: GalaxyNode[] = [
@@ -100,11 +106,12 @@ export const GALAXY_NODES: GalaxyNode[] = [
     href: "https://buy.stripe.com/6oUfZhgKz9dmbh3dovcAo01",
     external: true,
     monogram: "♥",
+    icon: "dodecahedron",
     name: "The Hearth",
     tagline: "Feed. Water. Teach.",
     accent: "#ff6f91",
     angleDeg: 95,
     radiusPct: 44,
-    scale: 0.85,
+    scale: 1,
   },
 ];

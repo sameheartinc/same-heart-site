@@ -135,3 +135,66 @@ with `npx tsc --noEmit` (clean) and a diff against the pre-edit files.
 Yellow's door (letting a holder influence the Signal's fetch topics)
 remains the one built key without a built door -- next natural pick
 once this is confirmed working.
+
+## Campaign domains pointing at the donate function (future)
+
+Raised Sep 1, 2026. Rob wants to eventually run campaigns from separate,
+purpose-built domains (e.g. www.kidsneeddads.com) that send people
+straight into Same Heart's donate flow ("The Hearth" -- see
+lib/galaxyNodes.ts) rather than through sameheart.ca/galaxy directly.
+Asked whether this goes through CanSpace specifically or how a
+"connected website" like that actually works.
+
+Explained: it doesn't have to be through any particular registrar --
+buying the domain anywhere (CanSpace, Namecheap, Cloudflare, GoDaddy,
+etc.) works the same way, since DNS configuration is registrar-agnostic.
+Two real options once a domain is bought:
+1. Plain domain forwarding at the registrar level -- fastest, no code,
+   but the browser address bar ends up showing the sameheart.ca
+   destination URL rather than staying on the campaign domain.
+2. Add the domain as a real custom domain on the Vercel project (DNS
+   pointed at Vercel) and build an actual branded landing page for it in
+   this codebase -- stays on the campaign's own domain the whole time,
+   proper SSL, and can carry real campaign-specific copy/design while
+   still using the same underlying Stripe donate link.
+
+Not actioned -- Rob hasn't bought a campaign domain yet. Revisit once he
+has one and knows what the campaign page itself should say.
+
+## "Heart Strings" -- renamed from "Keys" (Sep 1, 2026)
+Rob's naming call: what were called "Keys" on the site are now called
+"Heart Strings" everywhere a visitor actually sees the word -- headings,
+blurbs, the Hub's identity card, the locked-page messages on /impact and
+/commons/here, the activity-log lines earned alongside them, the About
+page, and the site's meta description. Green/Blue/Red/Yellow Heart
+String, same four colors and same four doors as before.
+Scope: display text only. Internal code/schema names (KeyColor, KEY_INFO,
+the profile_keys table, key_color column, /api/keys/* routes,
+listMyKeys/evaluateKeys) were deliberately left as "key" -- renaming a
+live database table is a real migration with real risk, and none of it
+is visible to anyone using the site. Verified via diff against backups
+(every string landed exactly as intended, nothing extra touched) and
+`npx tsc --noEmit` (clean).
+
+## Yellow Heart String's door -- Signal Sources admin (BUILT Sep 1, 2026)
+The Signal's RSS feed list moves from a hardcoded array (lib/rssFeeds.ts)
+into a real `feed_sources` table, manageable from a new /admin/signal
+page -- same "form submission, not a code deploy" payoff as /admin/skins
+had for widget skins. Built:
+  - `feed_sources` table (supabase/schema.sql) -- public read, admin
+    write (same RLS shape as widget_skins), seeded with the 7 feeds
+    already live in code so nothing about the Signal's coverage changes.
+  - app/api/cron/fetch-news/route.ts now reads the active, ordered list
+    from feed_sources first, and falls back to lib/rssFeeds.ts's
+    hardcoded RSS_FEEDS automatically if the table is ever empty or the
+    query fails -- a database hiccup can never go quiet the Signal.
+  - /admin/signal -- add, edit, turn on/off, delete a source. Turning a
+    source off (or deleting it) only stops *new* articles from it;
+    nothing already shown to anyone disappears.
+  - /admin -- a one-page front door linking Widget Skins and Signal
+    Sources, so "where's the admin page" has one answer. /admin/skins
+    now links back to it too.
+Verified via diff against backups on every edited file, and
+`npx tsc --noEmit` (clean). Not yet exercised against a live Supabase
+instance in this session -- worth a quick real add/edit/delete pass in
+/admin/signal after this deploys, same as any new admin form.

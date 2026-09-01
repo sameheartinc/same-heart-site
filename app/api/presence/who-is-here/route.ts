@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Couldn't check your keys right now." }, { status: 503 });
   }
   if (!heldKey) {
-    return NextResponse.json({ error: "The Red Key unlocks this -- you don't hold it yet." }, { status: 403 });
+    return NextResponse.json({ error: "The Red Heart String unlocks this -- you don't hold it yet." }, { status: 403 });
   }
 
   const cutoff = new Date(Date.now() - PRESENT_WITHIN_MINUTES * 60 * 1000).toISOString();

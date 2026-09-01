@@ -365,6 +365,41 @@ export default function GalaxyPage() {
                     }}
                   >
                     <span className="galaxy-node-star-core" aria-hidden="true" />
+                    {node.icon === "dodecahedron" && (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        width="26"
+                        height="26"
+                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent }}
+                      >
+                        {/* A flat dodecahedron glyph: an outer and inner
+                            pentagon with their corners joined, the usual
+                            shorthand for a 12-sided form in line-art icon
+                            sets -- reads clearly at this size, unlike a
+                            true 3D projection would. */}
+                        <polygon
+                          points="12,2 21,9 17.5,20 6.5,20 3,9"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinejoin="round"
+                        />
+                        <polygon
+                          points="12,7.5 15.5,10.2 14.2,14.5 9.8,14.5 8.5,10.2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1"
+                          strokeLinejoin="round"
+                          opacity={0.85}
+                        />
+                        <line x1="12" y1="2" x2="12" y2="7.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="21" y1="9" x2="15.5" y2="10.2" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="17.5" y1="20" x2="14.2" y2="14.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="6.5" y1="20" x2="9.8" y2="14.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="3" y1="9" x2="8.5" y2="10.2" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                      </svg>
+                    )}
                   </span>
                   <span
                     className="galaxy-node-label"

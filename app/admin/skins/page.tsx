@@ -218,7 +218,7 @@ export default function AdminSkinsPage() {
     >
       <div style={{ maxWidth: "880px", margin: "0 auto" }}>
         <Link
-          href="/hub"
+          href="/admin"
           style={{
             color: "var(--gold)",
             fontFamily: "var(--font-mono)",
@@ -228,7 +228,7 @@ export default function AdminSkinsPage() {
             textDecoration: "none",
           }}
         >
-          &larr; Same Heart
+          &larr; Admin
         </Link>
 
         <h1

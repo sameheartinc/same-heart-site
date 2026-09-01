@@ -12,6 +12,14 @@
 // an hour never blocks the others. BBC News and The Guardian are
 // already UK sources; ABC News (Australia) and CBC News (Canada) round
 // out the spread so no one country or outlet dominates the Signal.
+//
+// This list is now also the fallback: the real, editable source list
+// lives in the feed_sources table (see supabase/schema.sql and
+// /admin/signal), seeded with exactly these 7 rows. The hourly cron
+// (app/api/cron/fetch-news/route.ts) reads from that table first and
+// only falls back to this constant if the table is empty or the query
+// fails -- so the Signal never goes quiet over a database hiccup, and
+// this array never needs to be kept in sync by hand.
 export const RSS_FEEDS: Array<{ name: string; url: string; topic: string }> = [
   { name: "NPR", url: "https://feeds.npr.org/1001/rss.xml", topic: "world" },
   { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml", topic: "world" },
@@ -118,7 +126,12 @@ export async function fetchRssFeed(feed: { name: string; url: string; topic: str
   }
 }
 
-export async function fetchAllRssFeeds(): Promise<FeedArticle[]> {
-  const results = await Promise.all(RSS_FEEDS.map(fetchRssFeed));
+// Accepts the active list from feed_sources (see the cron route); falls
+// back to the hardcoded RSS_FEEDS above when no list is passed in, so
+// any other caller (or a test) keeps working exactly as before.
+export async function fetchAllRssFeeds(
+  feeds: Array<{ name: string; url: string; topic: string }> = RSS_FEEDS
+): Promise<FeedArticle[]> {
+  const results = await Promise.all(feeds.map(fetchRssFeed));
   return results.flat();
 }
