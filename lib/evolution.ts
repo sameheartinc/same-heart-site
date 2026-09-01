@@ -35,7 +35,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 
-export type UnlockKind = "widget-skin"; // more kinds join this union as they ship
+export type UnlockKind = "widget-skin" | "milestone"; // more kinds join this union as they ship
 
 // Every signal here is a plain, already-trustworthy derived number --
 // never a raw client claim. See computeSignals() in the evaluate route
@@ -67,6 +67,21 @@ export const UNLOCKABLES: Unlockable[] = [
     name: "Aurora",
     description: "Hold at least 2 Heart Strings and keep your capsule for 30 days.",
     isEligible: (s) => s.keysHeld >= 2 && s.tenureDays >= 30,
+  },
+  // Monetization gate, part 1 -- Rob's own design (see IDEAS.md's
+  // "Monetization: two-stage gate" entry). Holding all four Heart
+  // Strings never grants monetization itself -- it only unlocks the
+  // ability to apply in the Hub, which submits an application Rob
+  // reviews and personally approves or denies in /admin/monetization
+  // (see app/api/monetization/apply/route.ts and lib/monetization.ts).
+  // A "milestone" kind, not "widget-skin" -- nothing about the skin
+  // picker or WidgetFrame needs to know this exists.
+  {
+    id: "monetization-eligible",
+    kind: "milestone",
+    name: "Monetization Eligible",
+    description: "Hold all four Heart Strings -- Green, Blue, Red, and Yellow.",
+    isEligible: (s) => s.keysHeld >= 4,
   },
 ];
 

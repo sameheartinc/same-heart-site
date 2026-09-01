@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 const DASHBOARDS: { href: string; name: string; description: string }[] = [
   { href: "/admin/skins", name: "Widget Skins", description: "The color palettes and artwork offered in the audio player and Hub Capsule." },
   { href: "/admin/signal", name: "Signal Sources", description: "The RSS feeds the hourly Signal fetch reads from." },
+  { href: "/admin/monetization", name: "Monetization Applications", description: "Everyone who's earned all four Heart Strings and applied -- yours to approve or deny." },
 ];
 
 export default function AdminIndexPage() {

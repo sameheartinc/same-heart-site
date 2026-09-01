@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
 
   let url: string;
   let tagline: string | null = null;
+  let imageUrl: string | null = null;
   try {
     const body = await request.json();
     url = String(body.url || "").trim();
@@ -147,6 +148,14 @@ export async function POST(request: NextRequest) {
       // Collapse any newlines/tabs since the feed renders it on one line.
       const cleaned = body.tagline.replace(/[\r\n\t]+/g, " ").trim();
       if (cleaned.length > 0) tagline = cleaned;
+    }
+    // Purely decorative -- see supabase/schema.sql's comment on
+    // exchange_transmissions.image_url. Never fed into scoring below;
+    // only ever a URL the client already uploaded to the exchange-photos
+    // bucket (storage.objects' own RLS is what actually restricts where
+    // that upload could have come from, not this check).
+    if (typeof body.imageUrl === "string" && body.imageUrl.trim().length > 0 && body.imageUrl.length <= 2000) {
+      imageUrl = body.imageUrl.trim();
     }
   } catch {
     return NextResponse.json({ error: "Couldn't read that request." }, { status: 400 });
@@ -240,6 +249,7 @@ export async function POST(request: NextRequest) {
       reasoning: scored.reasoning,
       heartbeats_awarded: heartbeatsAwarded,
       tagline,
+      image_url: imageUrl,
     })
     .select("*")
     .single();

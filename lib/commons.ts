@@ -247,6 +247,48 @@ export async function listThreads(opts: {
   })) as CommonsThread[];
 }
 
+// "My Conversations" -- every thread someone's either started or
+// replied to, most recently active first. Two queries, not a join:
+// commons_threads has no column recording who's replied to it, so this
+// mirrors the same "own threads + replied threads" shape the Blue key's
+// eligibility check already uses in app/api/keys/evaluate/route.ts.
+// Only ever reads what's already visible to this user through normal
+// RLS (commons_threads/commons_replies select policies are public) --
+// nothing new to secure here.
+export async function listMyConversations(profileId: string): Promise<CommonsThread[]> {
+  const [authoredResult, repliedResult] = await Promise.all([
+    supabase.from("commons_threads").select("*, commons_replies(count)").eq("profile_id", profileId),
+    supabase.from("commons_replies").select("thread_id").eq("profile_id", profileId),
+  ]);
+
+  const threadsById = new Map<string, CommonsThread>();
+  for (const row of (authoredResult.data ?? []) as any[]) {
+    threadsById.set(row.id, { ...row, reply_count: row.commons_replies?.[0]?.count ?? 0 });
+  }
+
+  const repliedIds = Array.from(
+    new Set(
+      (repliedResult.data ?? [])
+        .map((r) => r.thread_id as string | null)
+        .filter((id): id is string => Boolean(id))
+    )
+  ).filter((id) => !threadsById.has(id));
+
+  if (repliedIds.length > 0) {
+    const { data: repliedThreads } = await supabase
+      .from("commons_threads")
+      .select("*, commons_replies(count)")
+      .in("id", repliedIds);
+    for (const row of (repliedThreads ?? []) as any[]) {
+      threadsById.set(row.id, { ...row, reply_count: row.commons_replies?.[0]?.count ?? 0 });
+    }
+  }
+
+  return Array.from(threadsById.values()).sort(
+    (a, b) => new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime()
+  );
+}
+
 export async function getThread(id: string): Promise<CommonsThread | null> {
   const { data, error } = await supabase.from("commons_threads").select("*").eq("id", id).single();
   if (error || !data) return null;

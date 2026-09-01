@@ -20,6 +20,7 @@ export interface Transmission {
   reasoning: string | null;
   heartbeats_awarded: number;
   tagline: string | null;
+  image_url: string | null;
   created_at: string;
 }
 
@@ -91,7 +92,7 @@ export async function listRoster(limit = 50): Promise<RankedProfile[]> {
 // Throws with a human-readable message on failure (bad URL, daily cap,
 // network) -- callers should catch and show `error.message` directly,
 // it's already written for a person to read.
-export async function transmitLink(url: string, tagline?: string): Promise<TransmitResult> {
+export async function transmitLink(url: string, tagline?: string, imageUrl?: string): Promise<TransmitResult> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error("You need to be signed in to transmit.");
@@ -104,7 +105,7 @@ export async function transmitLink(url: string, tagline?: string): Promise<Trans
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ url, tagline: trimmedTagline || undefined }),
+    body: JSON.stringify({ url, tagline: trimmedTagline || undefined, imageUrl: imageUrl || undefined }),
   });
 
   const json = await res.json().catch(() => ({}));

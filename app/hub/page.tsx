@@ -19,6 +19,7 @@ import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
 import { streakVisualTier, checkInWithServer, type StreakMilestone } from "@/lib/streak";
 import { listMyUnlocks, evaluateEvolution } from "@/lib/evolution";
+import { getMyMonetizationStatus, applyForMonetization, type MonetizationStatus } from "@/lib/monetization";
 import { FALLBACK_SKINS, loadWidgetSkins, type WidgetSkin, type WidgetSkinKey } from "@/lib/widgetSkins";
 import WidgetFrame from "@/components/WidgetFrame";
 
@@ -37,6 +38,7 @@ type Profile = {
   longest_streak: number;
   last_visit_date: string | null;
   commons_accent: string | null;
+  hub_background_url: string | null;
 };
 
 type LogEntry = {
@@ -58,6 +60,8 @@ export default function HubPage() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [skinSaving, setSkinSaving] = useState(false);
+  const [backgroundUploading, setBackgroundUploading] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const [accentSaving, setAccentSaving] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -66,11 +70,15 @@ export default function HubPage() {
   const [logError, setLogError] = useState<string | null>(null);
   const [milestone, setMilestone] = useState<StreakMilestone | null>(null);
   const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [keys, setKeys] = useState<ProfileKey[]>([]);
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
   const [notifOpen, setNotifOpen] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [monetizationStatus, setMonetizationStatus] = useState<MonetizationStatus>("none");
+  const [monetizationSubmitting, setMonetizationSubmitting] = useState(false);
+  const [monetizationError, setMonetizationError] = useState<string | null>(null);
   const [skinCatalog, setSkinCatalog] = useState<WidgetSkin[]>(FALLBACK_SKINS);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -88,7 +96,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url"
         )
         .eq("id", userData.user.id)
         .single();
@@ -146,6 +154,7 @@ export default function HubPage() {
 
       const myKeys = await listMyKeys();
       const myUnlocks = await listMyUnlocks();
+      const myMonetizationStatus = await getMyMonetizationStatus();
       const myNotifications = await listMyNotifications();
       const notifAuthorProfiles = await fetchProfilesByIds(
         myNotifications.map((n) => n.actor_id).filter((id): id is string => Boolean(id))
@@ -170,12 +179,25 @@ export default function HubPage() {
           setLeveledUpTo(currentLevel);
         }
         window.localStorage.setItem("same-heart-last-seen-level", String(currentLevel));
+
+        // "Name your ship" -- Rob noticed people show up elsewhere on
+        // the site (Commons replies, etc.) as "Spark #00034" because
+        // they never found the small, always-available call-sign editor
+        // at the top of this page (see startEditName/saveDisplayName
+        // below). Once someone's real enough to have reached Level 5,
+        // nudge them once -- never again, and never at all if they've
+        // already set a name by then.
+        if (currentLevel >= 5 && !currentProfile.display_name) {
+          const namePromptSeen = window.localStorage.getItem("same-heart-name-prompt-seen");
+          if (!namePromptSeen) setShowNamePrompt(true);
+        }
       } catch {
         /* localStorage can throw in some private-browsing contexts -- a
            missed celebration banner isn't worth surfacing an error for. */
       }
       setKeys(myKeys);
       setUnlockedIds(new Set(myUnlocks));
+      setMonetizationStatus(myMonetizationStatus);
       setNotifications(myNotifications);
       setNotifAuthors(notifAuthorProfiles);
       setIsAnonymous(Boolean((userData.user as { is_anonymous?: boolean }).is_anonymous));
@@ -214,6 +236,24 @@ export default function HubPage() {
     router.replace("/login");
   }
 
+  // Monetization gate, part 6 -- the Hub's own apply button. Eligibility
+  // (holding all four Heart Strings) is already reflected in
+  // unlockedIds; this just asks the server to actually record an
+  // application, which it does whether the applicant's denied before or
+  // never applied at all. Real approval only ever happens in
+  // /admin/monetization -- this never sets anything to "approved" itself.
+  async function applyMonetization() {
+    setMonetizationSubmitting(true);
+    setMonetizationError(null);
+    const result = await applyForMonetization();
+    setMonetizationSubmitting(false);
+    if (!result.ok) {
+      setMonetizationError(result.error ?? "Couldn't submit your application right now.");
+      return;
+    }
+    if (result.status) setMonetizationStatus(result.status);
+  }
+
   const unreadNotifications = notifications.filter((n) => !n.read_at);
 
   async function toggleNotifications() {
@@ -242,6 +282,79 @@ export default function HubPage() {
     if (error) {
       // Quietly revert -- this is cosmetic, not worth a scary error banner.
       setProfile((p) => (p ? { ...p, ship_skin: previous } : p));
+    }
+  }
+
+  // Hub background upload -- the first user-uploaded image on the site
+  // (see the schema.sql migration's comment for the tradeoff this
+  // accepts). Client-side checks here (type, size) are a courtesy, not
+  // the real security boundary -- storage.objects' RLS policies are what
+  // actually stop anyone from writing outside their own folder, and
+  // Supabase itself rejects anything that isn't a real image at the
+  // bucket level being irrelevant here since we don't restrict mime
+  // types at the bucket -- so this is deliberately generous but bounded
+  // by size alone.
+  const MAX_BACKGROUND_BYTES = 8 * 1024 * 1024;
+
+  async function uploadHubBackground(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file || !userId || !profile) return;
+
+    if (!file.type.startsWith("image/")) {
+      setBackgroundError("That doesn't look like an image.");
+      return;
+    }
+    if (file.size > MAX_BACKGROUND_BYTES) {
+      setBackgroundError("Keep it under 8MB.");
+      return;
+    }
+
+    setBackgroundError(null);
+    setBackgroundUploading(true);
+
+    const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `${userId}/${Date.now()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage.from("hub-backgrounds").upload(path, file, {
+      upsert: false,
+      contentType: file.type,
+    });
+
+    if (uploadError) {
+      setBackgroundUploading(false);
+      setBackgroundError("Couldn't upload that -- try again.");
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage.from("hub-backgrounds").getPublicUrl(path);
+    const nextUrl = publicUrlData.publicUrl;
+
+    const { error: saveError } = await supabase
+      .from("profiles")
+      .update({ hub_background_url: nextUrl })
+      .eq("id", userId);
+
+    setBackgroundUploading(false);
+    if (saveError) {
+      setBackgroundError("Uploaded, but couldn't save it to your profile -- try again.");
+      return;
+    }
+    setProfile({ ...profile, hub_background_url: nextUrl });
+  }
+
+  // Doesn't delete the old file from storage -- just clears the profile
+  // column so it stops being used. Same "leave it, don't chase cleanup"
+  // choice as everywhere else images are swapped on this site; worth a
+  // real cleanup pass later if storage usage ever becomes worth watching.
+  async function removeHubBackground() {
+    if (!userId || !profile) return;
+    const previous = profile.hub_background_url;
+    setProfile({ ...profile, hub_background_url: null });
+    const { error } = await supabase.from("profiles").update({ hub_background_url: null }).eq("id", userId);
+    if (error) {
+      setProfile((p) => (p ? { ...p, hub_background_url: previous } : p));
+      setBackgroundError("Couldn't remove it -- try again.");
     }
   }
 
@@ -304,6 +417,44 @@ export default function HubPage() {
     setEditingName(false);
   }
 
+  // A separate, self-contained save path for the Level 5 prompt banner
+  // below -- deliberately not reusing saveDisplayName's editingName
+  // state, since this banner has its own open/closed state
+  // (showNamePrompt) and needs to dismiss itself (and remember that,
+  // via localStorage) on success without touching the call-sign editor
+  // at the top of the page at all.
+  async function submitNamePrompt(e: React.FormEvent) {
+    e.preventDefault();
+    if (!userId || !profile || nameSaving) return;
+    const trimmed = nameDraft.trim().slice(0, 24);
+    if (trimmed.length > 0 && trimmed.length < 2) {
+      setNameError("A little longer than that.");
+      return;
+    }
+    const nextValue = trimmed.length > 0 ? trimmed : null;
+    setNameError(null);
+    setNameSaving(true);
+    const { error } = await supabase.from("profiles").update({ display_name: nextValue }).eq("id", userId);
+    setNameSaving(false);
+    if (error) {
+      setNameError("Couldn't save -- try again.");
+      return;
+    }
+    setProfile((p) => (p ? { ...p, display_name: nextValue } : p));
+    dismissNamePrompt();
+  }
+
+  function dismissNamePrompt() {
+    setShowNamePrompt(false);
+    setNameError(null);
+    try {
+      window.localStorage.setItem("same-heart-name-prompt-seen", "1");
+    } catch {
+      /* Same reasoning as the Level-up celebration above -- worst case
+         this prompt reappears once more next visit, nothing is lost. */
+    }
+  }
+
   async function addLogEntry(e: React.FormEvent) {
     e.preventDefault();
     const description = logDraft.trim();
@@ -337,9 +488,13 @@ export default function HubPage() {
   const activeSkin = getSkin(profile.ship_skin);
   // Palette skins (all of them today) render exactly as before -- plain
   // var(--void). An "artwork" skin additionally carries a real image, laid
-  // under a dark scrim so the same text/contrast rules still hold.
-  const heroBackground = activeSkin.image
-    ? `linear-gradient(rgba(5,7,13,0.74), rgba(5,7,13,0.74)), url(${activeSkin.image}) center / cover fixed no-repeat`
+  // under a dark scrim so the same text/contrast rules still hold. A
+  // personal uploaded background (hub_background_url) takes priority over
+  // both when set -- it's a more specific choice than picking a curated
+  // skin, so it wins.
+  const backgroundImage = profile.hub_background_url || activeSkin.image;
+  const heroBackground = backgroundImage
+    ? `linear-gradient(rgba(5,7,13,0.74), rgba(5,7,13,0.74)), url(${backgroundImage}) center / cover fixed no-repeat`
     : "var(--void)";
   const path = profile.path_key ? PATHS[profile.path_key as PathKey] : null;
   const spark = sparkLabel(profile.spark_id);
@@ -486,6 +641,111 @@ export default function HubPage() {
             >
               Your Heartbeats just crossed a prime number -- that's what a level is here.
             </p>
+          </div>
+        )}
+
+        {showNamePrompt && (
+          <div
+            className="hub-quote"
+            style={{
+              background: "var(--panel)",
+              border: "1px solid var(--gold)",
+              borderRadius: "14px",
+              padding: "16px 20px",
+              marginBottom: "22px",
+              textAlign: "center",
+              boxShadow: "0 0 24px rgba(201,161,90,0.25)",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                color: "var(--gold)",
+              }}
+            >
+              Level 5 -- name your ship
+            </p>
+            <p
+              style={{
+                margin: "6px 0 12px",
+                fontFamily: "var(--font-body)",
+                fontStyle: "italic",
+                color: "var(--ink-dim)",
+                fontSize: "0.85rem",
+              }}
+            >
+              You&rsquo;ve shown up enough to be real here -- right now you show up to others
+              as {profile.spark_id ? `Spark #${String(profile.spark_id).padStart(5, "0")}` : "a number"}.
+              Give your ship a name, or skip this and do it anytime from the top of this page.
+            </p>
+            <form
+              onSubmit={submitNamePrompt}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}
+            >
+              <input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                maxLength={24}
+                placeholder={profile.archetype ?? "Callsign"}
+                style={{
+                  textAlign: "center",
+                  background: "var(--void)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: "1rem",
+                  color: "var(--ink)",
+                  width: "220px",
+                  maxWidth: "80vw",
+                }}
+              />
+              {nameError && (
+                <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--rose)" }}>
+                  {nameError}
+                </p>
+              )}
+              <div style={{ display: "flex", gap: "16px" }}>
+                <button
+                  type="submit"
+                  disabled={nameSaving}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "var(--gold)",
+                    cursor: nameSaving ? "default" : "pointer",
+                  }}
+                >
+                  {nameSaving ? "Saving..." : "Save name"}
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissNamePrompt}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-dim)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Maybe later
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -924,6 +1184,81 @@ export default function HubPage() {
           </span>
         </div>
 
+        {/* Background upload -- a personal photo behind the whole page,
+            layered in ahead of the curated skins above (see
+            heroBackground). Deliberately its own row, not folded into the
+            Skin picker, since it's a different kind of choice: something
+            you brought, not something offered. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+            marginBottom: "22px",
+            padding: "0 4px",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "9px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--widget-text-faint)",
+            }}
+          >
+            Background
+          </span>
+          <label
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "9px",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--widget-accent)",
+              border: "1px solid var(--widget-accent)",
+              borderRadius: "999px",
+              padding: "5px 12px",
+              cursor: backgroundUploading ? "default" : "pointer",
+              opacity: backgroundUploading ? 0.6 : 1,
+            }}
+          >
+            {backgroundUploading ? "Uploading..." : profile.hub_background_url ? "Replace photo" : "Upload photo"}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={uploadHubBackground}
+              disabled={backgroundUploading}
+              style={{ display: "none" }}
+            />
+          </label>
+          {profile.hub_background_url && (
+            <button
+              type="button"
+              onClick={removeHubBackground}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--widget-text-faint)",
+                cursor: "pointer",
+              }}
+            >
+              Remove
+            </button>
+          )}
+          {backgroundError && (
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--widget-rose)" }}>
+              {backgroundError}
+            </span>
+          )}
+        </div>
+
         {/* Commons accent -- the Blue Key's door. Only ever appears once
             the key's actually held; the picker itself is the reward, not
             a setting anyone can reach on their own. See lib/keys.ts and
@@ -1048,6 +1383,138 @@ export default function HubPage() {
                 }
                 return <span key={k.key_color}>{dot}</span>;
               })}
+            </div>
+
+            {/* Monetization gate -- Rob's own design (see IDEAS.md's
+                "Monetization: two-stage gate" entry). Holding all four
+                Heart Strings only ever unlocks the *ability to apply*;
+                applying only ever creates a pending row. Every decision
+                is Rob's, made personally in /admin/monetization -- see
+                lib/evolution.ts, lib/monetization.ts, and
+                app/api/monetization/*. */}
+            <div
+              style={{
+                marginTop: "10px",
+                paddingTop: "10px",
+                borderTop: "1px solid var(--widget-border)",
+                width: "100%",
+              }}
+            >
+              {!unlockedIds.has("monetization-eligible") ? (
+                <p
+                  title="Holding all four Heart Strings unlocks the ability to apply to monetize your account -- reviewed and approved individually, never automatic."
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    letterSpacing: "0.04em",
+                    color: "var(--widget-text-faint)",
+                  }}
+                >
+                  {keys.length} of 4 Heart Strings -- hold all four to unlock the ability to apply to
+                  monetize your account.
+                </p>
+              ) : monetizationStatus === "none" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "9px",
+                      letterSpacing: "0.04em",
+                      color: "var(--widget-accent)",
+                    }}
+                  >
+                    All four Heart Strings held -- you can apply to monetize your account.
+                  </p>
+                  <button
+                    onClick={applyMonetization}
+                    disabled={monetizationSubmitting}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--widget-accent)",
+                      background: "none",
+                      color: "var(--widget-accent)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "9px",
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {monetizationSubmitting ? "Applying..." : "Apply"}
+                  </button>
+                </div>
+              ) : monetizationStatus === "pending" ? (
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    letterSpacing: "0.04em",
+                    color: "var(--widget-text-faint)",
+                  }}
+                >
+                  Your application to monetize is pending review.
+                </p>
+              ) : monetizationStatus === "approved" ? (
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    letterSpacing: "0.04em",
+                    color: "var(--widget-accent)",
+                  }}
+                >
+                  You&rsquo;re approved to monetize your account.
+                </p>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "9px",
+                      letterSpacing: "0.04em",
+                      color: "var(--widget-text-faint)",
+                    }}
+                  >
+                    Your application wasn&rsquo;t approved this time.
+                  </p>
+                  <button
+                    onClick={applyMonetization}
+                    disabled={monetizationSubmitting}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--widget-text-faint)",
+                      background: "none",
+                      color: "var(--widget-text-faint)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "9px",
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {monetizationSubmitting ? "Applying..." : "Apply again"}
+                  </button>
+                </div>
+              )}
+              {monetizationError && (
+                <p
+                  style={{
+                    margin: "6px 0 0",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    color: "var(--widget-rose)",
+                  }}
+                >
+                  {monetizationError}
+                </p>
+              )}
             </div>
           </div>
         )}

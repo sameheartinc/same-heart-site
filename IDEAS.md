@@ -198,3 +198,267 @@ Verified via diff against backups on every edited file, and
 `npx tsc --noEmit` (clean). Not yet exercised against a live Supabase
 instance in this session -- worth a quick real add/edit/delete pass in
 /admin/signal after this deploys, same as any new admin form.
+
+## Monetization: two-stage gate, Rob as the sole approver (idea logged Sep 1, 2026 -- GATE BUILT Sep 1, 2026, see follow-up entry below; payment rails still not started)
+Rob's own framing, worth preserving exactly: users can't monetize their
+account until they've reached a real, significant level of standing on
+the site -- and as they approach it, the site should actively let them
+know they're within reach, the same way the Hub already hints "X XP to
+Level Y" for Prime Levels. But reaching the threshold only ever makes
+someone *eligible*, never automatically monetized -- Rob personally
+reviews and approves every single person before real money is ever
+involved. "I am the gatekeeper," his words. This is the same shape as
+is_admin (one deliberate human checkpoint, not a roles table or an
+auto-grant) applied to a much higher-stakes decision.
+
+Two-stage design this implies, once it's actually built:
+  1. Eligibility -- a pure, server-trusted signal computed the same way
+     every other progression mechanic on the site is (Keys/Heart
+     Strings, Evolution/Unlockables, Prime Levels): some real threshold
+     on Standing/Level/Heart Strings held, checked against data the
+     server already trusts, never a client claim. Exact threshold is
+     undecided -- candidates to weigh later: a specific Standing tier,
+     a specific prime Level number, holding all four Heart Strings, or
+     some combination. Whatever it is, it should read as *earned*, the
+     same way everything else on this site does.
+  2. Approval -- a manual step only Rob can take, modeled after the
+     is_admin dashboards already built (/admin/skins, /admin/signal):
+     an applicant list Rob reviews one at a time, approves or declines.
+     Nothing about crossing the eligibility threshold in step 1 grants
+     anything by itself -- it only unlocks the ability to apply.
+
+Explicitly NOT being built yet, and shouldn't be until Rob says so:
+  - No Stripe Connect wiring, no payment rails, no subscription
+    mechanics. Rob's plan is to go to a lawyer and a bank first (real
+    business bank account, possibly a loan) before any money actually
+    moves between users. Building the payment layer before that exists
+    would be exactly the kind of over-building-speculative-content this
+    project has deliberately avoided all along.
+  - No user-facing "you're getting close to monetizing" UI yet either
+    -- showing that hint before Rob can actually approve anyone would
+    set an expectation the site can't yet deliver on.
+
+Open questions Rob is sitting with, not yet decided:
+  - What the actual eligibility threshold should be.
+  - What "approved" concretely unlocks on day one (creator
+    subscriptions? sponsorship eligibility? something else?) -- see the
+    three monetization shapes discussed in chat (creator subscriptions
+    behind Standing, brand-sponsored campaigns, a referral cut on real
+    Exchange impact).
+  - Legal/financial groundwork: lawyer review, business bank account,
+    possibly a loan, and a Stripe Connect account (Express vs Standard)
+    -- all real-world steps outside this codebase, all prerequisites
+    before step 2 above can mean anything.
+
+Next step whenever Rob's ready: pick the eligibility threshold and what
+approval unlocks, and only then build the eligibility signal + Rob's
+approval queue -- payment wiring stays out of scope until the legal and
+banking side is actually in place.
+
+## Monetization gate -- built (Sep 1, 2026)
+The eligibility + application + approval scaffolding described above is
+live in code (not yet in the live database -- see the SQL migration
+Rob still needs to run, same as any schema.sql change this session).
+What exists now:
+  - lib/evolution.ts -- a new "monetization-eligible" milestone
+    unlockable, granted automatically once all four Heart Strings are
+    held (keysHeld >= 4). Reuses the existing Evolution engine
+    end-to-end; no new signal-computation code was needed.
+  - profiles.monetization_approved and a new monetization_applications
+    table (supabase/schema.sql) -- one row per profile, status
+    pending/approved/denied, RLS lets a user read only their own row
+    and lets admins read/write all of them.
+  - app/api/monetization/apply/route.ts -- the only place an
+    application is ever created; re-checks eligibility itself from
+    profile_unlocks, never a client claim. Supports re-applying after a
+    denial.
+  - app/api/monetization/decide/route.ts -- the only place an
+    application is ever approved or denied; re-checks is_admin itself.
+    Sets profiles.monetization_approved but wires up nothing further --
+    no payment functionality exists yet.
+  - app/api/monetization/list/route.ts -- server-side read for the
+    admin queue. Needed because profiles' RLS only ever lets someone
+    read their own row (no "admins can read every profile" policy
+    exists) -- a client-side join the way /admin/skins reads
+    widget_skins directly would have silently returned nothing for
+    every applicant but Rob himself. Caught this in review before it
+    shipped broken.
+  - /admin/monetization -- Rob's approval queue, pending and decided
+    lists, Approve/Deny buttons. Added to the /admin index.
+  - Hub UI -- inside the existing Heart Strings block: a progress hint
+    ("X of 4 Heart Strings...") before eligible, an Apply button once
+    eligible, and status messages for pending/approved/denied (with a
+    re-apply option after a denial).
+Verified via diff against backups on every file (all changes additive,
+nothing existing removed or altered) and a clean `npx tsc --noEmit`.
+
+Still not started, on purpose: any Stripe Connect wiring, subscriptions,
+or actual payment movement. profiles.monetization_approved is just a
+flag other future code can check -- it doesn't unlock anything by
+itself yet. That stays blocked on Rob's lawyer, business bank account,
+and Stripe Connect setup, exactly as planned.
+
+SQL Rob still needs to run in Supabase (additive, safe to run more than
+once):
+
+    alter table profiles add column if not exists monetization_approved boolean not null default false;
+
+    create table if not exists monetization_applications (
+      id uuid default gen_random_uuid() primary key,
+      profile_id uuid not null references profiles(id) on delete cascade,
+      status text not null default 'pending',
+      applied_at timestamptz default now(),
+      decided_at timestamptz,
+      decided_by uuid references profiles(id),
+      unique (profile_id)
+    );
+
+    alter table monetization_applications enable row level security;
+
+    drop policy if exists "Users can see their own application" on monetization_applications;
+    create policy "Users can see their own application" on monetization_applications for select
+      using (auth.uid() = profile_id);
+
+    drop policy if exists "Admins manage monetization applications" on monetization_applications;
+    create policy "Admins manage monetization applications" on monetization_applications for all
+      using (auth.uid() in (select id from profiles where is_admin = true))
+      with check (auth.uid() in (select id from profiles where is_admin = true));
+
+    notify pgrst, 'reload schema';
+
+## Three small builds from Rob's Sep 1 feedback batch
+Rob noticed several real gaps in one message; three were concrete and
+straightforward to build immediately:
+
+1. **"Name your ship" prompt at Level 5** -- Rob noticed people show up
+   in Commons replies as "Spark #00034" because they never found the
+   small, always-available call-sign editor at the top of the Hub. A
+   one-time banner (same visual style as the streak/level-up banners)
+   now appears the first time someone reaches Level 5 with no
+   display_name set, inviting them to name their ship inline, or
+   dismiss with "Maybe later" (remembered via localStorage, same
+   pattern as the level-up celebration). Never shows again once
+   dismissed or once a name's been set. app/hub/page.tsx.
+
+2. **"My Conversations" page** -- investigated Rob's report that
+   conversations weren't clickable in Commons; every thread list found
+   in the code (Commons homepage's Live now/Unanswered, a community's
+   own thread list, search results, the Hub's notification dropdown)
+   was already correctly linked to /commons/t/[id]. Couldn't reproduce
+   an actual broken link, so if it recurs, worth pinning down exactly
+   which element Rob's clicking. Built the explicitly requested page
+   regardless, since it's real value either way: /commons/conversations
+   lists every thread someone's started or replied to, across every
+   community, sorted by most recent activity, each one properly linked.
+   Linked from the Commons homepage's top toolbar as "My Conversations".
+   lib/commons.ts's new listMyConversations(), app/commons/conversations/page.tsx.
+
+3. **Hub background photo upload** -- the first user-uploaded image on
+   the site. lib/skins.ts's header explicitly avoided this for the
+   curated site-wide skins ("no upload flow, no moderation surface, no
+   new privacy question... for a purely cosmetic feature") -- worth
+   being clear that this migration knowingly takes on that surface.
+   What keeps it bounded for now: the uploaded image is only ever
+   rendered back to the same person who uploaded it (their own
+   Hub/Commons background), so there's no exposure to anyone else's
+   browser -- but the file is still hosted on Same Heart's
+   infrastructure, and there's no content moderation on it. A real gap
+   worth remembering if this ever needs to scale past a small, trusted
+   user base. New `hub-backgrounds` Supabase Storage bucket (public
+   read; folder-per-user RLS for write, enforced by
+   storage.objects policies, not just client-side checks),
+   profiles.hub_background_url, a "Background" row in the Hub next to
+   the Skin picker (Upload photo / Replace photo / Remove), 8MB client-
+   side size cap. Old files aren't deleted from storage when replaced --
+   a known simplification, worth a real cleanup pass if storage usage
+   ever becomes worth watching.
+
+All three verified via diff against backups (fully additive, nothing
+existing removed) and a clean `npx tsc --noEmit`.
+
+SQL Rob needs to run for #3 (additive, safe to run more than once):
+
+    alter table profiles add column if not exists hub_background_url text;
+
+    insert into storage.buckets (id, name, public)
+    values ('hub-backgrounds', 'hub-backgrounds', true)
+    on conflict (id) do nothing;
+
+    drop policy if exists "Anyone can view hub backgrounds" on storage.objects;
+    create policy "Anyone can view hub backgrounds" on storage.objects for select
+      using (bucket_id = 'hub-backgrounds');
+
+    drop policy if exists "Users can upload their own hub background" on storage.objects;
+    create policy "Users can upload their own hub background" on storage.objects for insert
+      with check (bucket_id = 'hub-backgrounds' and (storage.foldername(name))[1] = auth.uid()::text);
+
+    drop policy if exists "Users can update their own hub background" on storage.objects;
+    create policy "Users can update their own hub background" on storage.objects for update
+      using (bucket_id = 'hub-backgrounds' and (storage.foldername(name))[1] = auth.uid()::text);
+
+    drop policy if exists "Users can delete their own hub background" on storage.objects;
+    create policy "Users can delete their own hub background" on storage.objects for delete
+      using (bucket_id = 'hub-backgrounds' and (storage.foldername(name))[1] = auth.uid()::text);
+
+    notify pgrst, 'reload schema';
+
+## Exchange photo attachments (built Sep 1, 2026)
+Rob asked for "beside the drop a link button... a button where you can
+upload a picture." Scoped this narrowly on purpose: a transmission still
+requires a real link and is still scored by AI purely from that link --
+the photo is a purely decorative attachment, shown as a thumbnail next
+to the transmission in the Commons feed and on /impact, never fed into
+scoring. Uses a new exchange-photos storage bucket (public read,
+folder-per-user write). image_url on exchange_transmissions.
+
+Worth being explicit about the difference from the Hub background
+upload logged above: that one is only ever shown back to the person who
+uploaded it. This one is public -- every Commons member sees it in the
+live feed. That's a real, if small, content-moderation surface (anyone
+can attach any image to something the whole Commons sees) with no
+reporting or takedown path built yet. Worth a proper look before this
+goes out past a small trusted group.
+
+Verified via diff against backups (fully additive except the two
+expected signature changes -- transmitLink() gaining an imageUrl
+param, and its one call site) and a clean `npx tsc --noEmit`.
+
+SQL Rob needs to run (additive, safe to run more than once):
+
+    alter table exchange_transmissions add column if not exists image_url text;
+
+    insert into storage.buckets (id, name, public)
+    values ('exchange-photos', 'exchange-photos', true)
+    on conflict (id) do nothing;
+
+    drop policy if exists "Anyone can view exchange photos" on storage.objects;
+    create policy "Anyone can view exchange photos" on storage.objects for select
+      using (bucket_id = 'exchange-photos');
+
+    drop policy if exists "Users can upload their own exchange photos" on storage.objects;
+    create policy "Users can upload their own exchange photos" on storage.objects for insert
+      with check (bucket_id = 'exchange-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+    notify pgrst, 'reload schema';
+
+## "The algorithm" -- compiling people's info to correlate and connect them (NOT BUILT, paused for discussion)
+In the same message as the photo-upload ask, Rob described wanting
+"the system so smart it knows to take peoples information and
+compiling it for others... building an algorithm for the website and
+each user and website as a whole simultaneously" -- using uploaded
+photos and other information as "reference points... for future
+correlation and communications between relevant members."　Deliberately
+did NOT build anything toward this, and explained why directly in
+chat rather than silently building a narrower version of it. Real
+open questions before this should become code: what specifically gets
+compiled and about whom, who can see the compiled result (this is the
+part that's most different from everything else built so far -- Keys,
+Standing, Path, etc. are all either private to one person or already
+freely visible; a system that correlates people's information *for
+other people to see* is a new kind of thing on this site), what a user
+is actually told and asked to consent to before their information
+feeds it, and how it interacts with the fact that Same Heart already
+handles real people's real personal and emotional information across
+Star Day/Path, the Exchange, and Commons. Not a rejection -- a "let's
+design this deliberately before writing it" pause, same spirit as the
+monetization gate above.

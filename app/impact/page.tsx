@@ -238,6 +238,20 @@ export default function ImpactHistoryPage() {
                       &ldquo;{t.tagline}&rdquo;
                     </p>
                   )}
+                  {t.image_url && (
+                    <img
+                      src={t.image_url}
+                      alt=""
+                      style={{
+                        marginTop: "8px",
+                        width: "100px",
+                        height: "100px",
+                        borderRadius: "8px",
+                        objectFit: "cover",
+                        border: "1px solid var(--border)",
+                      }}
+                    />
+                  )}
                   <div
                     style={{
                       display: "flex",

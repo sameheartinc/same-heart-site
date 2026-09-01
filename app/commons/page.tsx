@@ -86,6 +86,8 @@ export default function CommonsPage() {
   const [transmissions, setTransmissions] = useState<Transmission[]>([]);
   const [transmitUrl, setTransmitUrl] = useState("");
   const [transmitTagline, setTransmitTagline] = useState("");
+  const [transmitImageUrl, setTransmitImageUrl] = useState<string | null>(null);
+  const [transmitImageUploading, setTransmitImageUploading] = useState(false);
   const [transmitBusy, setTransmitBusy] = useState(false);
   const [transmitError, setTransmitError] = useState<string | null>(null);
   const [transmitSuccess, setTransmitSuccess] = useState<{
@@ -271,16 +273,60 @@ export default function CommonsPage() {
     setTransmitError(null);
     setTransmitSuccess(null);
     try {
-      const result = await transmitLink(url, transmitTagline);
+      const result = await transmitLink(url, transmitTagline, transmitImageUrl || undefined);
       setTransmissions((prev) => [result.transmission, ...prev].slice(0, 12));
       setTransmitSuccess({ heartbeats: result.heartbeatsAwarded, dailyCapReached: result.dailyCapReached });
       setTransmitUrl("");
       setTransmitTagline("");
+      setTransmitImageUrl(null);
     } catch (err) {
       setTransmitError(err instanceof Error ? err.message : "That transmission didn't go through.");
     } finally {
       setTransmitBusy(false);
     }
+  }
+
+  // A photo alongside a transmission -- purely decorative, uploaded
+  // straight to the exchange-photos bucket the moment it's picked, so
+  // it's just a URL by the time handleTransmit actually submits. See
+  // supabase/schema.sql's comment on exchange_transmissions.image_url
+  // for the real tradeoff this takes on (this one's visible to every
+  // Commons member, not just the uploader).
+  const MAX_TRANSMIT_IMAGE_BYTES = 8 * 1024 * 1024;
+
+  async function uploadTransmitPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !userId) return;
+
+    if (!file.type.startsWith("image/")) {
+      setTransmitError("That doesn't look like an image.");
+      return;
+    }
+    if (file.size > MAX_TRANSMIT_IMAGE_BYTES) {
+      setTransmitError("Keep the photo under 8MB.");
+      return;
+    }
+
+    setTransmitError(null);
+    setTransmitImageUploading(true);
+
+    const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `${userId}/${Date.now()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage.from("exchange-photos").upload(path, file, {
+      upsert: false,
+      contentType: file.type,
+    });
+
+    setTransmitImageUploading(false);
+    if (uploadError) {
+      setTransmitError("Couldn't upload that photo -- try again.");
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage.from("exchange-photos").getPublicUrl(path);
+    setTransmitImageUrl(publicUrlData.publicUrl);
   }
 
   if (checking) return <PageLoading />;
@@ -478,6 +524,17 @@ export default function CommonsPage() {
             &larr; Back to the Galaxy
           </Link>
           <Link
+            href="/commons/conversations"
+            style={{
+              color: "#c9a15a",
+              fontFamily: "var(--font-display)",
+              fontSize: "0.82rem",
+              textDecoration: "none",
+            }}
+          >
+            My Conversations &rarr;
+          </Link>
+          <Link
             href="/shop"
             style={{
               color: "#7c9fd9",
@@ -651,6 +708,35 @@ export default function CommonsPage() {
                 fontSize: "0.85rem",
               }}
             />
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "0 14px",
+                borderRadius: "10px",
+                border: "1px solid rgba(124,159,217,0.4)",
+                background: transmitImageUrl ? "rgba(124,159,217,0.12)" : "var(--panel)",
+                color: "#7c9fd9",
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.78rem",
+                cursor: transmitImageUploading ? "default" : "pointer",
+                opacity: transmitImageUploading ? 0.6 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {transmitImageUploading
+                ? "Uploading..."
+                : transmitImageUrl
+                ? "Photo attached ✓"
+                : "+ Photo"}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={uploadTransmitPhoto}
+                disabled={transmitImageUploading}
+                style={{ display: "none" }}
+              />
+            </label>
             <button
               type="submit"
               disabled={transmitBusy}
@@ -672,6 +758,31 @@ export default function CommonsPage() {
               {transmitBusy ? "Scanning..." : "Transmit"}
             </button>
           </form>
+
+          {transmitImageUrl && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+              <img
+                src={transmitImageUrl}
+                alt=""
+                style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(124,159,217,0.4)" }}
+              />
+              <button
+                type="button"
+                onClick={() => setTransmitImageUrl(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  color: "var(--ink-faint, #5c6684)",
+                  cursor: "pointer",
+                }}
+              >
+                Remove photo
+              </button>
+            </div>
+          )}
 
           {transmitError && (
             <p
@@ -769,6 +880,20 @@ export default function CommonsPage() {
                       >
                         {t.tagline}
                       </div>
+                    )}
+                    {t.image_url && (
+                      <img
+                        src={t.image_url}
+                        alt=""
+                        style={{
+                          marginLeft: "20px",
+                          width: "72px",
+                          height: "72px",
+                          borderRadius: "8px",
+                          objectFit: "cover",
+                          border: "1px solid rgba(124,159,217,0.3)",
+                        }}
+                      />
                     )}
                   </div>
                 );

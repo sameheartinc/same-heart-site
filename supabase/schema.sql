@@ -765,3 +765,117 @@ insert into feed_sources (name, url, topic, active, sort_order) values
 on conflict (url) do nothing;
 
 notify pgrst, 'reload schema';
+
+-- Monetization gate, part 1 -- Rob's own design: reaching real Standing
+-- (holding all four Heart Strings -- see lib/evolution.ts's
+-- "monetization-eligible" milestone) only ever unlocks the *ability to
+-- apply*; nothing here is ever automatic or self-service beyond that.
+-- Every single application is reviewed and decided by Rob personally in
+-- /admin/monetization -- "I am the gatekeeper," his words, same one-
+-- admin model as is_admin above. No payment rails exist yet and none
+-- are implied by this migration -- monetization_approved is just a
+-- flag future features can check once the legal and banking side (a
+-- lawyer, a business bank account, Stripe Connect) is actually in
+-- place. See IDEAS.md's "Monetization: two-stage gate" entry for the
+-- full design and open questions.
+alter table profiles add column if not exists monetization_approved boolean not null default false;
+
+create table if not exists monetization_applications (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid not null references profiles(id) on delete cascade,
+  status text not null default 'pending', -- pending | approved | denied
+  applied_at timestamptz default now(),
+  decided_at timestamptz,
+  decided_by uuid references profiles(id),
+  unique (profile_id)
+);
+
+alter table monetization_applications enable row level security;
+
+-- No insert policy for regular users on purpose -- an application is
+-- only ever created by app/api/monetization/apply/route.ts, which
+-- re-checks eligibility itself from profile_unlocks (server-trusted,
+-- never a client claim) before writing a pending row. Users can only
+-- ever read their own application's status here.
+drop policy if exists "Users can see their own application" on monetization_applications;
+create policy "Users can see their own application" on monetization_applications for select
+  using (auth.uid() = profile_id);
+
+drop policy if exists "Admins manage monetization applications" on monetization_applications;
+create policy "Admins manage monetization applications" on monetization_applications for all
+  using (auth.uid() in (select id from profiles where is_admin = true))
+  with check (auth.uid() in (select id from profiles where is_admin = true));
+
+notify pgrst, 'reload schema';
+
+-- Hub background uploads -- a personal, private-to-that-user background
+-- photo for the Hub (and, once set, it also stands behind the site's
+-- other pages that already read ship_skin's image the same way -- see
+-- app/hub/page.tsx's heroBackground). This is the first user-uploaded
+-- image on the site; lib/skins.ts's own header explicitly avoided this
+-- for the curated site-wide skins ("no upload flow, no moderation
+-- surface, no new privacy question... for a purely cosmetic feature")
+-- -- worth being clear-eyed that this migration deliberately takes that
+-- surface on. What keeps it bounded: this image is only ever rendered
+-- back to the same person who uploaded it (their own Hub/Commons
+-- background), so there's no exposure to anyone else's browser, but the
+-- file itself is still hosted on this project's infrastructure --
+-- illegal content uploaded here would still be illegal content Same
+-- Heart hosts, same as any file host. No content moderation exists for
+-- this yet; that's a real gap, not an oversight, if this ever needs to
+-- scale past a small trusted user base.
+alter table profiles add column if not exists hub_background_url text;
+
+insert into storage.buckets (id, name, public)
+values ('hub-backgrounds', 'hub-backgrounds', true)
+on conflict (id) do nothing;
+
+-- Folder-per-user convention: every object's path starts with the
+-- uploader's own auth uid (see app/hub/page.tsx's uploadHubBackground),
+-- and these policies are what actually enforce that server-side rather
+-- than trusting the client to only ever write there.
+drop policy if exists "Anyone can view hub backgrounds" on storage.objects;
+create policy "Anyone can view hub backgrounds" on storage.objects for select
+  using (bucket_id = 'hub-backgrounds');
+
+drop policy if exists "Users can upload their own hub background" on storage.objects;
+create policy "Users can upload their own hub background" on storage.objects for insert
+  with check (bucket_id = 'hub-backgrounds' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users can update their own hub background" on storage.objects;
+create policy "Users can update their own hub background" on storage.objects for update
+  using (bucket_id = 'hub-backgrounds' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Users can delete their own hub background" on storage.objects;
+create policy "Users can delete their own hub background" on storage.objects for delete
+  using (bucket_id = 'hub-backgrounds' and (storage.foldername(name))[1] = auth.uid()::text);
+
+notify pgrst, 'reload schema';
+
+-- Exchange photo uploads -- an optional image alongside a transmitted
+-- link (see app/api/exchange/transmit/route.ts and lib/exchange.ts).
+-- Unlike hub_background_url above, this one IS shown to other Commons
+-- members -- transmissions are already a public feed -- so this is a
+-- real, if small, content-moderation surface: anyone can attach any
+-- image to something everyone else in the Commons sees. No moderation
+-- exists for this yet (same honest gap as the Hub background upload,
+-- but with real visibility to other people this time, not just the
+-- uploader). Worth a proper look (reporting, a takedown path) before
+-- this goes out to more than a small trusted group. The image is purely
+-- decorative -- it plays no part in the AI impact scoring, which still
+-- only ever reads the submitted link.
+alter table exchange_transmissions add column if not exists image_url text;
+
+insert into storage.buckets (id, name, public)
+values ('exchange-photos', 'exchange-photos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Anyone can view exchange photos" on storage.objects;
+create policy "Anyone can view exchange photos" on storage.objects for select
+  using (bucket_id = 'exchange-photos');
+
+drop policy if exists "Users can upload their own exchange photos" on storage.objects;
+create policy "Users can upload their own exchange photos" on storage.objects for insert
+  with check (bucket_id = 'exchange-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+notify pgrst, 'reload schema';
