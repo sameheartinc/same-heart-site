@@ -462,3 +462,42 @@ handles real people's real personal and emotional information across
 Star Day/Path, the Exchange, and Commons. Not a rejection -- a "let's
 design this deliberately before writing it" pause, same spirit as the
 monetization gate above.
+
+## Kindred Sparks -- direction confirmed, shelved for now (Rob's call, Sep 1, 2026)
+Rob's answer to the algorithm question: the "find people with something
+in common" version resonates, not the "compile a fuller picture of
+someone for others" version. Good -- that's a meaningfully smaller,
+safer thing to build. Not started yet; a real first design still needs:
+which already-visible signals count as "something in common" (Path
+archetype is the obvious first one -- it's already shown to everyone
+via public_profiles; World Issues someone's transmitted about via the
+Exchange is a second candidate, also already public), where it shows up
+(a small "kindred sparks" widget on the Hub? Its own page?), and whether
+it's opt-in or on by default. Deliberately scoped to signals that are
+already visible elsewhere on the site rather than anything new or
+private, so this stays the safer version of the idea by construction,
+not just by good intentions. Rob's explicit call: scrap it for now, keep it in the docket. Not
+dead, just not active -- whenever it comes back up, the next step is
+still a concrete mockup of what one "kindred spark" suggestion actually
+looks like, before writing the matching logic itself.
+
+## The Arcade + icosahedron icons (built Sep 1, 2026)
+Two from the same message:
+  - Every Galaxy node except the Hearth (which keeps its own
+    dodecahedron, chosen deliberately when Rob asked for it as the
+    donate node's distinct symbol) now shows a hexagon-faceted
+    icosahedron glyph inside its glowing orb, instead of a plain color
+    pulse with no icon. Both glyph types now spin continuously while
+    the pointer's over the node (2.4s linear loop), and stop under
+    prefers-reduced-motion like every other animation on this page.
+    lib/galaxyNodes.ts's `icon` field, app/galaxy/page.tsx's new
+    .galaxy-node-icon CSS.
+  - The Arcade -- a new Galaxy destination (opposite the Hub) for
+    Rob's "funny little games" idea. Built as an honest "coming soon"
+    placeholder, same ComingSoon shell Wallet and Field Guide already
+    use, rather than inventing a game he didn't ask for or a fake list
+    with nothing in it. Ready to receive the first real game whenever
+    Rob has one specced out -- app/games/page.tsx.
+Verified via diff against backups (fully additive except the one
+widened type on GalaxyNode.icon) and a clean `npx tsc --noEmit`. No
+database migration needed for either.

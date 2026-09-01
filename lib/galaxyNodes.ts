@@ -26,12 +26,16 @@ export interface GalaxyNode {
   // donation page) -- tells the Galaxy page to open it in a new tab
   // instead of navigating away from Same Heart.
   external?: boolean;
-  // Opt-in glyph rendered inside the node's glowing orb -- every node's
-  // orb is plain today (see app/galaxy/page.tsx's redesign notes: the
-  // old spinning rainbow disc read as busy, so it became a calm color
-  // pulse with no icon at all), so this only draws something when a node
-  // actually asks for it. Currently just "dodecahedron", for the Hearth.
-  icon?: "dodecahedron";
+  // Glyph rendered inside the node's glowing orb, on top of the plain
+  // color pulse (see app/galaxy/page.tsx's redesign notes: the old
+  // spinning rainbow disc read as busy, so the pulse itself stayed
+  // plain -- these glyphs are a separate, later addition, not a return
+  // to that). "icosahedron" is the default shape for every destination;
+  // the Hearth alone keeps its own "dodecahedron", chosen deliberately
+  // (see its own comment below) so the donate node stays visually
+  // distinct from the rest. Both rotate on hover -- see
+  // .galaxy-node-icon in app/galaxy/page.tsx.
+  icon?: "dodecahedron" | "icosahedron";
 }
 
 export const GALAXY_NODES: GalaxyNode[] = [
@@ -39,6 +43,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     key: "hub",
     href: "/hub",
     monogram: "H",
+    icon: "icosahedron",
     name: "The Hub",
     tagline: "Your capsule",
     accent: "#c9a15a",
@@ -50,6 +55,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     key: "commons",
     href: "/commons",
     monogram: "C",
+    icon: "icosahedron",
     name: "The Commons",
     tagline: "Community & chat",
     accent: "#c9576a",
@@ -61,6 +67,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     key: "shop",
     href: "/shop",
     monogram: "S",
+    icon: "icosahedron",
     name: "The Merch Ship",
     tagline: "Shop > Ship",
     accent: "#7c9fd9",
@@ -72,6 +79,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     key: "wallet",
     href: "/wallet",
     monogram: "W",
+    icon: "icosahedron",
     name: "The Wallet",
     tagline: "Cards & unlockables",
     accent: "#e0703a",
@@ -83,6 +91,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     key: "guide",
     href: "/guide",
     monogram: "?",
+    icon: "icosahedron",
     name: "Field Guide",
     tagline: "How it all works",
     accent: "#7fd9c4",
@@ -90,6 +99,25 @@ export const GALAXY_NODES: GalaxyNode[] = [
     radiusPct: 57,
     scale: 0.58,
     dim: true,
+  },
+  {
+    // A "coming soon" placeholder, same shape as Wallet/Field Guide --
+    // Rob's own idea: a play area for quick, funny little games (his
+    // words: "geopolitical games... I have a lot of funny little games
+    // we could code out"), built one at a time as real, working games
+    // rather than promised as a vague feature. Sits opposite the Hub
+    // (180deg) in the widest remaining gap on the ring, between the
+    // Wallet and Commons.
+    key: "games",
+    href: "/games",
+    monogram: "G",
+    icon: "icosahedron",
+    name: "The Arcade",
+    tagline: "Quick games, real code",
+    accent: "#9b6fe0",
+    angleDeg: 180,
+    radiusPct: 40,
+    scale: 0.95,
   },
   {
     // A real, working destination, not a "coming soon" placeholder --

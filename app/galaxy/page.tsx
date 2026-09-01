@@ -171,6 +171,20 @@ export default function GalaxyPage() {
           box-shadow: 0 0 34px var(--n-accent);
         }
 
+        /* The polyhedron glyphs (dodecahedron/icosahedron) inside each
+           node's orb -- a slow, continuous spin for as long as the
+           pointer stays over the node, not just a one-time flip. */
+        .galaxy-node-icon {
+          transform-origin: 50% 50%;
+        }
+        .galaxy-node:hover .galaxy-node-icon {
+          animation: galaxyIconSpin 2.4s linear infinite;
+        }
+        @keyframes galaxyIconSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
         /* Smaller hit-boxes on phones so nodes have real breathing room
            instead of crowding the center of the console. */
         @media (max-width: 480px) {
@@ -183,6 +197,7 @@ export default function GalaxyPage() {
           .galaxy-node-float,
           .galaxy-ring-outer,
           .galaxy-ring-ticks,
+          .galaxy-node-icon,
           .galaxy-node-star::before { animation: none; }
         }
       `}</style>
@@ -367,6 +382,7 @@ export default function GalaxyPage() {
                     <span className="galaxy-node-star-core" aria-hidden="true" />
                     {node.icon === "dodecahedron" && (
                       <svg
+                        className="galaxy-node-icon"
                         aria-hidden="true"
                         viewBox="0 0 24 24"
                         width="26"
@@ -398,6 +414,46 @@ export default function GalaxyPage() {
                         <line x1="17.5" y1="20" x2="14.2" y2="14.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
                         <line x1="6.5" y1="20" x2="9.8" y2="14.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
                         <line x1="3" y1="9" x2="8.5" y2="10.2" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                      </svg>
+                    )}
+                    {node.icon === "icosahedron" && (
+                      <svg
+                        className="galaxy-node-icon"
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        width="26"
+                        height="26"
+                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent }}
+                      >
+                        {/* Same "outer shape + inner shape + joined
+                            corners" shorthand as the dodecahedron above,
+                            a hexagon in place of a pentagon -- reads as a
+                            faceted gem/icosahedron at icon size, same
+                            reasoning as that comment: clearer than a true
+                            3D projection would be this small. This is
+                            the default glyph for every node except the
+                            Hearth. */}
+                        <polygon
+                          points="12,3 19.8,7.5 19.8,16.5 12,21 4.2,16.5 4.2,7.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinejoin="round"
+                        />
+                        <polygon
+                          points="12,7.5 15.9,9.75 15.9,14.25 12,16.5 8.1,14.25 8.1,9.75"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1"
+                          strokeLinejoin="round"
+                          opacity={0.85}
+                        />
+                        <line x1="12" y1="3" x2="12" y2="7.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="19.8" y1="7.5" x2="15.9" y2="9.75" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="19.8" y1="16.5" x2="15.9" y2="14.25" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="12" y1="21" x2="12" y2="16.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="4.2" y1="16.5" x2="8.1" y2="14.25" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
+                        <line x1="4.2" y1="7.5" x2="8.1" y2="9.75" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
                       </svg>
                     )}
                   </span>
