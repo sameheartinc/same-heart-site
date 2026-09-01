@@ -53,6 +53,27 @@ export async function listRecentTransmissions(limit = 20): Promise<Transmission[
   return data as Transmission[];
 }
 
+// One profile's own transmissions, oldest-excluded-first (most recent
+// first) -- the Green Key's door (see PLAN.md and lib/keys.ts): a
+// personal "impact history" page compiling everything someone's ever
+// transmitted and what it actually scored. Reads the same public table
+// listRecentTransmissions does, just filtered to the signed-in profile,
+// so it needs no new RLS -- exchange_transmissions is already readable
+// by anyone (the Commons feed depends on that), this just narrows it.
+export async function listMyTransmissions(): Promise<Transmission[]> {
+  const { data: userData } = await supabase.auth.getUser();
+  const profileId = userData.user?.id;
+  if (!profileId) return [];
+
+  const { data, error } = await supabase
+    .from("exchange_transmissions")
+    .select("*")
+    .eq("profile_id", profileId)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data as Transmission[];
+}
+
 export async function listRoster(limit = 50): Promise<RankedProfile[]> {
   const { data, error } = await supabase
     .from("public_rankings")

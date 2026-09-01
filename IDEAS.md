@@ -86,3 +86,52 @@ What Rob would actually need to make this real:
 
 Not actioned. Revisit when Rob has a Muvi account and wants to build
 the embed page.
+
+## Midjourney artwork skins for the widget-skin engine (in progress)
+
+Raised Sep 1, 2026. The `widget_skins` table (see supabase/schema.sql and
+lib/widgetSkins.ts) already has a `kind` field with a "palette" and
+"artwork" option, but only "palette" is rendered today -- "artwork" was
+scaffolded on purpose, waiting on a real batch of curated images before
+it's worth building the rendering for.
+
+Rob's assembling a batch of Midjourney generations now, from a set of 20
+prompts covering the four Path elements (Guardian/Seeker/Weaver/Flame),
+celestial/Star Day, textural (parchment, frosted glass, woven fabric,
+brushed metal), abstract light/energy, retro/tech, and nature. Once he's
+picked a set and gotten them into the project (dropped somewhere I can
+reach, or told where they land), next steps are: crop/host the chosen
+images, add an image-upload path to `/admin/skins` (currently text-only
+CSS var fields, no file field), and teach `WidgetFrame` to actually
+render `kind: "artwork"` skins as a background image instead of the
+`vars`-only palette rendering it does today.
+
+Not actioned yet -- waiting on Rob's curated image set.
+
+## Green Key's door: Impact History page (BUILT Sep 1, 2026)
+
+The last of the four already-earnable Keys' doors that wasn't built yet
+(Red's who-is-here and Blue's Commons accent color already existed).
+Per PLAN.md: "a personal 'impact history' page compiling every
+transmission someone's sent and what it actually scored... a keepsake of
+real-world contribution, not a leaderboard."
+
+`app/impact/page.tsx` -- gated the same way `/admin/skins` is: an
+honest locked message (not a redirect) for a signed-in profile that
+doesn't hold the Green Key yet, explaining what it takes
+(`lib/keys.ts`'s existing blurb). Once held, shows three stats
+(transmission count, average impact score, total Heartbeats earned)
+and every transmission as a card -- title/domain linking to the
+original URL, tagline if one was written, world-issue label, score,
+Heartbeats awarded, and date. Reads via a new `listMyTransmissions()`
+in `lib/exchange.ts` (same public `exchange_transmissions` table the
+Commons feed already reads, just filtered to the signed-in profile --
+no new RLS needed). The green key's dot on the Hub is now a link into
+this page (the other three keys' dots stay inert, since only Blue and
+Green have anything to click through to right now). Added `/impact` to
+`app/robots.ts`'s disallow list, matching `/hub` and `/admin`. Verified
+with `npx tsc --noEmit` (clean) and a diff against the pre-edit files.
+
+Yellow's door (letting a holder influence the Signal's fetch topics)
+remains the one built key without a built door -- next natural pick
+once this is confirmed working.

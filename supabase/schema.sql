@@ -472,3 +472,252 @@ update profiles set ship_skin = 'heavenly' where ship_skin = 'cosmic-gold';
 alter table profiles alter column ship_skin set default 'heavenly';
 
 notify pgrst, 'reload schema';
+
+-- Admin flag -- deliberately one boolean, not a roles table. Same Heart
+-- has exactly one admin today (you); this is easy to grow into something
+-- richer later if a second admin is ever needed.
+alter table profiles add column if not exists is_admin boolean default false;
+
+-- Make your own account the one admin. Uses your account email rather
+-- than a hardcoded id, since the id isn't something either of us has
+-- handy -- this only ever matches the account signed up under this
+-- email.
+update profiles set is_admin = true
+where id = (select id from auth.users where email = 'sameheartinc@gmail.com');
+
+-- Widget Skins, moved from code to the database. Same shape as
+-- lib/widgetSkins.ts's WidgetSkin type, just persisted -- this is what
+-- makes an admin dashboard mean something: adding skin #17 is now a form
+-- submission, not a code change and a deploy. Public read (the catalog
+-- itself is just color palettes, nothing sensitive); write restricted to
+-- admins. The 4 skins that shipped in code (Classic, Retro, Cyberpunk,
+-- Aurora) are seeded below unchanged -- nobody's saved skin choice
+-- changes because of this migration.
+create table if not exists widget_skins (
+  key text primary key,
+  name text not null,
+  description text not null,
+  header_label text not null,
+  kind text not null default 'palette',       -- palette | artwork (artwork isn't rendered specially yet -- reserved for when curated art exists)
+  unlock_id text,                             -- matches an id in lib/evolution.ts's UNLOCKABLES; null means free/always available
+  sort_order integer not null default 0,
+  vars jsonb not null,
+  created_at timestamptz default now()
+);
+
+alter table widget_skins enable row level security;
+
+drop policy if exists "Anyone can see widget skins" on widget_skins;
+create policy "Anyone can see widget skins" on widget_skins for select using (true);
+
+drop policy if exists "Admins manage widget skins" on widget_skins;
+create policy "Admins manage widget skins" on widget_skins for all
+  using (auth.uid() in (select id from profiles where is_admin = true))
+  with check (auth.uid() in (select id from profiles where is_admin = true));
+
+-- Seed: the 4 skins already live in code today, unchanged, plus a real
+-- first batch of 12 more -- proving the catalog holds more than a
+-- handful, and giving you something to actually look at in the picker
+-- right away. Anything past these 16 is now just a form in /admin/skins,
+-- not a request back to me.
+insert into widget_skins (key, name, description, header_label, kind, unlock_id, sort_order, vars) values
+('classic', 'Classic', 'Clean and quiet -- the original card.', 'SIGNAL', 'palette', null, 0, '{
+  "--widget-background": "#121a2c", "--widget-panel": "#18233a", "--widget-border": "#313f5e",
+  "--widget-radius": "14px", "--widget-shadow": "0 4px 18px rgba(0,0,0,0.28)",
+  "--widget-header-bg": "#121a2c", "--widget-header-text": "#8b93ab", "--widget-text": "#ece7dc",
+  "--widget-text-dim": "#9aa3b8", "--widget-text-faint": "#5c6684", "--widget-accent": "#c9a15a", "--widget-rose": "#c9576a"
+}'::jsonb),
+('retro', 'Retro', 'A beveled late-90s messenger titlebar.', 'SIGNAL.EXE', 'palette', null, 1, '{
+  "--widget-background": "#c0c0c0", "--widget-panel": "#d4d0c8", "--widget-border": "#4d4d4d",
+  "--widget-radius": "2px", "--widget-shadow": "inset 1px 1px 0 #ffffff, inset -1px -1px 0 #4d4d4d, 2px 2px 0 rgba(0,0,0,0.45)",
+  "--widget-header-bg": "linear-gradient(180deg, #2a6fe0, #0a3aa8)", "--widget-header-text": "#ffffff", "--widget-text": "#000000",
+  "--widget-text-dim": "#3a3a3a", "--widget-text-faint": "#6b6b6b", "--widget-accent": "#2a6fe0", "--widget-rose": "#c0392b"
+}'::jsonb),
+('cyberpunk', 'Cyberpunk', 'Neon on near-black.', 'SIGNAL_v2', 'palette', null, 2, '{
+  "--widget-background": "#080b12", "--widget-panel": "#101827", "--widget-border": "#00ffff",
+  "--widget-radius": "4px", "--widget-shadow": "0 0 16px rgba(255,0,255,0.55), 0 0 4px rgba(0,255,255,0.6)",
+  "--widget-header-bg": "#101827", "--widget-header-text": "#ff00ff", "--widget-text": "#e8f9ff",
+  "--widget-text-dim": "#9fd8e0", "--widget-text-faint": "#5f7a82", "--widget-accent": "#00ffff", "--widget-rose": "#ff2f7a"
+}'::jsonb),
+('aurora', 'Aurora', 'Earned by holding at least 2 Keys and staying 30 days.', 'SIGNAL_AURORA', 'palette', 'widget-skin-aurora', 3, '{
+  "--widget-background": "#0a1420", "--widget-panel": "#122236", "--widget-border": "#3fd9b8",
+  "--widget-radius": "16px", "--widget-shadow": "0 0 22px rgba(63,217,184,0.35), 0 0 8px rgba(155,111,224,0.3)",
+  "--widget-header-bg": "linear-gradient(90deg, #163a4a, #1f2a4a)", "--widget-header-text": "#9be8d8", "--widget-text": "#eaf8f4",
+  "--widget-text-dim": "#a9d3c8", "--widget-text-faint": "#5d8a7d", "--widget-accent": "#3fd9b8", "--widget-rose": "#e0567b"
+}'::jsonb),
+('nightfall', 'Nightfall', 'A deep indigo sky with a silver moon.', 'SIGNAL_NIGHT', 'palette', null, 4, '{
+  "--widget-background": "#0d0b1e", "--widget-panel": "#17142e", "--widget-border": "#3a3560",
+  "--widget-radius": "14px", "--widget-shadow": "0 4px 20px rgba(0,0,0,0.4)",
+  "--widget-header-bg": "#17142e", "--widget-header-text": "#a8a0d9", "--widget-text": "#e8e6f5",
+  "--widget-text-dim": "#a39cc7", "--widget-text-faint": "#6b6490", "--widget-accent": "#b8b8e0", "--widget-rose": "#d97a9e"
+}'::jsonb),
+('sakura', 'Sakura', 'Soft pink and white, like cherry blossoms.', 'SIGNAL', 'palette', null, 5, '{
+  "--widget-background": "#fdf1f5", "--widget-panel": "#ffffff", "--widget-border": "#f5d4e0",
+  "--widget-radius": "16px", "--widget-shadow": "0 4px 16px rgba(230,150,180,0.25)",
+  "--widget-header-bg": "linear-gradient(180deg, #ffd6e6, #ffb8d4)", "--widget-header-text": "#8a3f5a", "--widget-text": "#4a2a38",
+  "--widget-text-dim": "#8a6070", "--widget-text-faint": "#c49aab", "--widget-accent": "#e0708f", "--widget-rose": "#c9576a"
+}'::jsonb),
+('terminal', 'Terminal', 'Green phosphor on black.', 'root@signal', 'palette', null, 6, '{
+  "--widget-background": "#000000", "--widget-panel": "#0a0f0a", "--widget-border": "#1f4f1f",
+  "--widget-radius": "0px", "--widget-shadow": "0 0 12px rgba(0,255,70,0.25)",
+  "--widget-header-bg": "#0a0f0a", "--widget-header-text": "#00ff41", "--widget-text": "#00ff41",
+  "--widget-text-dim": "#00b32d", "--widget-text-faint": "#0a5c1a", "--widget-accent": "#00ff41", "--widget-rose": "#ff4136"
+}'::jsonb),
+('sunset-boulevard', 'Sunset Boulevard', 'A warm 80s gradient, orange into pink.', 'SIGNAL_FM', 'palette', null, 7, '{
+  "--widget-background": "#2b1240", "--widget-panel": "#3d1a52", "--widget-border": "#ff6f91",
+  "--widget-radius": "12px", "--widget-shadow": "0 4px 18px rgba(255,111,145,0.3)",
+  "--widget-header-bg": "linear-gradient(90deg, #ff6f91, #ff9f6f)", "--widget-header-text": "#2b1240", "--widget-text": "#ffe8ec",
+  "--widget-text-dim": "#e0a8c0", "--widget-text-faint": "#a5709a", "--widget-accent": "#ff9f6f", "--widget-rose": "#ff6f91"
+}'::jsonb),
+('forest-floor', 'Forest Floor', 'Deep greens and earth tones.', 'SIGNAL', 'palette', null, 8, '{
+  "--widget-background": "#14200f", "--widget-panel": "#1e2e17", "--widget-border": "#3f5a2e",
+  "--widget-radius": "10px", "--widget-shadow": "0 4px 16px rgba(0,0,0,0.35)",
+  "--widget-header-bg": "#1e2e17", "--widget-header-text": "#a8c98a", "--widget-text": "#e0ecd4",
+  "--widget-text-dim": "#a3c28a", "--widget-text-faint": "#6b8a55", "--widget-accent": "#8fb84f", "--widget-rose": "#c9704a"
+}'::jsonb),
+('ocean-deep', 'Ocean Deep', 'Teal and navy, like deep water.', 'SIGNAL_SUB', 'palette', null, 9, '{
+  "--widget-background": "#071620", "--widget-panel": "#0d2534", "--widget-border": "#1f5f70",
+  "--widget-radius": "14px", "--widget-shadow": "0 4px 20px rgba(0,60,80,0.4)",
+  "--widget-header-bg": "#0d2534", "--widget-header-text": "#7fd4dc", "--widget-text": "#d4f0f5",
+  "--widget-text-dim": "#8fc4cc", "--widget-text-faint": "#4f8a94", "--widget-accent": "#2fb8c4", "--widget-rose": "#d9707a"
+}'::jsonb),
+('vaporwave', 'Vaporwave', 'Pink, purple, and cyan on a synth grid.', 'SIGNAL~86', 'palette', null, 10, '{
+  "--widget-background": "#1a1233", "--widget-panel": "#2b1d4a", "--widget-border": "#ff71ce",
+  "--widget-radius": "6px", "--widget-shadow": "0 0 20px rgba(255,113,206,0.4)",
+  "--widget-header-bg": "linear-gradient(90deg, #ff71ce, #01cdfe)", "--widget-header-text": "#1a1233", "--widget-text": "#f5f0ff",
+  "--widget-text-dim": "#b8a8e0", "--widget-text-faint": "#7a6ba0", "--widget-accent": "#05ffa1", "--widget-rose": "#ff71ce"
+}'::jsonb),
+('parchment', 'Parchment', 'Old paper and sepia ink.', 'SIGNAL', 'palette', null, 11, '{
+  "--widget-background": "#f2e8d5", "--widget-panel": "#ece0c8", "--widget-border": "#c9b48a",
+  "--widget-radius": "4px", "--widget-shadow": "inset 0 0 0 1px rgba(120,95,50,0.15)",
+  "--widget-header-bg": "#ddc9a0", "--widget-header-text": "#5a4525", "--widget-text": "#3a2f1a",
+  "--widget-text-dim": "#6b5a3a", "--widget-text-faint": "#9c8a60", "--widget-accent": "#8a6a30", "--widget-rose": "#a04a3a"
+}'::jsonb),
+('frost', 'Frost', 'Icy blue and glass white.', 'SIGNAL', 'palette', null, 12, '{
+  "--widget-background": "#eef6fb", "--widget-panel": "#ffffff", "--widget-border": "#c0dcec",
+  "--widget-radius": "16px", "--widget-shadow": "0 4px 18px rgba(100,160,200,0.2)",
+  "--widget-header-bg": "linear-gradient(180deg, #dcf0fb, #c0e0f5)", "--widget-header-text": "#1f5478", "--widget-text": "#1a3a52",
+  "--widget-text-dim": "#4f7590", "--widget-text-faint": "#8ab0c4", "--widget-accent": "#4aa3d9", "--widget-rose": "#d97a94"
+}'::jsonb),
+('ember', 'Ember', 'Deep red and black, like glowing coals.', 'SIGNAL', 'palette', null, 13, '{
+  "--widget-background": "#150505", "--widget-panel": "#240a0a", "--widget-border": "#6b1a1a",
+  "--widget-radius": "10px", "--widget-shadow": "0 0 20px rgba(200,40,20,0.4)",
+  "--widget-header-bg": "#240a0a", "--widget-header-text": "#ff8a5c", "--widget-text": "#f5d4c4",
+  "--widget-text-dim": "#cc8a6a", "--widget-text-faint": "#8a5540", "--widget-accent": "#ff5c33", "--widget-rose": "#e0304a"
+}'::jsonb),
+('lavender-fields', 'Lavender Fields', 'Soft purple and lilac.', 'SIGNAL', 'palette', null, 14, '{
+  "--widget-background": "#f5f0fb", "--widget-panel": "#ffffff", "--widget-border": "#e0d0f0",
+  "--widget-radius": "16px", "--widget-shadow": "0 4px 16px rgba(180,150,220,0.25)",
+  "--widget-header-bg": "linear-gradient(180deg, #e8d8f7, #d8c0f0)", "--widget-header-text": "#5a3f7a", "--widget-text": "#3f2f52",
+  "--widget-text-dim": "#7a6590", "--widget-text-faint": "#ab9ac0", "--widget-accent": "#9b6fe0", "--widget-rose": "#c96b9a"
+}'::jsonb),
+('monochrome', 'Monochrome', 'Pure grayscale, minimal and high-contrast.', 'SIGNAL', 'palette', null, 15, '{
+  "--widget-background": "#ffffff", "--widget-panel": "#f4f4f4", "--widget-border": "#d0d0d0",
+  "--widget-radius": "8px", "--widget-shadow": "0 2px 10px rgba(0,0,0,0.1)",
+  "--widget-header-bg": "#1a1a1a", "--widget-header-text": "#ffffff", "--widget-text": "#1a1a1a",
+  "--widget-text-dim": "#555555", "--widget-text-faint": "#999999", "--widget-accent": "#1a1a1a", "--widget-rose": "#666666"
+}'::jsonb)
+on conflict (key) do nothing;
+
+notify pgrst, 'reload schema';
+
+-- Real artwork skins, part 1 -- the "kind: artwork" field on widget_skins
+-- was scaffolded a few migrations back and left unrendered on purpose,
+-- waiting on a real curated batch of images (see IDEAS.md). Rob generated
+-- a first batch in Midjourney; the chosen 14 live as compressed JPEGs
+-- under public/widget-skin-art/ in the repo (shipped with the next
+-- deploy, same as any other static asset -- no separate upload step).
+-- image_url is only ever read for kind = 'artwork' rows; palette rows
+-- leave it null. vars still matter here -- the identity card and header
+-- that sit on top of the artwork are still styled from these tokens, see
+-- components/WidgetFrame.tsx.
+alter table widget_skins add column if not exists image_url text;
+
+insert into widget_skins (key, name, description, header_label, kind, unlock_id, sort_order, image_url, vars) values
+('orrery', 'The Orrery', 'A hand-drawn orbit of worlds, real photography.', 'ORRERY', 'artwork', null, 16, '/widget-skin-art/orrery.jpg', '{
+  "--widget-background": "#14150f", "--widget-panel": "#1a170f", "--widget-border": "#4a3f24",
+  "--widget-radius": "16px", "--widget-shadow": "0 4px 20px rgba(0,0,0,0.45)",
+  "--widget-header-bg": "#0d0e0a", "--widget-header-text": "#c9a15a", "--widget-text": "#ece7dc",
+  "--widget-text-dim": "#a79b81", "--widget-text-faint": "#6b6152", "--widget-accent": "#c9a15a", "--widget-rose": "#c9576a"
+}'::jsonb),
+('golden-ratio', 'Golden Ratio', 'A galaxy traced by the golden spiral.', 'SIGNAL_PHI', 'artwork', null, 17, '/widget-skin-art/golden-ratio.jpg', '{
+  "--widget-background": "#0f1c19", "--widget-panel": "#13221e", "--widget-border": "#2f5850",
+  "--widget-radius": "14px", "--widget-shadow": "0 4px 20px rgba(0,0,0,0.4)",
+  "--widget-header-bg": "#0a1512", "--widget-header-text": "#7fd4c4", "--widget-text": "#dff5ef",
+  "--widget-text-dim": "#a0c7bd", "--widget-text-faint": "#5f8a80", "--widget-accent": "#4fd6c0", "--widget-rose": "#c9576a"
+}'::jsonb),
+('nautilus', 'Nautilus', 'A living spiral, gold on deep water.', 'NAUTILUS', 'artwork', null, 18, '/widget-skin-art/nautilus.jpg', '{
+  "--widget-background": "#0e161a", "--widget-panel": "#10181d", "--widget-border": "#2a5560",
+  "--widget-radius": "16px", "--widget-shadow": "0 0 22px rgba(240,185,90,0.25)",
+  "--widget-header-bg": "#0a1216", "--widget-header-text": "#9fd8cc", "--widget-text": "#e6f5f2",
+  "--widget-text-dim": "#9fc2ba", "--widget-text-faint": "#587067", "--widget-accent": "#f0b95a", "--widget-rose": "#c9576a"
+}'::jsonb),
+('seeker-stargazer', 'Stargazer''s Dusk', 'A real night sky, dense with stars.', 'SIGNAL_DUSK', 'artwork', null, 19, '/widget-skin-art/seeker-stargazer.jpg', '{
+  "--widget-background": "#0c1220", "--widget-panel": "#0f1626", "--widget-border": "#2c3c5c",
+  "--widget-radius": "14px", "--widget-shadow": "0 4px 18px rgba(0,0,0,0.4)",
+  "--widget-header-bg": "#0a1220", "--widget-header-text": "#a8bfe0", "--widget-text": "#e8edf7",
+  "--widget-text-dim": "#a3aed0", "--widget-text-faint": "#5c6684", "--widget-accent": "#6f8fc4", "--widget-rose": "#c9576a"
+}'::jsonb),
+('dusk-ridge', 'Blue Ridge', 'Mountain ridges fading into blue dusk.', 'SIGNAL_RIDGE', 'artwork', null, 20, '/widget-skin-art/dusk-ridge.jpg', '{
+  "--widget-background": "#0a1523", "--widget-panel": "#0d2035", "--widget-border": "#2c5478",
+  "--widget-radius": "14px", "--widget-shadow": "0 4px 18px rgba(0,40,70,0.4)",
+  "--widget-header-bg": "#081727", "--widget-header-text": "#9fd0e8", "--widget-text": "#e3f2fb",
+  "--widget-text-dim": "#a8c9dc", "--widget-text-faint": "#5f829c", "--widget-accent": "#7fc4e0", "--widget-rose": "#c9576a"
+}'::jsonb),
+('vaporwave-horizon', 'Outrun Horizon', 'A synth sunset over a neon grid.', 'SIGNAL_VHS', 'artwork', null, 21, '/widget-skin-art/vaporwave-horizon.jpg', '{
+  "--widget-background": "#200c26", "--widget-panel": "#2a1030", "--widget-border": "#ff6fc9",
+  "--widget-radius": "8px", "--widget-shadow": "0 0 22px rgba(255,111,201,0.35)",
+  "--widget-header-bg": "#1a0a20", "--widget-header-text": "#ff9fe0", "--widget-text": "#ffeef8",
+  "--widget-text-dim": "#e0a8cc", "--widget-text-faint": "#8a5a78", "--widget-accent": "#4ff0ff", "--widget-rose": "#ff5c8a"
+}'::jsonb),
+('vaporwave-tide', 'Neon Tide', 'Neon clouds reflected on a glass tide.', 'SIGNAL_TIDE', 'artwork', null, 22, '/widget-skin-art/vaporwave-tide.jpg', '{
+  "--widget-background": "#160c26", "--widget-panel": "#1c1030", "--widget-border": "#ff8fce",
+  "--widget-radius": "8px", "--widget-shadow": "0 0 22px rgba(79,232,224,0.3)",
+  "--widget-header-bg": "#12081c", "--widget-header-text": "#9ff0e8", "--widget-text": "#fdeef8",
+  "--widget-text-dim": "#d0a8c4", "--widget-text-faint": "#7a5a70", "--widget-accent": "#4fe8e0", "--widget-rose": "#ff5c8a"
+}'::jsonb),
+('guardian-dust', 'Golden Drift', 'Warm golden dust, suspended and still.', 'SIGNAL_DUST', 'artwork', null, 23, '/widget-skin-art/guardian-dust.jpg', '{
+  "--widget-background": "#1c1509", "--widget-panel": "#241c0e", "--widget-border": "#8a6a30",
+  "--widget-radius": "12px", "--widget-shadow": "0 4px 20px rgba(80,60,10,0.35)",
+  "--widget-header-bg": "#1a1409", "--widget-header-text": "#e8c98a", "--widget-text": "#f5ebd4",
+  "--widget-text-dim": "#cdb389", "--widget-text-faint": "#8a7350", "--widget-accent": "#e0b355", "--widget-rose": "#c9704a"
+}'::jsonb),
+('skybreak', 'Skybreak', 'Light breaking clean through storm clouds.', 'SIGNAL_BREAK', 'artwork', null, 24, '/widget-skin-art/skybreak.jpg', '{
+  "--widget-background": "#0d1516", "--widget-panel": "#10181a", "--widget-border": "#3f5a60",
+  "--widget-radius": "14px", "--widget-shadow": "0 4px 20px rgba(0,0,0,0.4)",
+  "--widget-header-bg": "#0a1214", "--widget-header-text": "#cfe0dc", "--widget-text": "#eef5f3",
+  "--widget-text-dim": "#a8c0bc", "--widget-text-faint": "#5f7874", "--widget-accent": "#e8dfc0", "--widget-rose": "#c9576a"
+}'::jsonb),
+('woven-gold', 'Threadwork', 'Real thread, gold on deep indigo.', 'SIGNAL_WEAVE', 'artwork', null, 25, '/widget-skin-art/woven-gold.jpg', '{
+  "--widget-background": "#10151f", "--widget-panel": "#141a26", "--widget-border": "#4a3a1e",
+  "--widget-radius": "10px", "--widget-shadow": "0 4px 18px rgba(0,0,0,0.4)",
+  "--widget-header-bg": "#0c111a", "--widget-header-text": "#c9a15a", "--widget-text": "#e6e9f2",
+  "--widget-text-dim": "#a3aac2", "--widget-text-faint": "#5c6684", "--widget-accent": "#d4a24a", "--widget-rose": "#c9576a"
+}'::jsonb),
+('gilded-steel', 'Gilded Steel', 'Brushed metal catching a warm gold light.', 'SIGNAL_FORGE', 'artwork', null, 26, '/widget-skin-art/gilded-steel.jpg', '{
+  "--widget-background": "#13110c", "--widget-panel": "#17140f", "--widget-border": "#8a6a30",
+  "--widget-radius": "10px", "--widget-shadow": "0 4px 20px rgba(200,150,60,0.25)",
+  "--widget-header-bg": "#0d0b08", "--widget-header-text": "#e0b968", "--widget-text": "#f0e9d8",
+  "--widget-text-dim": "#baa87e", "--widget-text-faint": "#6b5f45", "--widget-accent": "#f0c060", "--widget-rose": "#c9704a"
+}'::jsonb),
+('old-parchment', 'Old Parchment', 'Real aged paper, worn at the edges.', 'SIGNAL_ARCHIVE', 'artwork', null, 27, '/widget-skin-art/old-parchment.jpg', '{
+  "--widget-background": "#f2e6cc", "--widget-panel": "#fbf6ea", "--widget-border": "#b89860",
+  "--widget-radius": "4px", "--widget-shadow": "inset 0 0 0 1px rgba(120,95,50,0.15)",
+  "--widget-header-bg": "#e8d4a8", "--widget-header-text": "#5a4525", "--widget-text": "#3a2f1a",
+  "--widget-text-dim": "#6b5a3a", "--widget-text-faint": "#9c8a60", "--widget-accent": "#8a6a30", "--widget-rose": "#a04a3a"
+}'::jsonb),
+('ocean-current', 'Ocean Current', 'Sunlight reaching down through open water.', 'SIGNAL_DEEP', 'artwork', null, 28, '/widget-skin-art/ocean-current.jpg', '{
+  "--widget-background": "#e2f2f4", "--widget-panel": "#eef9fa", "--widget-border": "#7fd4dc",
+  "--widget-radius": "16px", "--widget-shadow": "0 4px 18px rgba(30,150,170,0.2)",
+  "--widget-header-bg": "#cdeef2", "--widget-header-text": "#0f5866", "--widget-text": "#0d2e33",
+  "--widget-text-dim": "#3a6870", "--widget-text-faint": "#7aa8ae", "--widget-accent": "#1f8a99", "--widget-rose": "#d9707a"
+}'::jsonb),
+('forest-canopy', 'Forest Canopy', 'Sunlight through moss and standing trees.', 'SIGNAL_GROVE', 'artwork', null, 29, '/widget-skin-art/forest-canopy.jpg', '{
+  "--widget-background": "#e6efd4", "--widget-panel": "#eef5e0", "--widget-border": "#8fae5a",
+  "--widget-radius": "12px", "--widget-shadow": "0 4px 16px rgba(60,90,20,0.2)",
+  "--widget-header-bg": "#d8e8bc", "--widget-header-text": "#3d5a22", "--widget-text": "#253015",
+  "--widget-text-dim": "#4f6a35", "--widget-text-faint": "#82986a", "--widget-accent": "#4f7a2f", "--widget-rose": "#c9704a"
+}'::jsonb)
+on conflict (key) do nothing;
+
+notify pgrst, 'reload schema';

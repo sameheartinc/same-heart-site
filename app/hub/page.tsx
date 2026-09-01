@@ -18,7 +18,7 @@ import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
 import { streakVisualTier, checkInWithServer, type StreakMilestone } from "@/lib/streak";
 import { listMyUnlocks, evaluateEvolution } from "@/lib/evolution";
-import { WIDGET_SKINS, type WidgetSkinKey } from "@/lib/widgetSkins";
+import { FALLBACK_SKINS, loadWidgetSkins, type WidgetSkin, type WidgetSkinKey } from "@/lib/widgetSkins";
 import WidgetFrame from "@/components/WidgetFrame";
 
 type Profile = {
@@ -69,6 +69,7 @@ export default function HubPage() {
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
   const [notifOpen, setNotifOpen] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [skinCatalog, setSkinCatalog] = useState<WidgetSkin[]>(FALLBACK_SKINS);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
@@ -177,6 +178,12 @@ export default function HubPage() {
           listMyUnlocks().then((ids) => setUnlockedIds(new Set(ids)));
         }
       });
+
+      // The Capsule's skin catalog now lives in Supabase (see
+      // lib/widgetSkins.ts) -- load it once here so lockedSkinKeys below
+      // can be computed against the real list, not just the 4 fallback
+      // skins baked into the bundle.
+      loadWidgetSkins().then(setSkinCatalog);
     })();
   }, [router]);
 
@@ -319,7 +326,7 @@ export default function HubPage() {
   // Skins with an unlockId only join the Capsule's cycle once this
   // profile actually holds that unlock -- see lib/evolution.ts. Skins
   // with no unlockId (the original three) are never locked here.
-  const lockedSkinKeys: WidgetSkinKey[] = WIDGET_SKINS.filter(
+  const lockedSkinKeys: WidgetSkinKey[] = skinCatalog.filter(
     (s) => s.unlockId && !unlockedIds.has(s.unlockId)
   ).map((s) => s.key);
 
@@ -933,9 +940,8 @@ export default function HubPage() {
               {keys.map((k) => {
                 const info = KEY_INFO[k.key_color];
                 if (!info) return null;
-                return (
+                const dot = (
                   <span
-                    key={k.key_color}
                     title={`${info.name} -- ${info.blurb}`}
                     style={{
                       width: "14px",
@@ -947,6 +953,21 @@ export default function HubPage() {
                     }}
                   />
                 );
+                // Green's door is a whole page (see app/impact/page.tsx),
+                // not an inline control like Blue's accent picker above --
+                // so its dot is the one that's actually clickable.
+                if (k.key_color === "green") {
+                  return (
+                    <Link
+                      key={k.key_color}
+                      href="/impact"
+                      aria-label={`${info.name} -- open your Impact History`}
+                    >
+                      {dot}
+                    </Link>
+                  );
+                }
+                return <span key={k.key_color}>{dot}</span>;
               })}
             </div>
           </div>

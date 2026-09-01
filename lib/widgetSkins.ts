@@ -7,9 +7,18 @@
 // Two widgets use it today: the corner audio player (components/
 // GlobalPlayer.tsx) and the Hub's Capsule (app/hub/page.tsx). Each picks
 // its own skin independently (separate localStorage keys), but both draw
-// from this one registry -- that's the "ONE widget engine, MANY skins"
+// from this one catalog -- that's the "ONE widget engine, MANY skins"
 // principle: a new widget only ever needs its own storageKey, never its
 // own copy of this file.
+//
+// The catalog itself now lives in Supabase (the `widget_skins` table),
+// not in this file -- see supabase/schema.sql. That's what makes
+// /admin/skins meaningful: adding skin #17 is a form submission there,
+// not a code change and a deploy here. FALLBACK_SKINS below is only a
+// safety net for the moment before the real catalog has loaded (or if
+// the fetch ever fails) -- it's intentionally the same 4 skins that used
+// to be this file's only content, so a slow network never shows an empty
+// picker or an unstyled widget.
 //
 // The audio player is FRAME-ONLY: its content is an iHeartRadio iframe,
 // cross-origin, so its play button/track title/artwork can't be styled
@@ -17,12 +26,14 @@
 // Same Heart actually renders, though, so it needs the fuller token set
 // below (panel, text, accent, rose) to skin its interior too, not just
 // its frame.
-//
-// To add a new skin later: copy one entry, change the key, name,
-// description, and the var values. Nothing that *uses* a skin needs to
-// change -- every consumer only ever calls WIDGET_SKINS / getWidgetSkin.
 
-export type WidgetSkinKey = "classic" | "retro" | "cyberpunk" | "aurora";
+import { supabase } from "@/lib/supabaseClient";
+
+// No longer a fixed union -- keys are admin-addable at runtime now, so
+// this is just "a string that happens to identify a skin." Kept as a
+// named type (rather than switching every consumer to plain `string`)
+// so the intent stays readable at call sites.
+export type WidgetSkinKey = string;
 
 export interface WidgetSkin {
   key: WidgetSkinKey;
@@ -32,11 +43,21 @@ export interface WidgetSkin {
   // content -- purely decorative text (a station name/callsign feel),
   // not live data.
   headerLabel: string;
+  // "artwork" is reserved for when curated art (see PLAN.md's Midjourney
+  // workflow) backs a skin instead of a plain palette -- not rendered
+  // specially yet, so every skin today is "palette".
+  kind: "palette" | "artwork";
   // Set only on earned skins. Matches an id in lib/evolution.ts's
   // UNLOCKABLES -- a widget only ever offers this skin in its cycle once
   // the viewing profile holds that unlock (see WidgetFrame's
   // lockedSkinKeys prop). Skins without this are free, exactly as before.
   unlockId?: string;
+  // Only set on kind: "artwork" skins -- a path under /public (or any
+  // absolute URL) to a real image. WidgetFrame paints it as the outer
+  // frame's background; `vars` still matters even here, since the
+  // identity card and header sitting on top of it are still styled from
+  // these tokens (see components/WidgetFrame.tsx).
+  imageUrl?: string;
   vars: {
     "--widget-background": string;
     "--widget-panel": string;
@@ -53,12 +74,17 @@ export interface WidgetSkin {
   };
 }
 
-export const WIDGET_SKINS: WidgetSkin[] = [
+export const DEFAULT_WIDGET_SKIN_KEY: WidgetSkinKey = "classic";
+
+// The safety net described above -- identical to the 4 skins that were
+// this file's entire content before the catalog moved to Supabase.
+export const FALLBACK_SKINS: WidgetSkin[] = [
   {
     key: "classic",
     name: "Classic",
     description: "Clean and quiet -- the original card.",
     headerLabel: "SIGNAL",
+    kind: "palette",
     vars: {
       "--widget-background": "#121a2c",
       "--widget-panel": "#18233a",
@@ -79,6 +105,7 @@ export const WIDGET_SKINS: WidgetSkin[] = [
     name: "Retro",
     description: "A beveled late-90s messenger titlebar.",
     headerLabel: "SIGNAL.EXE",
+    kind: "palette",
     vars: {
       "--widget-background": "#c0c0c0",
       "--widget-panel": "#d4d0c8",
@@ -100,6 +127,7 @@ export const WIDGET_SKINS: WidgetSkin[] = [
     name: "Cyberpunk",
     description: "Neon on near-black.",
     headerLabel: "SIGNAL_v2",
+    kind: "palette",
     vars: {
       "--widget-background": "#080b12",
       "--widget-panel": "#101827",
@@ -116,12 +144,11 @@ export const WIDGET_SKINS: WidgetSkin[] = [
     },
   },
   {
-    // Earned, not chosen -- see lib/evolution.ts. The first skin gated
-    // on real, sustained progress rather than being free from day one.
     key: "aurora",
     name: "Aurora",
     description: "Earned by holding at least 2 Keys and staying 30 days.",
     headerLabel: "SIGNAL_AURORA",
+    kind: "palette",
     unlockId: "widget-skin-aurora",
     vars: {
       "--widget-background": "#0a1420",
@@ -140,11 +167,77 @@ export const WIDGET_SKINS: WidgetSkin[] = [
   },
 ];
 
-export const DEFAULT_WIDGET_SKIN_KEY: WidgetSkinKey = "classic";
+// Module-level cache -- every widget on every page shares one fetch of
+// the catalog rather than each WidgetFrame instance hitting Supabase on
+// its own. `null` means "not fetched yet"; a resolved array (even an
+// empty one, which shouldn't happen but is handled) means the fetch is
+// done. `inFlight` collapses concurrent calls (e.g. the audio player and
+// the Capsule both mounting at once) into one request.
+let cachedSkins: WidgetSkin[] | null = null;
+let inFlight: Promise<WidgetSkin[]> | null = null;
 
-export function getWidgetSkin(key: string | null | undefined): WidgetSkin {
+interface WidgetSkinRow {
+  key: string;
+  name: string;
+  description: string;
+  header_label: string;
+  kind: string;
+  unlock_id: string | null;
+  image_url: string | null;
+  vars: WidgetSkin["vars"];
+}
+
+function rowToSkin(row: WidgetSkinRow): WidgetSkin {
+  return {
+    key: row.key,
+    name: row.name,
+    description: row.description,
+    headerLabel: row.header_label,
+    kind: row.kind === "artwork" ? "artwork" : "palette",
+    unlockId: row.unlock_id ?? undefined,
+    imageUrl: row.image_url ?? undefined,
+    vars: row.vars,
+  };
+}
+
+// Fetches the real catalog from Supabase once, caches it for the rest of
+// this page session, and falls back to FALLBACK_SKINS on any failure
+// (offline, RLS misconfigured, table not migrated yet) so a widget never
+// renders unstyled just because the network hiccuped.
+export async function loadWidgetSkins(): Promise<WidgetSkin[]> {
+  if (cachedSkins) return cachedSkins;
+  if (inFlight) return inFlight;
+
+  inFlight = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from("widget_skins")
+        .select("key, name, description, header_label, kind, unlock_id, image_url, vars")
+        .order("sort_order", { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        cachedSkins = FALLBACK_SKINS;
+      } else {
+        cachedSkins = (data as WidgetSkinRow[]).map(rowToSkin);
+      }
+    } catch {
+      cachedSkins = FALLBACK_SKINS;
+    }
+    return cachedSkins!;
+  })();
+
+  return inFlight;
+}
+
+// Pure lookup against an already-loaded catalog -- doesn't fetch, so
+// callers control when a network request happens (see WidgetFrame).
+// Falls back to the catalog's own default entry, or the first entry if
+// even that's missing, so this never returns undefined.
+export function getWidgetSkin(key: string | null | undefined, catalog: WidgetSkin[]): WidgetSkin {
   return (
-    WIDGET_SKINS.find((s) => s.key === key) ??
-    WIDGET_SKINS.find((s) => s.key === DEFAULT_WIDGET_SKIN_KEY)!
+    catalog.find((s) => s.key === key) ??
+    catalog.find((s) => s.key === DEFAULT_WIDGET_SKIN_KEY) ??
+    catalog[0] ??
+    FALLBACK_SKINS[0]
   );
 }

@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: ["/", "/about", "/shop", "/wallet", "/privacy", "/terms", "/contact"],
-      disallow: ["/api/", "/hub", "/commons", "/galaxy", "/guide", "/star-day"],
+      disallow: ["/api/", "/hub", "/commons", "/galaxy", "/guide", "/star-day", "/admin", "/impact"],
     },
     sitemap: "https://sameheart.ca/sitemap.xml",
   };
