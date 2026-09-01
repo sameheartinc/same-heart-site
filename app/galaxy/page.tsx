@@ -352,7 +352,12 @@ export default function GalaxyPage() {
                       width: "58px",
                       height: "58px",
                       borderRadius: "50%",
-                      background: "#050810",
+                      // Was a near-black disc (#050810) so each node's
+                      // colored glow popped against a dark sky. Against
+                      // the heavenly light sky that read as a dark hole
+                      // instead of a glowing orb, so the base is now a
+                      // warm, bright light-source color instead.
+                      background: "#fef6e4",
                       border: `1px solid ${node.accent}`,
                       boxShadow: `0 0 ${node.dim ? 10 : 18}px ${node.accent}${node.dim ? "33" : "44"}`,
                       transition: "box-shadow 0.28s ease",

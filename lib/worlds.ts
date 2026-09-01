@@ -19,40 +19,48 @@ export interface WorldDef extends WorldVisual {
 
 // The universal starfield shown before anyone's path is known -- the same
 // for every visitor, regardless of which world they land in afterward.
+//
+// Heavenly, not just recolored: a light sky isn't a dark sky with the
+// values flipped -- a pale particle on a pale ground disappears (this
+// bit Seeker specifically: #a9c1f2 stars were fine on navy, invisible on
+// cream). Every particleColor below was re-picked for real contrast
+// against its own sky, keeping each path's original hue family so the
+// identity carries over -- gold stays gold, rose stays rose, ember stays
+// ember.
 export const ONBOARDING_WORLD: WorldVisual = {
-  skyTop: "#05060f",
-  skyBottom: "#171226",
-  particleColor: "#c9a15a",
+  skyTop: "#fdfbf5",
+  skyBottom: "#f3e6d0",
+  particleColor: "#b8863f",
   particleStyle: "stars",
 };
 
 export const WORLDS: Record<PathKey, WorldDef> = {
   guardian: {
     key: "guardian",
-    skyTop: "#0a0e1a",
-    skyBottom: "#3a2a12",
-    particleColor: "#c9a15a",
+    skyTop: "#fdfbf5",
+    skyBottom: "#e8d2a8",
+    particleColor: "#96702f",
     particleStyle: "dust",
   },
   seeker: {
     key: "seeker",
-    skyTop: "#05060f",
-    skyBottom: "#141a33",
-    particleColor: "#a9c1f2",
+    skyTop: "#f7fbff",
+    skyBottom: "#dbe8f7",
+    particleColor: "#4a6fa5",
     particleStyle: "stars",
   },
   weaver: {
     key: "weaver",
-    skyTop: "#06121a",
-    skyBottom: "#123240",
+    skyTop: "#fdf6f7",
+    skyBottom: "#f0d7de",
     particleColor: "#c9576a",
     particleStyle: "current",
   },
   flame: {
     key: "flame",
-    skyTop: "#0d0603",
-    skyBottom: "#3a1608",
-    particleColor: "#e0703a",
+    skyTop: "#fff8f2",
+    skyBottom: "#f6d7bb",
+    particleColor: "#c9573a",
     particleStyle: "embers",
   },
 };

@@ -7,6 +7,44 @@ const SITE_URL = "https://sameheart.ca";
 const SITE_DESCRIPTION =
   "SAMEHEART is opening its doors soon. Quiet from the outside — a whole universe once you're in.";
 
+// A plain, factual description for machines (search engines, AI
+// crawlers, JSON-LD parsers) -- deliberately not the same string as
+// SITE_DESCRIPTION above, which is the mysterious, human-facing brand
+// voice used for social-share previews. See app/about/page.tsx for the
+// full version of this same description.
+const ORG_DESCRIPTION =
+  "Same Heart is a personal growth and community platform: a personality/self-discovery system (Star Day, Path), community discussion spaces (the Commons), a curated feed of real news (the Signal), and permanent earned recognition for real engagement (Keys).";
+
+// Organization + WebSite structured data (JSON-LD) -- gives search
+// engines and AI systems a plain, machine-readable fact sheet instead of
+// only the poetic human-facing copy above. See app/about/page.tsx for
+// the same facts written out in full prose.
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: "Same Heart",
+      legalName: "Same Heart Inc.",
+      url: SITE_URL,
+      logo: `${SITE_URL}/mark.png`,
+      email: "sameheartinc@gmail.com",
+      description: ORG_DESCRIPTION,
+      address: {
+        "@type": "PostalAddress",
+        addressRegion: "Ontario",
+        addressCountry: "CA",
+      },
+    },
+    {
+      "@type": "WebSite",
+      name: "Same Heart",
+      url: SITE_URL,
+      description: ORG_DESCRIPTION,
+    },
+  ],
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -46,6 +84,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+        />
         <GlobalPlayer />
         {children}
         <Analytics />

@@ -17,6 +17,9 @@ import {
 import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
 import { streakVisualTier, checkInWithServer, type StreakMilestone } from "@/lib/streak";
+import { listMyUnlocks, evaluateEvolution } from "@/lib/evolution";
+import { WIDGET_SKINS, type WidgetSkinKey } from "@/lib/widgetSkins";
+import WidgetFrame from "@/components/WidgetFrame";
 
 type Profile = {
   display_name: string | null;
@@ -65,6 +68,11 @@ export default function HubPage() {
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
   const [notifOpen, setNotifOpen] = useState(false);
+  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -134,6 +142,7 @@ export default function HubPage() {
       }
 
       const myKeys = await listMyKeys();
+      const myUnlocks = await listMyUnlocks();
       const myNotifications = await listMyNotifications();
       const notifAuthorProfiles = await fetchProfilesByIds(
         myNotifications.map((n) => n.actor_id).filter((id): id is string => Boolean(id))
@@ -143,6 +152,7 @@ export default function HubPage() {
       setProfile(currentProfile);
       setLog(currentLog);
       setKeys(myKeys);
+      setUnlockedIds(new Set(myUnlocks));
       setNotifications(myNotifications);
       setNotifAuthors(notifAuthorProfiles);
       setIsAnonymous(Boolean((userData.user as { is_anonymous?: boolean }).is_anonymous));
@@ -156,6 +166,15 @@ export default function HubPage() {
       evaluateKeys().then((result) => {
         if (result.newlyEarned.length > 0) {
           listMyKeys().then(setKeys);
+        }
+      });
+
+      // Same quiet, idempotent background check, for the more general
+      // rewards described in lib/evolution.ts (the first one being the
+      // Aurora widget skin below).
+      evaluateEvolution().then((result) => {
+        if (result.newlyEarned.length > 0) {
+          listMyUnlocks().then((ids) => setUnlockedIds(new Set(ids)));
         }
       });
     })();
@@ -213,6 +232,49 @@ export default function HubPage() {
     }
   }
 
+  // The name painted on the hull -- freeform, optional, editable any time.
+  // Falls back to the archetype (e.g. "The Weaver") when cleared, the same
+  // fallback authorName() already uses for this column elsewhere.
+  function startEditName() {
+    if (!profile) return;
+    setNameDraft(profile.display_name?.trim() || "");
+    setNameError(null);
+    setEditingName(true);
+  }
+
+  function cancelEditName() {
+    setEditingName(false);
+    setNameError(null);
+  }
+
+  async function saveDisplayName(e: React.FormEvent) {
+    e.preventDefault();
+    if (!userId || !profile || nameSaving) return;
+    const trimmed = nameDraft.trim().slice(0, 24);
+    if (trimmed.length > 0 && trimmed.length < 2) {
+      setNameError("A little longer than that.");
+      return;
+    }
+    const nextValue = trimmed.length > 0 ? trimmed : null;
+    if (nextValue === profile.display_name) {
+      setEditingName(false);
+      return;
+    }
+    const previous = profile.display_name;
+    setNameError(null);
+    // Optimistic update, same pattern as chooseSkin/chooseAccent above.
+    setProfile({ ...profile, display_name: nextValue });
+    setNameSaving(true);
+    const { error } = await supabase.from("profiles").update({ display_name: nextValue }).eq("id", userId);
+    setNameSaving(false);
+    if (error) {
+      setProfile((p) => (p ? { ...p, display_name: previous } : p));
+      setNameError("Couldn't save -- try again.");
+      return;
+    }
+    setEditingName(false);
+  }
+
   async function addLogEntry(e: React.FormEvent) {
     e.preventDefault();
     const description = logDraft.trim();
@@ -253,6 +315,13 @@ export default function HubPage() {
   const path = profile.path_key ? PATHS[profile.path_key as PathKey] : null;
   const spark = sparkLabel(profile.spark_id);
   const streakTier = streakVisualTier(profile.current_streak ?? 0);
+  const shipName = profile.display_name?.trim() || profile.archetype || "Unnamed Vessel";
+  // Skins with an unlockId only join the Capsule's cycle once this
+  // profile actually holds that unlock -- see lib/evolution.ts. Skins
+  // with no unlockId (the original three) are never locked here.
+  const lockedSkinKeys: WidgetSkinKey[] = WIDGET_SKINS.filter(
+    (s) => s.unlockId && !unlockedIds.has(s.unlockId)
+  ).map((s) => s.key);
 
   return (
     <main
@@ -390,10 +459,130 @@ export default function HubPage() {
           </div>
         )}
 
+        {/* Outside the Capsule, on purpose -- a small floating call
+            sign, like a name painted on the hull, separate from the
+            fully-skinnable console below. */}
+        <div style={{ textAlign: "center", marginBottom: "18px" }}>
+          {editingName ? (
+            <form
+              onSubmit={saveDisplayName}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}
+            >
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                maxLength={24}
+                placeholder={profile.archetype ?? "Callsign"}
+                style={{
+                  textAlign: "center",
+                  background: "var(--panel)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  padding: "6px 10px",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: "1.1rem",
+                  color: "var(--ink)",
+                  width: "220px",
+                  maxWidth: "80vw",
+                }}
+              />
+              {nameError && (
+                <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--rose)" }}>
+                  {nameError}
+                </p>
+              )}
+              <div style={{ display: "flex", gap: "14px" }}>
+                <button
+                  type="submit"
+                  disabled={nameSaving}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "var(--gold)",
+                    cursor: nameSaving ? "default" : "pointer",
+                  }}
+                >
+                  {nameSaving ? "Saving..." : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEditName}
+                  disabled={nameSaving}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-faint)",
+                    cursor: nameSaving ? "default" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={startEditName}
+              title="Rename your ship"
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                margin: "0 auto",
+                display: "inline-flex",
+                alignItems: "baseline",
+                gap: "7px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: "1.1rem",
+                  letterSpacing: "0.02em",
+                  color: "var(--gold)",
+                }}
+              >
+                {shipName}
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--ink-faint)" }}>
+                &#9998;
+              </span>
+            </button>
+          )}
+          <p
+            style={{
+              margin: "2px 0 0",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--ink-faint)",
+            }}
+          >
+            {profile.frequency}Hz &middot; adrift and holding
+          </p>
+        </div>
+
+        <div style={{ marginBottom: "16px" }}>
+          <WidgetFrame storageKey="same-heart-capsule-skin" lockedSkinKeys={lockedSkinKeys}>
+            <div style={{ padding: "22px" }}>
         <div
           style={{
-            background: "var(--panel)",
-            border: "1px solid var(--border)",
+            background: "var(--widget-panel)",
+            border: "1px solid var(--widget-border)",
             borderRadius: "18px",
             padding: "26px",
             marginBottom: "16px",
@@ -413,17 +602,17 @@ export default function HubPage() {
                 flexWrap: "wrap",
                 fontFamily: "var(--font-mono)",
                 fontSize: "10px",
-                color: "var(--gold)",
+                color: "var(--widget-accent)",
                 marginBottom: "4px",
               }}
             >
               <span>{profile.designation}</span>
-              {spark && <span style={{ color: "var(--ink-faint)" }}>&middot; {spark}</span>}
+              {spark && <span style={{ color: "var(--widget-text-faint)" }}>&middot; {spark}</span>}
             </div>
             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.3rem", margin: "0 0 6px" }}>
               {profile.archetype}
             </h1>
-            <p style={{ fontFamily: "var(--font-body)", fontStyle: "italic", color: "var(--ink-dim)", margin: 0 }}>
+            <p style={{ fontFamily: "var(--font-body)", fontStyle: "italic", color: "var(--widget-text-dim)", margin: 0 }}>
               {profile.frequency}Hz &middot; {profile.standing} &middot; {profile.xp} XP
             </p>
             {path && (
@@ -454,11 +643,11 @@ export default function HubPage() {
             )}
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
-            <div style={{ textAlign: "center", padding: "12px 20px", border: "1px solid var(--border)", borderRadius: "12px" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", color: "var(--gold)" }}>
+            <div style={{ textAlign: "center", padding: "12px 20px", border: "1px solid var(--widget-border)", borderRadius: "12px" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", color: "var(--widget-accent)" }}>
                 {dayNumber}
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)" }}>DAY</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--widget-text-faint)" }}>DAY</div>
             </div>
             <div
               title={streakTier.label}
@@ -466,7 +655,7 @@ export default function HubPage() {
               style={{
                 textAlign: "center",
                 padding: "12px 20px",
-                border: `1px solid ${streakTier.glow > 0 ? "var(--gold)" : "var(--border)"}`,
+                border: `1px solid ${streakTier.glow > 0 ? "var(--widget-accent)" : "var(--widget-border)"}`,
                 borderRadius: "12px",
                 boxShadow:
                   streakTier.glow > 0
@@ -480,12 +669,12 @@ export default function HubPage() {
                   fontFamily: "var(--font-display)",
                   fontWeight: 800,
                   fontSize: "1.6rem",
-                  color: streakTier.glow > 0 ? "var(--gold)" : "var(--ink)",
+                  color: streakTier.glow > 0 ? "var(--widget-accent)" : "var(--widget-text)",
                 }}
               >
                 {profile.current_streak ?? 0}
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)" }}>STREAK</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--widget-text-faint)" }}>STREAK</div>
             </div>
 
             {/* Notifications -- v1 is just "someone replied to your
@@ -501,7 +690,7 @@ export default function HubPage() {
                 style={{
                   textAlign: "center",
                   padding: "12px 20px",
-                  border: `1px solid ${unreadNotifications.length > 0 ? "var(--gold)" : "var(--border)"}`,
+                  border: `1px solid ${unreadNotifications.length > 0 ? "var(--widget-accent)" : "var(--widget-border)"}`,
                   borderRadius: "12px",
                   background: "none",
                   cursor: "pointer",
@@ -519,7 +708,7 @@ export default function HubPage() {
                       height: "16px",
                       padding: "0 4px",
                       borderRadius: "8px",
-                      background: "var(--rose)",
+                      background: "var(--widget-rose)",
                       color: "#fff",
                       fontFamily: "var(--font-mono)",
                       fontSize: "9px",
@@ -531,7 +720,7 @@ export default function HubPage() {
                   </span>
                 )}
                 <div style={{ fontSize: "1.4rem", lineHeight: 1 }}>&#128276;</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint)", marginTop: "6px" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--widget-text-faint)", marginTop: "6px" }}>
                   NOTICES
                 </div>
               </button>
@@ -546,15 +735,15 @@ export default function HubPage() {
                     width: "min(320px, 80vw)",
                     maxHeight: "320px",
                     overflowY: "auto",
-                    background: "var(--panel)",
-                    border: "1px solid var(--border)",
+                    background: "var(--widget-panel)",
+                    border: "1px solid var(--widget-border)",
                     borderRadius: "12px",
                     boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
                     padding: "10px",
                   }}
                 >
                   {notifications.length === 0 ? (
-                    <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--ink-faint)" }}>
+                    <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--widget-text-faint)" }}>
                       Nothing yet -- replies to your threads show up here.
                     </p>
                   ) : (
@@ -568,7 +757,7 @@ export default function HubPage() {
                           padding: "8px",
                           borderRadius: "8px",
                           textDecoration: "none",
-                          color: "var(--ink)",
+                          color: "var(--widget-text)",
                           fontFamily: "var(--font-body)",
                           fontSize: "0.82rem",
                           background: n.read_at ? "transparent" : "rgba(201,161,90,0.08)",
@@ -602,7 +791,7 @@ export default function HubPage() {
               fontSize: "9px",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--ink-faint)",
+              color: "var(--widget-text-faint)",
             }}
           >
             Skin
@@ -628,7 +817,7 @@ export default function HubPage() {
                       ? `url(${s.image}) center / cover`
                       : `linear-gradient(135deg, ${s.vars["--void"]} 50%, ${s.vars["--gold"]} 50%)`,
                     border: isActive ? `2px solid ${s.vars["--gold"]}` : "2px solid transparent",
-                    boxShadow: isActive ? `0 0 0 2px var(--void), 0 0 0 3px ${s.vars["--gold"]}66` : "none",
+                    boxShadow: isActive ? `0 0 0 2px var(--widget-background), 0 0 0 3px ${s.vars["--gold"]}66` : "none",
                     transition: "box-shadow 0.2s ease, transform 0.15s ease",
                   }}
                   onTouchStart={() => {}}
@@ -640,7 +829,7 @@ export default function HubPage() {
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: "9px",
-              color: "var(--ink-faint)",
+              color: "var(--widget-text-faint)",
               opacity: skinSaving ? 1 : 0,
               transition: "opacity 0.3s ease",
             }}
@@ -670,7 +859,7 @@ export default function HubPage() {
                 fontSize: "9px",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "var(--ink-faint)",
+                color: "var(--widget-text-faint)",
               }}
             >
               Accent
@@ -693,8 +882,8 @@ export default function HubPage() {
                       cursor: isActive ? "default" : "pointer",
                       padding: 0,
                       background: c.value,
-                      border: isActive ? "2px solid var(--gold)" : "2px solid transparent",
-                      boxShadow: isActive ? "0 0 0 2px var(--void), 0 0 0 3px rgba(201,161,90,0.4)" : "none",
+                      border: isActive ? "2px solid var(--widget-accent)" : "2px solid transparent",
+                      boxShadow: isActive ? "0 0 0 2px var(--widget-background), 0 0 0 3px rgba(201,161,90,0.4)" : "none",
                       transition: "box-shadow 0.2s ease",
                     }}
                   />
@@ -705,7 +894,7 @@ export default function HubPage() {
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: "9px",
-                color: "var(--ink-faint)",
+                color: "var(--widget-text-faint)",
                 opacity: accentSaving ? 1 : 0,
                 transition: "opacity 0.3s ease",
               }}
@@ -735,7 +924,7 @@ export default function HubPage() {
                 fontSize: "9px",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "var(--ink-faint)",
+                color: "var(--widget-text-faint)",
               }}
             >
               Keys
@@ -773,11 +962,11 @@ export default function HubPage() {
             alignItems: "center",
             justifyContent: "center",
             gap: "10px",
-            background: "var(--panel)",
-            border: "1px solid var(--gold)",
+            background: "var(--widget-panel)",
+            border: "1px solid var(--widget-accent)",
             borderRadius: "999px",
             padding: "14px 20px",
-            color: "var(--gold)",
+            color: "var(--widget-accent)",
             fontFamily: "var(--font-display)",
             fontWeight: 700,
             fontSize: "0.85rem",
@@ -815,11 +1004,11 @@ export default function HubPage() {
             style={{
               flex: 1,
               minWidth: "200px",
-              background: "var(--panel)",
-              border: "1px solid var(--border)",
+              background: "var(--widget-panel)",
+              border: "1px solid var(--widget-border)",
               borderRadius: "999px",
               padding: "10px 16px",
-              color: "var(--ink)",
+              color: "var(--widget-text)",
               fontFamily: "var(--font-body)",
               fontSize: "0.9rem",
             }}
@@ -828,11 +1017,11 @@ export default function HubPage() {
             type="submit"
             disabled={logSaving || !logDraft.trim()}
             style={{
-              background: "var(--gold)",
+              background: "var(--widget-accent)",
               border: "none",
               borderRadius: "999px",
               padding: "10px 20px",
-              color: "var(--void)",
+              color: "var(--widget-background)",
               fontFamily: "var(--font-display)",
               fontWeight: 600,
               fontSize: "0.82rem",
@@ -844,30 +1033,33 @@ export default function HubPage() {
           </button>
         </form>
         {logError && (
-          <p style={{ color: "var(--rose)", fontSize: "0.82rem", marginTop: "-10px", marginBottom: "16px" }}>
+          <p style={{ color: "var(--widget-rose)", fontSize: "0.82rem", marginTop: "-10px", marginBottom: "16px" }}>
             {logError}
           </p>
         )}
 
         {log.length === 0 ? (
-          <p style={{ color: "var(--ink-dim)", fontStyle: "italic", fontFamily: "var(--font-body)" }}>
+          <p style={{ color: "var(--widget-text-dim)", fontStyle: "italic", fontFamily: "var(--font-body)" }}>
             Nothing logged yet. This is where it starts filling in.
           </p>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
             {log.map((entry) => (
               <li key={entry.id} style={{ fontFamily: "var(--font-body)", fontSize: "0.94rem" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--gold)", marginRight: "10px" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--widget-accent)", marginRight: "10px" }}>
                   {new Date(entry.occurred_at).toLocaleDateString()}
                 </span>
                 {entry.description}
                 {entry.xp_awarded > 0 && (
-                  <span style={{ color: "var(--gold)", marginLeft: "8px" }}>+{entry.xp_awarded} XP</span>
+                  <span style={{ color: "var(--widget-accent)", marginLeft: "8px" }}>+{entry.xp_awarded} XP</span>
                 )}
               </li>
             ))}
           </ul>
         )}
+            </div>
+          </WidgetFrame>
+        </div>
 
         <button
           onClick={signOut}

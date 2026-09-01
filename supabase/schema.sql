@@ -428,3 +428,47 @@ drop policy if exists "Users see their own Signal engagement" on signal_engageme
 create policy "Users see their own Signal engagement" on signal_engagement for select using (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';
+
+-- Evolution, the generic sibling of Keys (see the profile_keys comment
+-- above). A single ledger table for every future non-Key permanent
+-- reward -- widget skins today, whatever else joins lib/evolution.ts's
+-- UNLOCKABLES registry later -- so adding a new *kind* of reward never
+-- means a new table. unlock_id is free text on purpose: it's matched
+-- against UNLOCKABLES[].id in application code, not a Postgres enum,
+-- so shipping a new one is a code change here, not a migration. Same
+-- lockdown as profile_keys: no insert/update policy, so the only writer
+-- is the service-role client inside app/api/evolution/evaluate/route.ts,
+-- which re-derives eligibility itself rather than trusting the client.
+-- Safe to run more than once.
+
+create table if not exists profile_unlocks (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  unlock_id text not null,
+  earned_at timestamptz default now(),
+  unique (profile_id, unlock_id)
+);
+
+alter table profile_unlocks enable row level security;
+
+drop policy if exists "Users see their own unlocks" on profile_unlocks;
+create policy "Users see their own unlocks" on profile_unlocks for select using (auth.uid() = profile_id);
+
+notify pgrst, 'reload schema';
+
+-- Site-wide theme flip: Heavenly (see lib/skins.ts) is now the default
+-- Skin instead of Cosmic Gold. This moves the column's default forward
+-- for new signups, and migrates existing profiles that are still on the
+-- untouched original default over to Heavenly too -- otherwise everyone
+-- who signed up before today would stay on the old dark skin forever,
+-- which defeats the point of changing the default at all. The one real
+-- tradeoff: there's no way to tell "never touched the skin picker" apart
+-- from "deliberately picked Cosmic Gold on purpose" -- both look
+-- identical in this column -- so anyone in the latter, rarer case gets
+-- moved too. Given how early and small the user base is, that's an
+-- acceptable, easily-reversible cost. Earth Tones and Pastel Dream
+-- choices are untouched either way. Safe to run more than once.
+update profiles set ship_skin = 'heavenly' where ship_skin = 'cosmic-gold';
+alter table profiles alter column ship_skin set default 'heavenly';
+
+notify pgrst, 'reload schema';

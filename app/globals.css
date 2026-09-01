@@ -1,14 +1,19 @@
 @import url("https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Literata:ital,opsz,wght@0,18..144,400;0,18..144,500;1,18..144,400&display=swap");
 
 :root {
-  --void: #0a0e1a;
-  --panel: #121a2c;
-  --ink: #ece7dc;
-  --ink-dim: #9aa3b8;
-  --ink-faint: #5c6684;
-  --gold: #c9a15a;
+  /* The Heavenly palette -- proven first on the entrance page ("Find
+     Your Frequency"), now the site-wide default. See PLAN.md/the commit
+     history for the dark values these replaced -- Cosmic Gold lives on
+     as a selectable Skin in lib/skins.ts for Hub/Commons, so nothing
+     free was removed, just no longer the default. */
+  --void: #fdfbf5;
+  --panel: #ffffff;
+  --ink: #2e2a45;
+  --ink-dim: #6f6a85;
+  --ink-faint: #a29cb0;
+  --gold: #b8863f;
   --rose: #c9576a;
-  --border: #313f5e;
+  --border: #ece6d8;
 
   --font-display: "Unbounded", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Literata", Georgia, serif;

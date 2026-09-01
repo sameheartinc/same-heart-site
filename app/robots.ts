@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: ["/", "/shop", "/wallet", "/privacy", "/terms", "/contact"],
+      allow: ["/", "/about", "/shop", "/wallet", "/privacy", "/terms", "/contact"],
       disallow: ["/api/", "/hub", "/commons", "/galaxy", "/guide", "/star-day"],
     },
     sitemap: "https://sameheart.ca/sitemap.xml",

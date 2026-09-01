@@ -295,6 +295,7 @@ export default function Home() {
         }}
       >
         {[
+          { href: "/about", label: "About" },
           { href: "/privacy", label: "Privacy" },
           { href: "/terms", label: "Terms" },
           { href: "/contact", label: "Contact" },

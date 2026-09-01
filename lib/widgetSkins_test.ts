@@ -22,7 +22,7 @@
 // description, and the var values. Nothing that *uses* a skin needs to
 // change -- every consumer only ever calls WIDGET_SKINS / getWidgetSkin.
 
-export type WidgetSkinKey = "classic" | "retro" | "cyberpunk" | "aurora";
+export type WidgetSkinKey = "classic" | "retro" | "cyberpunk";
 
 export interface WidgetSkin {
   key: WidgetSkinKey;
@@ -32,11 +32,6 @@ export interface WidgetSkin {
   // content -- purely decorative text (a station name/callsign feel),
   // not live data.
   headerLabel: string;
-  // Set only on earned skins. Matches an id in lib/evolution.ts's
-  // UNLOCKABLES -- a widget only ever offers this skin in its cycle once
-  // the viewing profile holds that unlock (see WidgetFrame's
-  // lockedSkinKeys prop). Skins without this are free, exactly as before.
-  unlockId?: string;
   vars: {
     "--widget-background": string;
     "--widget-panel": string;
@@ -113,29 +108,6 @@ export const WIDGET_SKINS: WidgetSkin[] = [
       "--widget-text-faint": "#5f7a82",
       "--widget-accent": "#00ffff",
       "--widget-rose": "#ff2f7a",
-    },
-  },
-  {
-    // Earned, not chosen -- see lib/evolution.ts. The first skin gated
-    // on real, sustained progress rather than being free from day one.
-    key: "aurora",
-    name: "Aurora",
-    description: "Earned by holding at least 2 Keys and staying 30 days.",
-    headerLabel: "SIGNAL_AURORA",
-    unlockId: "widget-skin-aurora",
-    vars: {
-      "--widget-background": "#0a1420",
-      "--widget-panel": "#122236",
-      "--widget-border": "#3fd9b8",
-      "--widget-radius": "16px",
-      "--widget-shadow": "0 0 22px rgba(63,217,184,0.35), 0 0 8px rgba(155,111,224,0.3)",
-      "--widget-header-bg": "linear-gradient(90deg, #163a4a, #1f2a4a)",
-      "--widget-header-text": "#9be8d8",
-      "--widget-text": "#eaf8f4",
-      "--widget-text-dim": "#a9d3c8",
-      "--widget-text-faint": "#5d8a7d",
-      "--widget-accent": "#3fd9b8",
-      "--widget-rose": "#e0567b",
     },
   },
 ];

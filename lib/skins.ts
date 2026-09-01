@@ -20,7 +20,7 @@
 // user-uploaded, on purpose: no upload flow, no moderation surface, no new
 // privacy question to answer for a purely cosmetic feature.
 
-export type SkinKey = "cosmic-gold" | "earth-tones" | "pastel-dream";
+export type SkinKey = "heavenly" | "cosmic-gold" | "earth-tones" | "pastel-dream";
 
 export type SkinKind = "palette" | "artwork";
 
@@ -44,6 +44,27 @@ export type Skin = {
 };
 
 export const SKINS: Skin[] = [
+  {
+    // First in the array on purpose: getSkin() below falls back to
+    // SKINS[0] for any null/unrecognized key, and this is meant to be
+    // that fallback -- the same palette already proven on the entrance
+    // page, now the site-wide default. Cosmic Gold isn't gone, just no
+    // longer first.
+    key: "heavenly",
+    kind: "palette",
+    name: "Heavenly",
+    blurb: "Soft light, quiet warmth. The site's new default voice.",
+    vars: {
+      "--void": "#fdfbf5",
+      "--panel": "#ffffff",
+      "--ink": "#2e2a45",
+      "--ink-dim": "#6f6a85",
+      "--ink-faint": "#a29cb0",
+      "--gold": "#b8863f",
+      "--rose": "#c9576a",
+      "--border": "#ece6d8",
+    },
+  },
   {
     key: "cosmic-gold",
     kind: "palette",
@@ -94,7 +115,7 @@ export const SKINS: Skin[] = [
   },
 ];
 
-export const DEFAULT_SKIN_KEY: SkinKey = "cosmic-gold";
+export const DEFAULT_SKIN_KEY: SkinKey = "heavenly";
 
 export function getSkin(key: string | null | undefined): Skin {
   return SKINS.find((s) => s.key === key) ?? SKINS[0];
