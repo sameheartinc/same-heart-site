@@ -898,3 +898,32 @@ create or replace view public_profiles as
   from profiles;
 
 notify pgrst, 'reload schema';
+
+-- Heartfelt / Heartache -- see lib/commons.ts for the full design
+-- reasoning (deliberately two positive/empathetic signals, not an
+-- upvote/downvote pair, one reaction per person per post). A single
+-- generic table covers both threads and replies via target_type/
+-- target_id rather than two near-identical tables, since the shape of
+-- "who reacted, how, to what" is identical either way.
+create table if not exists commons_reactions (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  target_type text not null check (target_type in ('thread', 'reply')),
+  target_id uuid not null,
+  kind text not null check (kind in ('heartfelt', 'heartache')),
+  created_at timestamptz default now(),
+  unique (profile_id, target_type, target_id)
+);
+
+alter table commons_reactions enable row level security;
+
+drop policy if exists "Signed-in users see reactions" on commons_reactions;
+create policy "Signed-in users see reactions" on commons_reactions for select using (auth.uid() is not null);
+drop policy if exists "Users set their own reactions" on commons_reactions;
+create policy "Users set their own reactions" on commons_reactions for insert with check (auth.uid() = profile_id);
+drop policy if exists "Users change their own reactions" on commons_reactions;
+create policy "Users change their own reactions" on commons_reactions for update using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
+drop policy if exists "Users clear their own reactions" on commons_reactions;
+create policy "Users clear their own reactions" on commons_reactions for delete using (auth.uid() = profile_id);
+
+notify pgrst, 'reload schema';

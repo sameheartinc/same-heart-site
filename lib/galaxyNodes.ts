@@ -120,6 +120,27 @@ export const GALAXY_NODES: GalaxyNode[] = [
     scale: 0.95,
   },
   {
+    // A real, working destination -- see lib/deepSignals.ts for the
+    // full reasoning. Rob's own framing: anyone can search the web for
+    // information, so the thing worth coming back for is the collective
+    // experience of unlocking something real, one Signal at a time, on
+    // two fronts he named directly -- media/information literacy, and
+    // drug prevention & real opportunity for young people. Deliberately
+    // NOT dimmed like Field Guide/Arcade -- this is real content from
+    // day one, not a placeholder. Sits in the widest open gap on the
+    // ring, between Field Guide (8deg) and the Hearth (95deg).
+    key: "deep-signals",
+    href: "/deep-signals",
+    monogram: "D",
+    icon: "icosahedron",
+    name: "Deep Signals",
+    tagline: "Real answers, unlocked as you grow",
+    accent: "#5b5fc7",
+    angleDeg: 50,
+    radiusPct: 45,
+    scale: 1,
+  },
+  {
     // A real, working destination, not a "coming soon" placeholder --
     // deliberately sized modestly (smaller than Commons/Shop, not dimmed
     // like Field Guide) so it reads as present but not asking for

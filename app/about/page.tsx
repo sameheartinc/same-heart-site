@@ -71,6 +71,30 @@ export default function AboutPage() {
             than a typical app dashboard.
           </p>
 
+          <h2 style={sectionStyle}>Why I built this</h2>
+          <p>
+            I founded Same Heart in 2026 because I don&rsquo;t think the world&rsquo;s
+            biggest problems get solved by any one industry, government, or
+            organization acting alone &mdash; they get solved by people, and right now
+            most of those people have no real way to find each other. Same Heart&rsquo;s
+            ultimate mission is to help connect people in order to solve the world&rsquo;s
+            greatest problems. It&rsquo;s built to act as a hub that connects causes,
+            people, purpose, and efficacy across industries that don&rsquo;t normally talk
+            to each other, so real effort doesn&rsquo;t stay siloed and good work
+            doesn&rsquo;t go unnoticed.
+          </p>
+          <p>
+            The goal isn&rsquo;t growth for its own sake. It&rsquo;s to bring real value
+            back to the people who show up here, and to help encourage sustainable growth
+            across North America &mdash; for the individuals on it, the causes they care
+            about, and eventually the businesses and communities that get built through
+            it. Same Heart is still young, and there&rsquo;s a lot left to build, but the
+            mission behind every decision is the one it started with.
+          </p>
+          <p style={{ fontStyle: "italic", color: "var(--ink-faint, #5c6684)" }}>
+            &mdash; Rob, founder
+          </p>
+
           <h2 style={sectionStyle}>Who&rsquo;s it for</h2>
           <p>
             Same Heart is for people looking for genuine self-understanding and real
@@ -130,8 +154,8 @@ export default function AboutPage() {
 
           <h2 style={sectionStyle}>Who&rsquo;s behind it</h2>
           <p>
-            Same Heart is operated by Same Heart Inc., incorporated in Ontario, Canada. The
-            site is being built in the open &mdash; some of what&rsquo;s described above is
+            Same Heart was founded by Rob in 2026, and is operated by Same Heart Inc.,
+            incorporated in Ontario, Canada. The site is being built in the open &mdash; some of what&rsquo;s described above is
             fully live today, and some is still being built. Our{" "}
             <Link href="/terms" style={{ color: "var(--gold)" }}>
               Terms of Service

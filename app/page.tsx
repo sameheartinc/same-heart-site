@@ -137,6 +137,36 @@ export default function Home() {
         }
       `}</style>
 
+      {/* Top-right nav -- About and Support Services, always reachable
+          from the very first thing anyone sees, whether they arrive
+          through a link or just hear "sameheart.ca" from someone in
+          person. Support Services carries the Same Heart mark (mark.png)
+          per Rob's own spec: something recognizable enough that someone
+          who was only told the domain name out loud can still spot the
+          right tab. */}
+      <nav
+        aria-label="Site"
+        style={{
+          position: "absolute",
+          top: "18px",
+          right: "20px",
+          zIndex: 2,
+          display: "flex",
+          alignItems: "center",
+          gap: "20px",
+          flexWrap: "wrap",
+        }}
+      >
+        <Link href="/about" style={topNavLinkStyle}>
+          About
+        </Link>
+        <Link href="/support" style={{ ...topNavLinkStyle, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/mark.png" alt="" aria-hidden="true" style={{ width: "15px", height: "15px", objectFit: "contain" }} />
+          Support Services
+        </Link>
+      </nav>
+
       <div className="stars" aria-hidden="true">
         {STARS.map((s, i) => (
           <span
@@ -176,7 +206,7 @@ export default function Home() {
             margin: "0 0 26px",
           }}
         >
-          Something is arriving.
+          Most people haven&rsquo;t found this yet.
         </p>
 
         <Link
@@ -211,8 +241,26 @@ export default function Home() {
             margin: "0 0 8px",
           }}
         >
-          SAMEHEART is opening its doors soon. Quiet from the outside &mdash;
-          a whole universe once you&rsquo;re in.
+          Same Heart is live &mdash; quiet from the outside, a whole universe
+          once you&rsquo;re in: real people, real causes, and a reason to
+          keep coming back.
+        </p>
+
+        <p
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "9px",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--ink-faint, #5c6684)",
+            maxWidth: "46ch",
+            margin: "0 0 26px",
+            lineHeight: 1.9,
+          }}
+        >
+          A community built around what you care about &middot; real
+          recognition, never bought &middot; new discoveries, unlocked as
+          you grow
         </p>
 
         <Link href="/shop" className="merch-cta" style={{ marginTop: "4px" }}>
@@ -319,3 +367,12 @@ export default function Home() {
     </main>
   );
 }
+
+const topNavLinkStyle: React.CSSProperties = {
+  color: "var(--ink-dim)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "10px",
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  textDecoration: "none",
+};

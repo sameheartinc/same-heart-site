@@ -50,6 +50,22 @@ export interface CommonsReply {
   created_at: string;
 }
 
+// Heartfelt / Heartache -- Rob's own idea for a way to react to a post
+// in the Commons. Deliberately NOT an upvote/downvote pair: both are
+// positive, honest emotional signals -- Heartfelt for something warm or
+// uplifting, Heartache for something that landed because it's hard or
+// sad -- not a way to pile on or bury a post. One reaction per person
+// per post (switching kinds replaces it, clicking the same kind again
+// clears it), so this is a mood signal, never a vote count to win.
+export type ReactionKind = "heartfelt" | "heartache";
+export type ReactionTargetType = "thread" | "reply";
+
+export interface ReactionSummary {
+  heartfelt: number;
+  heartache: number;
+  mine: ReactionKind | null;
+}
+
 export interface CommonsNotification {
   id: string;
   actor_id: string | null;
@@ -380,6 +396,67 @@ export async function createReply(input: { threadId: string; profileId: string; 
 // already used for Skin selection -- no server route needed since the
 // RLS policy already restricts it to your own rows, and nothing of real
 // value (XP, keys, money) rides on this table.
+// Batch-fetch Heartfelt/Heartache counts (plus the current person's own
+// reaction, if any) for a set of targets that are all the same type --
+// call once for a thread id and once for a batch of reply ids, same
+// pattern as fetchProfilesByIds above. Returns a summary for every id
+// passed in, even ones with zero reactions, so callers never need to
+// guess at a default.
+export async function fetchReactionSummaries(
+  targetType: ReactionTargetType,
+  targetIds: string[],
+  profileId: string | null
+): Promise<Record<string, ReactionSummary>> {
+  const unique = Array.from(new Set(targetIds)).filter(Boolean);
+  const summaries: Record<string, ReactionSummary> = {};
+  for (const id of unique) summaries[id] = { heartfelt: 0, heartache: 0, mine: null };
+  if (unique.length === 0) return summaries;
+  const { data, error } = await supabase
+    .from("commons_reactions")
+    .select("target_id, kind, profile_id")
+    .eq("target_type", targetType)
+    .in("target_id", unique);
+  if (error || !data) return summaries;
+  for (const row of data as Array<{ target_id: string; kind: ReactionKind; profile_id: string }>) {
+    const bucket = summaries[row.target_id];
+    if (!bucket) continue;
+    if (row.kind === "heartfelt") bucket.heartfelt += 1;
+    else bucket.heartache += 1;
+    if (profileId && row.profile_id === profileId) bucket.mine = row.kind;
+  }
+  return summaries;
+}
+
+// Toggling logic lives here, not in every page that reacts to something:
+// picking the reaction you already have clears it, picking the other one
+// switches it, and picking one with nothing set yet creates it. Returns
+// the new "mine" state so the caller can update its local summary without
+// a full re-fetch.
+export async function setReaction(
+  targetType: ReactionTargetType,
+  targetId: string,
+  profileId: string,
+  kind: ReactionKind,
+  current: ReactionKind | null
+): Promise<ReactionKind | null> {
+  if (current === kind) {
+    await supabase
+      .from("commons_reactions")
+      .delete()
+      .eq("profile_id", profileId)
+      .eq("target_type", targetType)
+      .eq("target_id", targetId);
+    return null;
+  }
+  await supabase
+    .from("commons_reactions")
+    .upsert(
+      { profile_id: profileId, target_type: targetType, target_id: targetId, kind },
+      { onConflict: "profile_id,target_type,target_id" }
+    );
+  return kind;
+}
+
 export async function listMyNotifications(limit = 20): Promise<CommonsNotification[]> {
   const { data, error } = await supabase
     .from("notifications")

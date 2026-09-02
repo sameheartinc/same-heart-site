@@ -10,15 +10,21 @@ import {
   authorName,
   createReply,
   fetchProfilesByIds,
+  fetchReactionSummaries,
   getThread,
   listReplies,
+  setReaction,
   touchPresence,
   type CommonsReply,
   type CommonsThread,
   type PublicProfile,
+  type ReactionKind,
+  type ReactionSummary,
+  type ReactionTargetType,
 } from "@/lib/commons";
 
 const ACCENT = "#c9576a";
+const EMPTY_SUMMARY: ReactionSummary = { heartfelt: 0, heartache: 0, mine: null };
 
 export default function ThreadPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -29,6 +35,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [notFound, setNotFound] = useState(false);
   const [replies, setReplies] = useState<CommonsReply[]>([]);
   const [authors, setAuthors] = useState<Record<string, PublicProfile>>({});
+  const [reactions, setReactions] = useState<Record<string, ReactionSummary>>({});
   const [replyBody, setReplyBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,12 +58,13 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         .then(({ data: skinRow }) => {
           if (skinRow?.ship_skin) setMySkin(getSkin(skinRow.ship_skin));
         });
-      await load();
+      await load(data.user.id);
       setChecking(false);
     })();
   }, [router, params.id]);
 
-  async function load() {
+  async function load(uid?: string | null) {
+    const effectiveUid = uid !== undefined ? uid : userId;
     const t = await getThread(params.id);
     if (!t) {
       setNotFound(true);
@@ -66,6 +74,14 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
     const r = await listReplies(params.id);
     setReplies(r);
     setAuthors(await fetchProfilesByIds([t.profile_id, ...r.map((rep) => rep.profile_id)]));
+    // Heartfelt/Heartache -- one fetch for the thread itself, one for every
+    // reply, merged into a single lookup by id (thread and reply ids never
+    // collide, so this is safe). See lib/commons.ts for the reasoning.
+    const [threadReactions, replyReactions] = await Promise.all([
+      fetchReactionSummaries("thread", [t.id], effectiveUid),
+      fetchReactionSummaries("reply", r.map((rep) => rep.id), effectiveUid),
+    ]);
+    setReactions({ ...threadReactions, ...replyReactions });
   }
 
   async function handleReply(e: React.FormEvent) {
@@ -82,6 +98,53 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Optimistic toggle -- updates the on-screen count immediately rather
+  // than waiting on a round trip, then fires the real write. Mirrors the
+  // exact same-kind-clears / different-kind-switches logic that lives in
+  // lib/commons.ts's setReaction, so the local math and the server write
+  // never disagree.
+  async function handleReact(targetType: ReactionTargetType, targetId: string, kind: ReactionKind) {
+    if (!userId) return;
+    const current = reactions[targetId]?.mine ?? null;
+    setReactions((prev) => {
+      const base = prev[targetId] ?? EMPTY_SUMMARY;
+      const next: ReactionSummary = { ...base };
+      if (current === "heartfelt") next.heartfelt = Math.max(0, next.heartfelt - 1);
+      if (current === "heartache") next.heartache = Math.max(0, next.heartache - 1);
+      if (current === kind) {
+        next.mine = null;
+      } else {
+        next.mine = kind;
+        if (kind === "heartfelt") next.heartfelt += 1;
+        else next.heartache += 1;
+      }
+      return { ...prev, [targetId]: next };
+    });
+    await setReaction(targetType, targetId, userId, kind, current);
+  }
+
+  function reactionRow(targetType: ReactionTargetType, targetId: string) {
+    const summary = reactions[targetId] ?? EMPTY_SUMMARY;
+    return (
+      <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+        <button
+          type="button"
+          onClick={() => handleReact(targetType, targetId, "heartfelt")}
+          style={reactionButtonStyle(summary.mine === "heartfelt", "#c9576a")}
+        >
+          &#10084;&nbsp;Heartfelt{summary.heartfelt > 0 ? ` ${summary.heartfelt}` : ""}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleReact(targetType, targetId, "heartache")}
+          style={reactionButtonStyle(summary.mine === "heartache", "#5b5fc7")}
+        >
+          &#128148;&nbsp;Heartache{summary.heartache > 0 ? ` ${summary.heartache}` : ""}
+        </button>
+      </div>
+    );
   }
 
   if (checking) return <PageLoading />;
@@ -124,11 +187,12 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "0 0 16px", lineHeight: 1.3 }}>
           {thread.title}
         </h1>
-        <p style={{ fontFamily: "var(--font-body)", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.7, marginBottom: "36px", whiteSpace: "pre-wrap" }}>
+        <p style={{ fontFamily: "var(--font-body)", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.7, marginBottom: "10px", whiteSpace: "pre-wrap" }}>
           {thread.body}
         </p>
+        {reactionRow("thread", thread.id)}
 
-        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.95rem", marginBottom: "14px" }}>
+        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.95rem", margin: "36px 0 14px" }}>
           {replies.length === 0 ? "No replies yet" : `${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}
         </h2>
 
@@ -141,6 +205,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
               <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "0.92rem", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                 {r.body}
               </p>
+              {reactionRow("reply", r.id)}
             </li>
           ))}
         </ul>
@@ -166,4 +231,18 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
       </div>
     </main>
   );
+}
+
+function reactionButtonStyle(active: boolean, color: string): React.CSSProperties {
+  return {
+    padding: "5px 11px",
+    borderRadius: "999px",
+    border: `1px solid ${active ? color : "var(--border)"}`,
+    background: active ? `${color}22` : "transparent",
+    color: active ? color : "var(--ink-dim)",
+    fontFamily: "var(--font-mono)",
+    fontSize: "10px",
+    letterSpacing: "0.02em",
+    cursor: "pointer",
+  };
 }

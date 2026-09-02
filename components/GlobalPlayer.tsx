@@ -3,8 +3,8 @@
 import { usePathname } from "next/navigation";
 import WidgetFrame from "./WidgetFrame";
 
-// A small, corner-anchored "now playing" card (iHeartRadio's Afrobeats
-// playlist) that lives in the root layout so it survives client-side
+// A small, corner-anchored "now playing" card (iHeartRadio's 24/7 News
+// station) that lives in the root layout so it survives client-side
 // navigation between the hub, the galaxy, and the Commons -- Next's App
 // Router keeps a layout-level component mounted across route changes as
 // long as it isn't conditionally unmounted, so this hides itself with CSS
@@ -35,8 +35,8 @@ export default function GlobalPlayer() {
     >
       <WidgetFrame storageKey="same-heart-widget-skin">
         <iframe
-          src="https://www.iheart.com/playlist/afrobeats-312064750-N25dHwBUmsC3ALDqgryqBt/?embed=true"
-          title="Afrobeats playlist on iHeartRadio"
+          src="https://www.iheart.com/live/iheartradio-247-news-6043/?embed=true"
+          title="iHeartRadio 24/7 News"
           width="220"
           height={52}
           style={{ border: "none", display: "block" }}

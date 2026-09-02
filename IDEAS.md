@@ -630,3 +630,129 @@ supabase/schema.sql migration from earlier this session (kindred_opt_out
 column + updated public_profiles view) -- still needs to be run; see the
 SQL block already in this file above. Community overlap intentionally
 left out of this first version, same as the original definition said.
+
+## Founder's mission section + Support Services page (built, Sep 2, 2026)
+Rob asked for a page about why he founded Same Heart and its mission, plus
+a real, easy-to-find support/helpline page he can point people to just by
+telling them "sameheart.ca" -- both now live, and both reachable without
+an account:
+- app/about/page.tsx gained a new "Why I built this" section (first
+  section under the intro, before "Who's it for") in Rob's own voice:
+  founded 2026, mission to connect people/causes/purpose/efficacy across
+  industries to help solve the world's biggest problems, bring real value
+  back to the people who use it, encourage sustainable growth across
+  North America. "Who's behind it" now also names Rob and the founding
+  year. Nothing existing on the page was changed or removed.
+- New app/support/page.tsx ("Support Services") -- real crisis and
+  support helplines for the US and Canada, grouped by category (suicide
+  & crisis, domestic violence, substance use & mental health, LGBTQ+
+  support, Indigenous peoples in Canada, general help/211), each with a
+  tap-to-call/text link plus a link to the org's own site. Every number
+  was checked against the organization's own site on Sep 2, 2026 (via
+  web search/fetch) before publishing -- notably, the Trevor Project's
+  own line is listed rather than the federal 988 "Press 3" LGBTQ+ youth
+  option, since that federal program was defunded in mid-2025 and its
+  restoration was still uncertain as of this writing. Opens with a plain
+  "this is not a crisis service, call 911 if anyone's in immediate
+  danger" notice up top.
+- app/page.tsx (the splash/landing page) gained a top-right nav with
+  "About" and "Support Services" links -- the latter carries the Same
+  Heart mark (mark.png) next to the text, per Rob's own spec, so it's
+  recognizable even to someone who only heard the domain name spoken out
+  loud. The existing centered content and bottom footer links were left
+  untouched.
+Worth a periodic re-check of the Support Services numbers -- crisis
+resources are exactly the kind of content that's actively harmful when
+stale, and at least one program (the federal LGBTQ+ 988 option) changed
+status within the last year.
+
+## Deep Signals -- built (Sep 2, 2026)
+Rob's ask: anyone can Google information -- what's worth coming back to
+Same Heart for is the collective experience of unlocking something real,
+unknown, a mystery, while actually disseminating concrete information on
+two things he named directly: (1) the gap in media/information literacy
+that makes it hard to reason clearly about the world's problems, and (2)
+the drug use crisis in North America and the lack of real, productive
+futures for young people. Asked Rob two scoping questions first: where
+this should live (Galaxy destination vs. Hub widget vs. both -- he chose
+its own Galaxy destination) and what should unlock the next one (level-
+up vs. streak vs. something else -- he chose leveling up, reusing Prime
+Levels).
+
+Built:
+- lib/deepSignals.ts -- a plain ordered array of 10 "Deep Signals",
+  alternating between two categories ("Reading the Signal Clearly" for
+  media literacy, "Real Paths Forward" for drug prevention/youth
+  opportunity). Every claim is real and sourced, not fabricated -- e.g.
+  the SIFT method (Mike Caulfield's digital literacy framework), lateral
+  reading (backed by a real Canadian classroom study), the actual 2024-
+  2025 US overdose death decline per CDC/STAT News data, NIDA's
+  evidence-based prevention principles, and youth-adult connectedness as
+  a protective factor. The last Signal links straight to the new Support
+  Services page. Pure-function-of-XP, same pattern as Prime Levels
+  itself -- Signal N unlocks at Level N, nothing new to persist.
+- app/deep-signals/page.tsx -- the Archive page. Shows every unlocked
+  Signal in full (category, title, teaser, real body content, source
+  link), shows only the very next locked Signal's mystery teaser plus
+  "unlocks at Level N", and shows everything further out as just a bare
+  locked number -- no title, no content -- to keep the actual mystery
+  intact rather than spoiling the whole sequence up front.
+- lib/galaxyNodes.ts gained a real (not dimmed/placeholder) "Deep
+  Signals" node between Field Guide and the Hearth, accent #5b5fc7.
+Worth expanding past 10 Signals over time the same way Heart Strings and
+Signal Sources have grown -- this is the real, working first slice, not
+the whole planned scope.
+
+## Global Player: swapped Afrobeats for iHeartRadio 24/7 News (Sep 2, 2026)
+components/GlobalPlayer.tsx's corner "now playing" card (iHeartRadio
+embed, lives in the root layout) now points to iHeartRadio's 24/7 News
+live station (https://www.iheart.com/live/iheartradio-247-news-6043)
+instead of the Afrobeats playlist -- same widget, same placement, just a
+different iHeartRadio embed src/title. Checked the embed URL loads a
+real, valid iHeartRadio live station page before swapping it in.
+
+## Landing page copy refresh -- dropped "opening its doors soon" (Sep 2, 2026)
+Rob: the site's been live and functional for a long time now (Hub,
+Commons, Exchange, Heart Strings, Kindred Sparks, Deep Signals...), so
+the splash page's leftover pre-launch framing was stale. In app/page.tsx:
+"Something is arriving." -> "Most people haven't found this yet." (present
+tense, keeps the mystery/exclusivity pull that Deep Signals leans on
+too); "SAMEHEART is opening its doors soon..." -> "Same Heart is live --
+quiet from the outside, a whole universe once you're in: real people,
+real causes, and a reason to keep coming back." Also added one small new
+line right after it -- "A community built around what you care about *
+real recognition, never bought * new discoveries, unlocked as you grow"
+-- giving a stranger just enough concrete texture (Commons, Heart
+Strings, Deep Signals) to sense this is a real, substantial platform
+without spoiling any of it. Nothing else on the page (the glowing "Find
+Your Frequency" CTA, Merch Ship link, waitlist form, footer, top-right
+nav) was touched.
+
+## Heartfelt / Heartache reactions -- built (Sep 2, 2026)
+Rob's own idea from the big Sep 1 batch, picked as the most concretely
+scoped item to build next. Deliberately NOT an upvote/downvote pair --
+both reactions are positive, honest emotional signals: Heartfelt for
+something warm or uplifting, Heartache for something that landed because
+it's hard or sad. One reaction per person per post (clicking the one you
+already have clears it, clicking the other switches it), so this stays a
+mood signal, never a vote count to win or a way to bury someone's post.
+
+New `commons_reactions` table (supabase/schema.sql) -- generic
+target_type/target_id design so one table covers both commons_threads
+and commons_replies rather than two near-identical tables. RLS: anyone
+signed in can see all reactions (needed for accurate counts), but insert/
+update/delete are all scoped to `auth.uid() = profile_id` -- you can only
+ever set or clear your own reaction. `lib/commons.ts` gained
+`fetchReactionSummaries` (batch-fetch counts + your own reaction for a
+set of same-type target ids) and `setReaction` (the toggle/switch/clear
+logic, shared by every caller so it can't drift). `app/commons/t/[id]/
+page.tsx` renders a Heartfelt/Heartache button row under the thread's
+original post and under every reply, with an optimistic local update on
+click (so the count moves instantly) before the real write goes out.
+
+Rob needs to run the new `commons_reactions` migration block appended to
+the end of supabase/schema.sql in Supabase before this goes live.
+
+Possible future direction (not requested, not built): surface a
+Commons-wide "most Heartfelt this week" or similar highlight -- logged
+here only as an idea, not a commitment.
