@@ -12,8 +12,10 @@ import {
   markNotificationsRead,
   fetchProfilesByIds,
   authorName,
+  getTrendingThread,
   type CommonsNotification,
   type PublicProfile,
+  type TrendingThread,
 } from "@/lib/commons";
 import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
@@ -50,6 +52,13 @@ type LogEntry = {
   xp_awarded: number;
 };
 
+// "Floating ideas that are getting more attention" only start showing
+// up once someone's engaged enough to have leveled up a few times --
+// Rob's own framing ("evolve for consistent users as they become more
+// engaged"). Level 3 (5 XP) is an early but genuine threshold, not the
+// very first visit -- see lib/primeLevels.ts.
+const TRENDING_UNLOCK_LEVEL = 3;
+
 function sparkLabel(sparkId: number | null): string | null {
   if (sparkId == null) return null;
   return "Spark #" + String(sparkId).padStart(5, "0");
@@ -79,6 +88,15 @@ export default function HubPage() {
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
   const [notifOpen, setNotifOpen] = useState(false);
+  // Floating bubbles -- an ambient, no-click-required companion to the
+  // NOTICES bell above (ask was: "a little bubble pop up... make it
+  // clickable to take them to the community area"), plus a second,
+  // level-gated bubble surfacing whatever idea is getting real
+  // attention right now. Dismissing either just hides it for this visit
+  // (session-only state) -- it isn't "read" until you actually act on it.
+  const [trending, setTrending] = useState<TrendingThread | null>(null);
+  const [replyBubbleDismissed, setReplyBubbleDismissed] = useState(false);
+  const [trendingBubbleDismissed, setTrendingBubbleDismissed] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
   const [monetizationStatus, setMonetizationStatus] = useState<MonetizationStatus>("none");
   const [monetizationSubmitting, setMonetizationSubmitting] = useState(false);
@@ -239,6 +257,14 @@ export default function HubPage() {
       if (!currentProfile.kindred_opt_out) {
         findKindredSparks(userData.user.id).then(setKindredMatches);
       }
+
+      // "Floating ideas getting more attention" -- see lib/commons.ts's
+      // getTrendingThread. Level-gated (TRENDING_UNLOCK_LEVEL above) so
+      // it only starts appearing once someone's engaged enough to have
+      // leveled up a few times, not from their very first visit.
+      if (getLevel(currentProfile.xp) >= TRENDING_UNLOCK_LEVEL) {
+        getTrendingThread().then(setTrending);
+      }
     })();
   }, [router]);
 
@@ -283,6 +309,7 @@ export default function HubPage() {
   }
 
   const unreadNotifications = notifications.filter((n) => !n.read_at);
+  const newestUnread = unreadNotifications[0] ?? null;
 
   async function toggleNotifications() {
     const opening = !notifOpen;
@@ -296,6 +323,14 @@ export default function HubPage() {
       );
       await markNotificationsRead(ids);
     }
+  }
+
+  // Clicking the floating reply bubble marks just that one notice read
+  // (same optimistic-then-write pattern as toggleNotifications above)
+  // and lets the Link's own navigation carry you to the thread.
+  async function openReplyBubble(id: string) {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)));
+    await markNotificationsRead([id]);
   }
 
   async function chooseSkin(key: SkinKey) {
@@ -571,8 +606,41 @@ export default function HubPage() {
           50% { box-shadow: 0 0 34px rgba(201,161,90,0.55); }
         }
         .streak-glow-pulse { animation: streakPulse 3.4s ease-in-out infinite; }
+        @keyframes bubbleIn {
+          from { opacity: 0; transform: translateY(6px) scale(0.96); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes bubbleFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        .hub-floating-bubbles {
+          position: absolute;
+          top: -14px;
+          left: 0;
+          right: 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+          pointer-events: none;
+          z-index: 6;
+        }
+        .hub-floating-bubble {
+          pointer-events: auto;
+          animation: bubbleIn 0.5s ease both, bubbleFloat 3.2s ease-in-out 0.5s infinite;
+        }
+        @media (max-width: 480px) {
+          .hub-floating-bubbles {
+            position: static;
+            flex-direction: column;
+            margin-bottom: 10px;
+          }
+          .hub-floating-bubble { max-width: none !important; }
+        }
         @media (prefers-reduced-motion: reduce) {
           .hub-quote, .liftoff-btn, .streak-glow-pulse { animation: none; }
+          .hub-floating-bubble { animation: none; }
         }
       `}</style>
 
@@ -936,7 +1004,99 @@ export default function HubPage() {
           </p>
         </div>
 
-        <div style={{ marginBottom: "16px" }}>
+        <div style={{ marginBottom: "16px", position: "relative" }}>
+          {/* Floating bubbles -- ambient, no click required. Left: a
+              level-gated "an idea is getting attention" callout (see
+              TRENDING_UNLOCK_LEVEL, lib/commons.ts's getTrendingThread).
+              Right: the newest unread reply notice, always available to
+              everyone regardless of level -- this one's just a faster,
+              harder-to-miss way to see what the NOTICES bell already
+              holds, not a new gate. */}
+          {((trending && !trendingBubbleDismissed) || (newestUnread && !replyBubbleDismissed)) && (
+            <div className="hub-floating-bubbles">
+              <div style={{ maxWidth: "48%" }}>
+                {trending && !trendingBubbleDismissed && (
+                  <div className="hub-floating-bubble" style={{ maxWidth: "190px" }}>
+                    <Link
+                      href={`/commons/t/${trending.id}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 12px",
+                        borderRadius: "14px",
+                        background: "var(--widget-panel)",
+                        border: "1px solid var(--widget-accent)",
+                        boxShadow: "0 6px 18px rgba(0,0,0,0.3)",
+                        fontFamily: "var(--font-body)",
+                        fontSize: "0.72rem",
+                        lineHeight: 1.3,
+                        color: "var(--widget-text)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.9rem" }}>&#10024;</span>
+                      <span>An idea is getting attention: &ldquo;{trending.title}&rdquo;</span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setTrendingBubbleDismissed(true);
+                        }}
+                        style={{ marginLeft: "4px", color: "var(--widget-text-faint)", cursor: "pointer" }}
+                      >
+                        &times;
+                      </span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+              <div style={{ maxWidth: "48%", display: "flex", justifyContent: "flex-end" }}>
+                {newestUnread && !replyBubbleDismissed && (
+                  <div className="hub-floating-bubble" style={{ maxWidth: "190px" }}>
+                    <Link
+                      href={newestUnread.thread_id ? `/commons/t/${newestUnread.thread_id}` : "/commons"}
+                      onClick={() => openReplyBubble(newestUnread.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 12px",
+                        borderRadius: "14px",
+                        background: "var(--widget-panel)",
+                        border: "1px solid var(--widget-accent)",
+                        boxShadow: "0 6px 18px rgba(0,0,0,0.3)",
+                        fontFamily: "var(--font-body)",
+                        fontSize: "0.72rem",
+                        lineHeight: 1.3,
+                        color: "var(--widget-text)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.9rem" }}>&#128172;</span>
+                      <span>
+                        {authorName(notifAuthors[newestUnread.actor_id ?? ""])} {newestUnread.body}
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setReplyBubbleDismissed(true);
+                        }}
+                        style={{ marginLeft: "4px", color: "var(--widget-text-faint)", cursor: "pointer" }}
+                      >
+                        &times;
+                      </span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <WidgetFrame storageKey="same-heart-capsule-skin" lockedSkinKeys={lockedSkinKeys}>
             <div style={{ padding: "22px" }}>
         <div

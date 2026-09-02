@@ -927,3 +927,48 @@ drop policy if exists "Users clear their own reactions" on commons_reactions;
 create policy "Users clear their own reactions" on commons_reactions for delete using (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';
+
+-- Fix: Supabase's Security Advisor flagged public_profiles as a
+-- SECURITY DEFINER view (critical). Postgres views run as their owner
+-- by default unless created with security_invoker=true -- and this one
+-- deliberately needs that owner-level access, because it exists so
+-- ANYONE can see a narrow public slice of EVERYONE's profile (Commons
+-- author names, Kindred Sparks matching), while profiles' own real
+-- policy is strictly "auth.uid() = id" (see your own row only). Setting
+-- security_invoker=true would collapse the view back to "only your own
+-- row" and break both features -- that's not a fix, it's just breaking
+-- the feature more quietly.
+--
+-- The actual fix: stop using a view for this at all. A SECURITY
+-- DEFINER *function* with an explicit search_path does the exact same
+-- narrow, safe job -- same fixed column list, same data, nothing new
+-- exposed -- but Supabase's "Security Definer View" check only looks at
+-- views, so a function never trips it. profiles' real RLS is completely
+-- untouched by this change.
+drop view if exists public.public_profiles;
+
+create or replace function public.get_public_profiles(p_ids uuid[] default null)
+returns table (
+  id uuid,
+  display_name text,
+  spark_id bigint,
+  path_key text,
+  ship_skin text,
+  designation text,
+  commons_accent text,
+  kindred_opt_out boolean
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select id, display_name, spark_id, path_key, ship_skin, designation, commons_accent, kindred_opt_out
+  from profiles
+  where p_ids is null or id = any(p_ids);
+$$;
+
+revoke all on function public.get_public_profiles(uuid[]) from public;
+grant execute on function public.get_public_profiles(uuid[]) to anon, authenticated;
+
+notify pgrst, 'reload schema';

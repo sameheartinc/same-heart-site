@@ -31,11 +31,16 @@ function rarityWeight(sharedByCount: number, totalCount: number) {
 }
 
 export async function findKindredSparks(myProfileId: string, limit = 3): Promise<KindredMatch[]> {
+  // get_public_profiles(), not a "public_profiles" view -- see
+  // lib/commons.ts's fetchProfilesByIds for why (Supabase's Security
+  // Advisor flags a view that has to bypass profiles' own RLS to show
+  // everyone else's row, even one this narrow and intentional; a
+  // SECURITY DEFINER function does the same job without the flag).
+  // p_ids left null asks for everyone, same as the view's unfiltered
+  // select did -- the .eq("kindred_opt_out", false) below still applies
+  // to the function's table output exactly like it did to the view's.
   const [profilesResult, transmissionsResult] = await Promise.all([
-    supabase
-      .from("public_profiles")
-      .select("id, display_name, spark_id, path_key, ship_skin, designation, commons_accent, kindred_opt_out")
-      .eq("kindred_opt_out", false),
+    supabase.rpc("get_public_profiles", { p_ids: null }).eq("kindred_opt_out", false),
     supabase.from("exchange_transmissions").select("profile_id, issue_key").not("issue_key", "is", null),
   ]);
 

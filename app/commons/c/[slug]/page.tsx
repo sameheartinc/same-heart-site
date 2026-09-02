@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -29,6 +29,7 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const [notFound, setNotFound] = useState(false);
   const [isMember, setIsMember] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [threads, setThreads] = useState<CommonsThread[]>([]);
   const [authors, setAuthors] = useState<Record<string, PublicProfile>>({});
 
@@ -38,6 +39,17 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Joining used to be a dead end -- Rob's own report was that after
+  // clicking Join, there was nothing left to click to actually say
+  // anything ("you should be able to engage immediately after and pump
+  // in a response"). Now joining opens the composer immediately and
+  // moves focus straight into the title field, so the very next thing
+  // you can do is start typing, not hunt for a button.
+  useEffect(() => {
+    if (formOpen) titleInputRef.current?.focus();
+  }, [formOpen]);
 
   useEffect(() => {
     (async () => {
@@ -78,9 +90,19 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   async function handleJoin() {
     if (!userId || !community) return;
     setJoining(true);
-    await joinCommunity(community.id, userId);
-    setIsMember(true);
-    setJoining(false);
+    setJoinError(null);
+    try {
+      await joinCommunity(community.id, userId);
+      setIsMember(true);
+      // Joining should feel like being handed the mic, not just a badge
+      // change -- open the composer right away so there's something to
+      // click the instant you're in.
+      setFormOpen(true);
+    } catch {
+      setJoinError("Couldn't join that one -- try again in a moment.");
+    } finally {
+      setJoining(false);
+    }
   }
 
   async function handleCreateThread(e: React.FormEvent) {
@@ -144,13 +166,18 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
             </h1>
           </div>
           {!isMember ? (
-            <button
-              onClick={handleJoin}
-              disabled={joining}
-              style={{ padding: "10px 18px", borderRadius: "10px", border: "none", background: accent, color: "#1a0d10", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}
-            >
-              {joining ? "Joining..." : "Join"}
-            </button>
+            <div style={{ textAlign: "right" }}>
+              <button
+                onClick={handleJoin}
+                disabled={joining}
+                style={{ padding: "10px 18px", borderRadius: "10px", border: "none", background: accent, color: "#1a0d10", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}
+              >
+                {joining ? "Joining..." : "Join"}
+              </button>
+              {joinError && (
+                <p style={{ margin: "6px 0 0", color: "#e0703a", fontSize: "0.75rem", fontFamily: "var(--font-body)" }}>{joinError}</p>
+              )}
+            </div>
           ) : (
             <span style={{ padding: "10px 18px", borderRadius: "10px", border: `1px solid ${accent}`, color: accent, fontFamily: "var(--font-mono)", fontSize: "10px", textTransform: "uppercase" }}>
               Member
@@ -200,6 +227,7 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
               ))}
             </div>
             <input
+              ref={titleInputRef}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Title"

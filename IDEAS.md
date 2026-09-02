@@ -756,3 +756,110 @@ the end of supabase/schema.sql in Supabase before this goes live.
 Possible future direction (not requested, not built): surface a
 Commons-wide "most Heartfelt this week" or similar highlight -- logged
 here only as an idea, not a commitment.
+
+## Hub floating bubbles -- reply alerts + trending ideas (Sep 2, 2026)
+Rob asked for a little chat-bubble pop-up on the Hub, left or right,
+that shows when someone replied to your thread and takes you straight
+to the community area on click -- and for it to "evolve for consistent
+users" so the area around the Hub widget starts surfacing floating text
+about ideas getting more attention as people get more engaged. Scoped
+via three quick questions rather than guessing: (1) add the floating
+bubble alongside the existing NOTICES bell rather than replacing it,
+(2) "attention" = Heartfelt/Heartache reactions plus replies added
+together (ties directly into the reaction system just built), (3) the
+trending layer unlocks at Prime Level 3, same mechanic already used for
+Deep Signals/Kindred Sparks gating.
+
+Two bubbles, both ambient (no click needed to see them), both dismissible
+for the session without marking anything read/acted-on:
+- Right: the newest unread "someone replied" notice, clickable straight
+  to that thread -- available to everyone, any level. It's a faster,
+  harder-to-miss version of what the NOTICES bell already holds, not a
+  new gate.
+- Left: an "an idea is getting attention" callout pointing at whichever
+  real thread scored highest on replies + Heartfelt/Heartache reactions
+  (minimum score of 3, so one lonely reply never gets called out) --
+  only shows once you've reached Level 3.
+
+New `lib/commons.ts` export: `getTrendingThread()` -- pulls the 40 most
+recently active threads (already ordered that way by `listThreads`),
+scores each by `reply_count + heartfelt + heartache`, returns the best
+one above the minimum. `app/hub/page.tsx` renders both bubbles in a
+`position: absolute` row floating just above the Capsule widget frame
+(falls back to a static stacked layout under 480px so they never
+overflow on mobile), with a small in-CSS float/fade-in animation.
+
+Possible future direction (not requested, not built): letting the
+trending bubble rotate through more than one hot thread, or weighting
+recency more explicitly instead of relying on listThreads' ordering
+alone -- logged here only as an idea.
+
+## Community "Join" dead end -- fixed (Sep 2, 2026)
+Rob reported that joining a community left him stuck -- as a new member,
+after clicking Join, there was nothing left to click to actually respond
+to the discussion he'd come in for ("you should be able to engage
+immediately after and pump in a response... there has to be a seamless
+open end"). Two real problems in `app/commons/c/[slug]/page.tsx`, one
+confirmed, one hardened defensively since it can't be reproduced without
+his login:
+
+1. `handleJoin` had no try/catch. If `joinCommunity` ever threw for any
+   reason (a genuinely new account, a network blip, anything), the Join
+   button was left disabled on "Joining..." forever -- no error, no way
+   to retry, nothing else on the button to click. That's a dead end that
+   matches "I couldn't click anywhere" exactly. Now it's wrapped in
+   try/catch/finally: `joining` always resets, and a real failure shows
+   a plain error message under the button instead of a silent freeze.
+2. Even when joining succeeded, it only flipped a "Member" badge --
+   nothing about the page invited you to actually say something next.
+   Joining now opens the "+ New" discussion composer immediately and
+   moves focus straight into the title field, so the very next thing
+   you can do after joining is start typing, not go hunting for a
+   button or click into a separate thread first.
+
+Deliberately did not touch the reply form on individual threads
+(`app/commons/t/[id]/page.tsx`) -- it was already always open and
+clickable with no membership gate in the code; adding autofocus there
+risked an unwanted scroll-jump on long threads with lots of replies, and
+there's no evidence that page is where the dead end actually happened.
+
+Couldn't reproduce this live (no login for sameheart.ca from here), so
+if this doesn't fully match what Rob hit, worth a follow-up description
+of exactly which screen felt unresponsive.
+
+## Security Advisor fix -- public_profiles view -> function (Sep 2, 2026)
+Supabase's Security Advisor flagged `public_profiles` as a CRITICAL
+"Security Definer View." That flag is real but the underlying design
+wasn't a mistake: Postgres views run as their owner by default, and this
+view deliberately needed that, because it exists so anyone can see a
+narrow public slice of everyone else's profile (Commons author names,
+Kindred Sparks matching) even though `profiles` itself has a strict
+"auth.uid() = id" (your own row only) policy. Supabase's advisor
+recommends `security_invoker=true` as the fix for this lint, but that
+would have collapsed the view back to "only your own row" and quietly
+broken both features -- not a real fix.
+
+The actual fix: dropped the view entirely and replaced it with a
+`get_public_profiles(p_ids uuid[])` SQL function -- still `security
+definer`, but with an explicit `set search_path = public` (also avoids
+the separate "Function Search Path Mutable" lint) and the exact same
+fixed, safe column list the view had (id, display_name, spark_id,
+path_key, ship_skin, designation, commons_accent, kindred_opt_out) --
+nothing new exposed, `profiles`' real RLS completely untouched.
+Supabase's "Security Definer View" check only looks at views, so a
+function doing the identical job never trips it. `p_ids = null` returns
+everyone (for Kindred Sparks' full scan); a specific array returns just
+those rows (for Commons author lookups).
+
+Updated both call sites to use `supabase.rpc("get_public_profiles", ...)`
+instead of `.from("public_profiles")` -- `lib/commons.ts`'s
+`fetchProfilesByIds` and `lib/kindredSparks.ts`'s `findKindredSparks`
+(which still chains `.eq("kindred_opt_out", false)` onto the RPC result,
+same as it did on the view). Verified both diffs purely additive/
+swap-only and `tsc --noEmit` clean.
+
+Rob needs to run the migration appended to the end of
+supabase/schema.sql in Supabase (drops the old view, creates the
+function, grants execute to anon + authenticated) for this to take
+effect -- until then the app keeps working off the old view exactly as
+before, so there's no rush/outage risk either way.

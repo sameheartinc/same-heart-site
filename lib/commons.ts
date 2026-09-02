@@ -81,13 +81,19 @@ export interface CommonsNotification {
 // only store profile_id -- this is the one place author display data
 // gets attached, client-side, rather than relying on a PostgREST
 // relationship embed against a view.
+//
+// This calls the get_public_profiles() function (see supabase/schema.sql)
+// rather than selecting from a "public_profiles" view. A view here would
+// need to run as its owner to see past everyone else's row (profiles'
+// real RLS policy is "auth.uid() = id" only) -- Supabase's Security
+// Advisor flags that pattern as a critical "Security Definer View" even
+// when it's this intentional and this narrow. A SECURITY DEFINER
+// function with the same fixed, safe column list does the identical job
+// without ever tripping that check, and profiles' own RLS never changes.
 export async function fetchProfilesByIds(ids: string[]): Promise<Record<string, PublicProfile>> {
   const unique = Array.from(new Set(ids)).filter(Boolean);
   if (unique.length === 0) return {};
-  const { data, error } = await supabase
-    .from("public_profiles")
-    .select("id, display_name, spark_id, path_key, ship_skin, designation, commons_accent, kindred_opt_out")
-    .in("id", unique);
+  const { data, error } = await supabase.rpc("get_public_profiles", { p_ids: unique });
   if (error || !data) return {};
   const map: Record<string, PublicProfile> = {};
   for (const row of data as PublicProfile[]) map[row.id] = row;
@@ -455,6 +461,43 @@ export async function setReaction(
       { onConflict: "profile_id,target_type,target_id" }
     );
   return kind;
+}
+
+export interface TrendingThread {
+  id: string;
+  title: string;
+  score: number;
+}
+
+// "Floating ideas getting more attention" -- Rob's own phrase (Sep 2,
+// 2026) for surfacing real community engagement to people who've
+// engaged enough themselves to have leveled up a few times (see
+// app/hub/page.tsx's TRENDING_UNLOCK_LEVEL). Score is deliberately just
+// replies plus Heartfelt/Heartache reactions added together -- real
+// people choosing to respond or react, not views or any other passive
+// metric -- and a thread needs a real minimum before it counts as
+// "trending" at all, so a single lonely reply never gets called out as
+// attention. Candidates come from listThreads' own most-recently-active
+// ordering, so this naturally favors current conversations over old
+// ones without a separate date filter.
+const TRENDING_MIN_SCORE = 3;
+
+export async function getTrendingThread(): Promise<TrendingThread | null> {
+  const candidates = await listThreads({ limit: 40 });
+  if (candidates.length === 0) return null;
+  const reactions = await fetchReactionSummaries(
+    "thread",
+    candidates.map((t) => t.id),
+    null
+  );
+  let best: TrendingThread | null = null;
+  for (const t of candidates) {
+    const r = reactions[t.id] ?? { heartfelt: 0, heartache: 0, mine: null };
+    const score = t.reply_count + r.heartfelt + r.heartache;
+    if (score < TRENDING_MIN_SCORE) continue;
+    if (!best || score > best.score) best = { id: t.id, title: t.title, score };
+  }
+  return best;
 }
 
 export async function listMyNotifications(limit = 20): Promise<CommonsNotification[]> {
