@@ -84,7 +84,12 @@ export const GALAXY_NODES: GalaxyNode[] = [
     tagline: "Cards & unlockables",
     accent: "#e0703a",
     angleDeg: 150,
-    radiusPct: 42,
+    // radiusPct nudged out from 42 -- see the Sep 3 2026 "loosen the
+    // bottom" note on Deep Signals below; this, Deep Signals, and the
+    // Hearth used to sit at nearly the same distance from center
+    // (42/45/44), which read as one tight, rigid band along the bottom
+    // rather than three separate destinations.
+    radiusPct: 46,
     scale: 1.05,
   },
   {
@@ -137,7 +142,15 @@ export const GALAXY_NODES: GalaxyNode[] = [
     tagline: "Real answers, unlocked as you grow",
     accent: "#5b5fc7",
     angleDeg: 50,
-    radiusPct: 45,
+    // "A little more loose... at the bottom" (Rob, Sep 3 2026): this,
+    // the Wallet, and the Hearth all sat within a few radiusPct of each
+    // other (45/42/44) along the lower half of the ring, reading as one
+    // tight band rather than three distinct destinations. Spread them
+    // out instead of packing them tighter -- this one out to 49, the
+    // Wallet out to 46, and the Hearth pulled in slightly to 41 (not
+    // pushed further out -- see its own comment below on why that
+    // node stays conservative).
+    radiusPct: 49,
     scale: 1,
   },
   {
@@ -157,6 +170,12 @@ export const GALAXY_NODES: GalaxyNode[] = [
     // ~46% to ~28%) and meaningfully higher up (top% drops from ~94% to
     // ~88%), while still sitting in the open gap between Deep Signals
     // (50deg) and the Wallet (150deg) rather than crowding either.
+    //
+    // radiusPct pulled in slightly (44 -> 41) as part of the Sep 3 2026
+    // "loosen the bottom" pass -- Deep Signals and the Wallet moved
+    // further out instead, for more spread overall, but this node keeps
+    // its own radius conservative rather than pushing out too, given
+    // its history of drifting off-screen on shorter viewports.
     key: "hearth",
     href: "https://buy.stripe.com/6oUfZhgKz9dmbh3dovcAo01",
     external: true,
@@ -166,7 +185,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     tagline: "Feed. Water. Teach.",
     accent: "#ff6f91",
     angleDeg: 120,
-    radiusPct: 44,
+    radiusPct: 41,
     scale: 1,
   },
 ];

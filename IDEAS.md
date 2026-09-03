@@ -1490,3 +1490,51 @@ backups on every file touched.
 here): adds the `feed_source_suggestions` table and its one RLS
 policy. Nothing destroys existing data -- feed_sources, profile_keys,
 and everything else are untouched.
+
+---
+
+## Galaxy page polish: heart position, tilt, flicker, spacing (Sep 3, 2026)
+
+Rob: "can you. move the heart icon up and to the left...also..could you
+make the page a little more loose per say at the bottom and just have
+more modular play. 10x its currently tilt and make each icon flickering
+oh so faintly"
+
+No page named -- inferred from "heart icon" + "tilt" + "each icon" that
+this meant the Galaxy console (app/galaxy/page.tsx), the only page with
+a heart mark, a tilt mechanic, and multiple icons. Stated the
+interpretation plainly rather than blocking on a question, since this is
+cosmetic and easy to redirect if wrong.
+
+What was built:
+- Heart icon (the central "Same Heart" mark/logo) nudged up and left of
+  true center via its own transform offset -- left/top stay at 50%/50%
+  so orbitPosition's node-position math is completely untouched.
+- Tilt: "10x" taken literally against the resting angle (28deg) would
+  land past vertical (a rotateX wraps every 360deg) and look broken, so
+  the 10x instead applies to the interactive sensitivity -- how hard the
+  console leans as the cursor moves -- which is the part that actually
+  reads as "tilt" while using the page. Clamped (10-65deg / -60-60deg)
+  so it can never flip past vertical. BASE_TILT_X itself got a modest
+  bump too (28 -> 38) for a bolder resting pose.
+- "More modular play": every node used to share one exact 5s float
+  rhythm with only a start-delay offset, so they stayed locked in the
+  same relative phase forever -- read as one wave passing through a
+  fixed formation, not independent things. Now each node gets its own
+  float duration and amplitude (deterministic off its own index, not
+  Math.random(), so no hydration mismatch -- same reasoning as the
+  landing page's seeded() stars).
+- Each node's icon now flickers faintly and continuously (opacity
+  0.88-1, ~3.8s cycle) with a staggered per-node delay so all eight
+  never flicker in sync; already covered by the existing
+  prefers-reduced-motion rule, no extra accessibility work needed.
+- "Loose... at the bottom": Wallet, Deep Signals, and the Hearth used to
+  sit within a few radiusPct of each other (42/45/44), reading as one
+  tight band along the lower half of the ring. Spread them out instead
+  -- Wallet to 46, Deep Signals to 49, Hearth pulled in slightly to 41
+  rather than pushed out further, given its own history (Sep 3 2026,
+  earlier this session) of drifting off-screen on shorter viewports.
+
+Verified with `npx tsc --noEmit` (clean) and diffs against pre-edit
+backups on both files touched (app/galaxy/page.tsx, lib/galaxyNodes.ts).
+No migration -- purely visual/client-side.

@@ -28,7 +28,21 @@ function orbitPosition(angleDeg: number, radiusPct: number) {
 const SHIP_CURSOR =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 100 100'%3E%3Cpath d='M50 4 L79 63 L50 48 L21 63 Z' fill='%23f0d9a8' stroke='%23c9a15a' stroke-width='3'/%3E%3Cpath d='M50 48 L50 95 L37 77 Z M50 48 L50 95 L63 77 Z' fill='%23c9a15a' fill-opacity='0.55'/%3E%3C/svg%3E\") 15 6, auto";
 
-const BASE_TILT_X = 28; // degrees -- the resting "looking down at the console" angle
+// Rob, Sep 3 2026: "10x its currently tilt." Taken literally against the
+// resting angle (28deg) that's a ~-80deg console -- past vertical, into
+// "flipped over" territory, since a rotateX wraps every 360deg -- so the
+// 10x instead lands on the part of this that actually reads as "tilt"
+// while using the page: how hard the console leans as the cursor moves
+// (see handleMouseMove below). BASE_TILT_X itself only got a modest bump
+// for a bolder resting pose. clampTilt keeps the now much more sensitive
+// interactive range from ever wrapping past vertical and looking broken.
+const BASE_TILT_X = 38; // degrees -- the resting "looking down at the console" angle
+const TILT_X_RANGE: [number, number] = [10, 65];
+const TILT_Y_RANGE: [number, number] = [-60, 60];
+
+function clampTilt(value: number, [min, max]: [number, number]) {
+  return Math.min(max, Math.max(min, value));
+}
 
 export default function GalaxyPage() {
   const router = useRouter();
@@ -54,17 +68,19 @@ export default function GalaxyPage() {
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }, []);
 
-  // The whole console tilts a little further toward wherever the cursor
-  // is -- small, capped range, so it reads as "responsive controls," not
-  // motion sickness. Skipped entirely under reduced-motion.
+  // The whole console tilts toward wherever the cursor is -- 10x more
+  // sensitive than before per Rob's request, clamped (see TILT_X_RANGE/
+  // TILT_Y_RANGE above) so a full corner-to-corner mouse sweep leans the
+  // console dramatically without ever tipping it past vertical into a
+  // broken-looking flip. Skipped entirely under reduced-motion.
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     if (reducedMotion.current || !stageRef.current) return;
     const rect = stageRef.current.getBoundingClientRect();
     const relX = (e.clientX - rect.left) / rect.width - 0.5; // -0.5 .. 0.5
     const relY = (e.clientY - rect.top) / rect.height - 0.5;
     setTilt({
-      x: BASE_TILT_X + relY * -12,
-      y: relX * 14,
+      x: clampTilt(BASE_TILT_X + relY * -120, TILT_X_RANGE),
+      y: clampTilt(relX * 140, TILT_Y_RANGE),
     });
   }
 
@@ -101,7 +117,11 @@ export default function GalaxyPage() {
         }
         @keyframes galaxyNodeFloat {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
+          50% { transform: translateY(var(--float-amp, -6px)); }
+        }
+        @keyframes galaxyIconFlicker {
+          0%, 100% { opacity: 0.88; }
+          50%      { opacity: 1; }
         }
         @keyframes galaxyRingSpin {
           from { transform: rotate(0deg); }
@@ -116,8 +136,15 @@ export default function GalaxyPage() {
           animation: galaxyNodeIn 0.6s ease both;
           cursor: inherit;
         }
+        /* Duration and amplitude come from each node's own inline
+           --float-duration/--float-amp (see the per-node map below) --
+           Rob's "more modular play": every node used to share this
+           exact 5s rhythm with only a start-delay offset, so they'd
+           stay locked in the same relative phase forever and read as
+           one wave passing through a fixed formation rather than
+           independent things quietly alive on their own. */
         .galaxy-node-float {
-          animation: galaxyNodeFloat 5s ease-in-out infinite;
+          animation: galaxyNodeFloat var(--float-duration, 5s) ease-in-out infinite;
         }
         .galaxy-ring-outer { animation: galaxyRingSpin 140s linear infinite; }
         .galaxy-ring-ticks { animation: galaxyRingSpinReverse 200s linear infinite; }
@@ -184,6 +211,13 @@ export default function GalaxyPage() {
            reads fine for a simple line-art glyph like this. */
         .galaxy-node-icon {
           transform-origin: 50% 50%;
+          /* Oh-so-faint per Rob's request -- opacity only ever drifts
+             between 0.88 and 1, and each icon's own inline
+             animation-delay (set where it's rendered below) staggers
+             the phase so all eight never flicker in unison. Already
+             covered by the prefers-reduced-motion rule further down,
+             same as every other animation on this page. */
+          animation: galaxyIconFlicker 3.8s ease-in-out infinite;
         }
         .galaxy-node:hover .galaxy-node-icon {
           animation: galaxyIconSpin 2.4s linear infinite;
@@ -302,13 +336,17 @@ export default function GalaxyPage() {
             })}
           </div>
 
-          {/* Center -- decorative, not a link; the five nodes are the map. */}
+          {/* Center -- decorative, not a link; the five nodes are the map.
+              Nudged up and to the left of true center per Rob's request
+              (Sep 3 2026) -- left/top stay at 50%/50% so orbitPosition's
+              own math (and every node position built on it) is untouched;
+              the offset lives only in this element's own transform. */}
           <div
             style={{
               position: "absolute",
               left: "50%",
               top: "50%",
-              transform: "translate(-50%, -50%) translateZ(40px)",
+              transform: "translate(calc(-50% - 26px), calc(-50% - 22px)) translateZ(40px)",
               textAlign: "center",
               pointerEvents: "none",
             }}
@@ -337,6 +375,15 @@ export default function GalaxyPage() {
           {GALAXY_NODES.map((node, i) => {
             const pos = orbitPosition(node.angleDeg, node.radiusPct);
             const opacity = node.dim ? 0.62 : 1;
+            // "More modular play" (Rob, Sep 3 2026): each node's own
+            // float duration/amplitude, not one shared rhythm -- see
+            // .galaxy-node-float's comment above. Deterministic off the
+            // node's own index (not Math.random()) so this never causes
+            // a server/client hydration mismatch, same reasoning as the
+            // seeded() stars on the landing page.
+            const floatDuration = 4 + (i % 4) * 0.9;
+            const floatAmp = -(5 + (i % 3) * 2.5);
+            const iconFlickerDelay = (i * 0.53) % 3.8;
             return (
               <Link
                 key={node.key}
@@ -368,6 +415,8 @@ export default function GalaxyPage() {
                     gap: `${6 * node.scale}px`,
                     animationDelay: `${0.4 * i}s`,
                     transform: `scale(${node.scale})`,
+                    ["--float-duration" as string]: `${floatDuration}s`,
+                    ["--float-amp" as string]: `${floatAmp}px`,
                   }}
                 >
                   <span
@@ -396,7 +445,7 @@ export default function GalaxyPage() {
                         viewBox="0 0 24 24"
                         width="34"
                         height="34"
-                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent }}
+                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent, animationDelay: `${iconFlickerDelay}s` }}
                       >
                         {/* A flat dodecahedron glyph: an outer and inner
                             pentagon with their corners joined, the usual
@@ -432,7 +481,7 @@ export default function GalaxyPage() {
                         viewBox="0 0 24 24"
                         width="34"
                         height="34"
-                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent }}
+                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent, animationDelay: `${iconFlickerDelay}s` }}
                       >
                         {/* Same "outer shape + inner shape + joined
                             corners" shorthand as the dodecahedron above,
