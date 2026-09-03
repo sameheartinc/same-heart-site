@@ -25,6 +25,7 @@ import {
   type ReactionTargetType,
 } from "@/lib/commons";
 import { EMPTY_PRACTICE_POINTS, normalizePracticePoints, practiceTier, type PracticePoints } from "@/lib/practices";
+import { renderRichText } from "@/lib/richText";
 
 const ACCENT = "#c9576a";
 const EMPTY_SUMMARY: ReactionSummary = { heartfelt: 0, heartache: 0, mine: null };
@@ -239,7 +240,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
           {thread.title}
         </h1>
         <p style={{ fontFamily: "var(--font-body)", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.7, marginBottom: "10px", whiteSpace: "pre-wrap" }}>
-          {thread.body}
+          {renderRichText(thread.body)}
         </p>
         {thread.image_url && (
           <img

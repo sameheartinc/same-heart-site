@@ -128,7 +128,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     // drug prevention & real opportunity for young people. Deliberately
     // NOT dimmed like Field Guide/Arcade -- this is real content from
     // day one, not a placeholder. Sits in the widest open gap on the
-    // ring, between Field Guide (8deg) and the Hearth (95deg).
+    // ring, between Field Guide (8deg) and the Hearth (120deg).
     key: "deep-signals",
     href: "/deep-signals",
     monogram: "D",
@@ -144,13 +144,19 @@ export const GALAXY_NODES: GalaxyNode[] = [
     // A real, working destination, not a "coming soon" placeholder --
     // deliberately sized modestly (smaller than Commons/Shop, not dimmed
     // like Field Guide) so it reads as present but not asking for
-    // anything. Sits in the widest open gap on the ring, between Field
-    // Guide and the Wallet. Links straight out to a Stripe Payment Link
+    // anything. Links straight out to a Stripe Payment Link
     // (pay-what-you-want) -- no payment code runs on Same Heart itself,
     // and no Buy Me a Coffee platform cut either. To change the amount
     // options or copy, edit the Payment Link directly in the Stripe
     // dashboard; to point this node somewhere else entirely, this href
     // is the only line that needs to change.
+    //
+    // angleDeg was 95 (almost straight down) -- Rob's own report was
+    // that it sat out of view, past the bottom edge on shorter screens.
+    // Moved to 120deg: further left (orbitPosition's left% drops from
+    // ~46% to ~28%) and meaningfully higher up (top% drops from ~94% to
+    // ~88%), while still sitting in the open gap between Deep Signals
+    // (50deg) and the Wallet (150deg) rather than crowding either.
     key: "hearth",
     href: "https://buy.stripe.com/6oUfZhgKz9dmbh3dovcAo01",
     external: true,
@@ -159,7 +165,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     name: "The Hearth",
     tagline: "Feed. Water. Teach.",
     accent: "#ff6f91",
-    angleDeg: 95,
+    angleDeg: 120,
     radiusPct: 44,
     scale: 1,
   },

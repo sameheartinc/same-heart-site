@@ -28,6 +28,25 @@ interface FeedSourceRow {
   sortOrder: number;
 }
 
+// The other half of the Yellow Heart String's door (see app/signal/page.tsx
+// and app/api/signal/suggest|decide|suggestions). A holder proposing a
+// source lands here first, as a pending row -- approving one inserts it
+// straight into feed_sources above; declining just closes it out. Read
+// through app/api/signal/suggestions (service role) rather than a direct
+// client select, since it needs to join in the suggester's display name
+// and profiles isn't publicly readable.
+interface SuggestionRow {
+  id: string;
+  profileId: string;
+  displayName: string | null;
+  name: string;
+  url: string;
+  topic: string;
+  note: string | null;
+  status: "pending" | "approved" | "declined";
+  createdAt: string;
+}
+
 function blankForm(nextSortOrder: number): Omit<FeedSourceRow, "id"> {
   return {
     name: "",
@@ -48,6 +67,9 @@ export default function AdminSignalPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,10 +87,58 @@ export default function AdminSignalPage() {
       setChecking(false);
       if (profileRow?.is_admin) {
         await refresh();
+        await refreshSuggestions();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  async function refreshSuggestions() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+    try {
+      const res = await fetch("/api/signal/suggestions", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSuggestionsError(json.error || "Couldn't load suggestions.");
+        return;
+      }
+      setSuggestions(Array.isArray(json.suggestions) ? json.suggestions : []);
+    } catch {
+      setSuggestionsError("Couldn't reach the server.");
+    }
+  }
+
+  async function decideSuggestion(suggestionId: string, decision: "approved" | "declined") {
+    setDecidingId(suggestionId);
+    setSuggestionsError(null);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setDecidingId(null);
+      return;
+    }
+    try {
+      const res = await fetch("/api/signal/decide", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestionId, decision }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSuggestionsError(json.error || "Couldn't save that decision.");
+        setDecidingId(null);
+        return;
+      }
+      await refreshSuggestions();
+      if (decision === "approved") await refresh();
+    } finally {
+      setDecidingId(null);
+    }
+  }
 
   async function refresh() {
     setLoading(true);
@@ -238,6 +308,85 @@ export default function AdminSignalPage() {
 
         {error && (
           <p style={{ color: "var(--rose)", fontSize: "0.85rem", marginBottom: "16px" }}>{error}</p>
+        )}
+
+        {/* Yellow Heart String's door, the review side -- see
+            app/signal/page.tsx (where these come from) and
+            app/api/signal/decide (the only place one becomes a real
+            feed_sources row). Only ever shows pending ones; approved
+            and declined suggestions just quietly drop out of this list
+            once decided, same as the applications list in
+            /admin/monetization. */}
+        {suggestions.filter((s) => s.status === "pending").length > 0 && (
+          <div style={{ marginBottom: "28px" }}>
+            <h2
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "10px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--ink-faint, #5c6684)",
+                margin: "0 0 10px",
+              }}
+            >
+              Suggested by members
+            </h2>
+            {suggestionsError && (
+              <p style={{ color: "var(--rose)", fontSize: "0.85rem", marginBottom: "10px" }}>{suggestionsError}</p>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {suggestions
+                .filter((s) => s.status === "pending")
+                .map((s) => (
+                  <div
+                    key={s.id}
+                    style={{
+                      background: "var(--panel)",
+                      border: "1px solid var(--gold)",
+                      borderRadius: "12px",
+                      padding: "14px 16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: "0 0 2px", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.95rem" }}>
+                          {s.name}
+                        </p>
+                        <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--ink-faint, #5c6684)", wordBreak: "break-all" }}>
+                          {s.topic} &middot; {s.url}
+                        </p>
+                        <p style={{ margin: "4px 0 0", fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--ink-faint, #5c6684)" }}>
+                          Suggested by {s.displayName || "a member"}
+                        </p>
+                        {s.note && (
+                          <p style={{ margin: "6px 0 0", fontSize: "0.85rem", color: "var(--ink-dim)", fontStyle: "italic" }}>
+                            &ldquo;{s.note}&rdquo;
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => decideSuggestion(s.id, "approved")}
+                          disabled={decidingId === s.id}
+                          style={primaryButtonStyle}
+                        >
+                          {decidingId === s.id ? "..." : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => decideSuggestion(s.id, "declined")}
+                          disabled={decidingId === s.id}
+                          style={dangerButtonStyle}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
         )}
 
         {!form && (

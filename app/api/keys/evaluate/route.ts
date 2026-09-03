@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { YELLOW_KEY_MIN_ARTICLES } from "@/lib/keys";
 
 // Keys, part 1 -- see the Keys and Doors design in PLAN.md. This route is
 // the only place a key is ever granted: it re-derives eligibility itself
@@ -13,7 +14,9 @@ const GREEN_KEY_MIN_TRANSMISSIONS = 5;
 const GREEN_KEY_MIN_AVG_SCORE = 60;
 const BLUE_KEY_MIN_COMMUNITIES = 3;
 const RED_KEY_MIN_LONGEST_STREAK = 14;
-const YELLOW_KEY_MIN_ARTICLES = 10;
+// YELLOW_KEY_MIN_ARTICLES now lives in lib/keys.ts, shared with
+// app/signal/page.tsx so its "X of 10 read" progress can never drift
+// from the actual threshold this route enforces.
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");

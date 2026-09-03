@@ -39,6 +39,13 @@ export const KEY_INFO: Record<KeyColor, { name: string; accent: string; blurb: s
   },
 };
 
+// How many distinct Signal articles someone needs to read (see
+// signal_engagement in supabase/schema.sql) to earn the Yellow key.
+// Lives here rather than only inside app/api/keys/evaluate/route.ts so
+// app/signal/page.tsx can show real progress toward it without
+// duplicating the number and risking the two drifting apart.
+export const YELLOW_KEY_MIN_ARTICLES = 10;
+
 // Blue's door: a personal accent color for the Commons, chosen from a
 // small curated set rather than a free-text color field -- same reasoning
 // as the Skins palette (see lib/skins.ts). Kept out of KEY_INFO since it's
@@ -126,5 +133,61 @@ export async function fetchWhoIsHere(): Promise<PresentProfile[] | null> {
     return Array.isArray(json.present) ? json.present : null;
   } catch {
     return null;
+  }
+}
+
+// Yellow's door -- see app/signal/page.tsx. A held Yellow key lets
+// someone propose a new Signal source; it only ever becomes real once
+// Rob approves it in /admin/signal (app/api/signal/decide/route.ts),
+// same "earned ability, human still gatekeeps what reaches everyone"
+// shape as the monetization gate.
+export interface SignalSuggestion {
+  id: string;
+  name: string;
+  url: string;
+  topic: string;
+  note: string | null;
+  status: "pending" | "approved" | "declined";
+  created_at: string;
+}
+
+// Reads only the caller's own suggestions -- feed_source_suggestions'
+// RLS policy only ever allows that, so this is a safe direct client
+// read (same posture as listMyKeys above), no server route needed.
+export async function listMySignalSuggestions(): Promise<SignalSuggestion[]> {
+  const { data, error } = await supabase
+    .from("feed_source_suggestions")
+    .select("id, name, url, topic, note, status, created_at")
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data as SignalSuggestion[];
+}
+
+// Creating a suggestion does need a server route (unlike reading one's
+// own back) -- feed_source_suggestions has no client insert policy at
+// all, on purpose, so the Yellow key can be re-checked server-side
+// first. Returns the server's own error string on failure (not held
+// yet, bad URL, too many pending) so the page can show exactly why.
+export async function suggestSignalSource(
+  name: string,
+  url: string,
+  topic: string,
+  note: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { ok: false, error: "Sign in first." };
+
+  try {
+    const res = await fetch("/api/signal/suggest", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name, url, topic, note }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: json.error || "Couldn't submit your suggestion right now." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Couldn't reach the server. Try again in a moment." };
   }
 }

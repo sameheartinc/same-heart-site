@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { SKINS, getSkin, type SkinKey } from "@/lib/skins";
 import { listMyKeys, evaluateKeys, setCommonsAccent, KEY_INFO, COMMONS_ACCENT_PALETTE, type ProfileKey } from "@/lib/keys";
+import { founderStatus } from "@/lib/founders";
 import { getLevel, nextPrimeThreshold } from "@/lib/primeLevels";
 import {
   listMyNotifications,
@@ -56,6 +57,7 @@ type Profile = {
   hub_background_url: string | null;
   kindred_opt_out: boolean;
   practice_points: unknown;
+  verified_rank: number | null;
 };
 
 type LogEntry = {
@@ -138,16 +140,22 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank"
         )
         .eq("id", userData.user.id)
         .single();
 
-      if (!profileData?.designation) {
-        // Star Day hasn't been set yet -- send them there first.
-        router.replace("/star-day");
-        return;
-      }
+      // Star Day used to gate the Hub here -- redirecting anyone without
+      // a designation to a mandatory "enter your birthday" form (see
+      // IDEAS.md, Sep 3 2026: Rob's call was that asking for a birthday
+      // up front isn't necessary and risks losing people before they
+      // ever see the Hub). Removed: every profile now gets its
+      // designation/frequency/archetype automatically at signup, computed
+      // from when the account joined instead of when the person was born
+      // (see supabase/schema.sql's handle_new_user()/compute_signal()),
+      // so there's nothing left to gate on here. A real, optional
+      // birthday field belongs in a future profile builder in Settings,
+      // not a blocking redirect -- not built yet.
 
       const { data: logData, error: logFetchError } = await supabase
         .from("log_entries")
@@ -1594,13 +1602,27 @@ export default function HubPage() {
                 );
                 // Green's door is a whole page (see app/impact/page.tsx),
                 // not an inline control like Blue's accent picker above --
-                // so its dot is the one that's actually clickable.
+                // so its dot is the one that's actually clickable. Yellow's
+                // door (see app/signal/page.tsx) is the same shape -- a
+                // holder can suggest a real new Signal source, reviewed by
+                // Rob in /admin/signal.
                 if (k.key_color === "green") {
                   return (
                     <Link
                       key={k.key_color}
                       href="/impact"
                       aria-label={`${info.name} -- open your Impact History`}
+                    >
+                      {dot}
+                    </Link>
+                  );
+                }
+                if (k.key_color === "yellow") {
+                  return (
+                    <Link
+                      key={k.key_color}
+                      href="/signal"
+                      aria-label={`${info.name} -- suggest a Signal source`}
                     >
                       {dot}
                     </Link>
@@ -1844,6 +1866,68 @@ export default function HubPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Founding Member -- Rob's Sep 3 2026 request: the first 100
+            people to verify their email get a prize, the first 1000 get
+            a store discount. Ranked by verified_rank (set the moment
+            auth.users.email_confirmed_at first gets set -- see
+            supabase/schema.sql's on_auth_user_email_confirmed trigger
+            and lib/founders.ts), not raw signup, since everyone gets an
+            anonymous session before any of them have a real email.
+            Shows nothing at all for anyone without a verified_rank
+            (not verified yet, or verified after the first 1000) --
+            same "nothing to show yet" posture as every other
+            conditional panel on this page. */}
+        {profile && founderStatus(profile.verified_rank) && (
+          <div
+            style={{
+              marginBottom: "22px",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel, transparent)",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--widget-text-faint)",
+              }}
+            >
+              Founding Member
+            </span>
+            <p
+              style={{
+                margin: "8px 0 4px",
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                color: "var(--widget-text)",
+              }}
+            >
+              {founderStatus(profile.verified_rank)!.label}
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.02em",
+                color: "var(--widget-text-faint)",
+              }}
+            >
+              {founderStatus(profile.verified_rank)!.tier === "prize"
+                ? "You're one of the first 100 verified members. Your code: "
+                : "You're one of the first 1000 verified members. Your discount code: "}
+              <span style={{ color: "var(--widget-text)" }}>
+                {founderStatus(profile.verified_rank)!.code}
+              </span>
+            </p>
           </div>
         )}
 

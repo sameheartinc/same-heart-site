@@ -1205,3 +1205,288 @@ security one, since nothing of real value rides on those two columns.
 each change was additive-only, before writing anything. `npx tsc
 --noEmit` run across the whole batch after all five files were written --
 0 errors, exit code 0.
+
+---
+
+## Voice Tier 2 -- bold/italic formatting (Sep 3, 2026)
+
+Rob's pick (via AskUserQuestion) for the first Tier 2 to build, out of
+the four options offered.
+
+**What shipped:**
+- `lib/richText.tsx` -- new file. Hand-rolled `**bold**` / `*italic*` /
+  `***bold italic***` parser, deliberately NOT a markdown library and
+  NOT `dangerouslySetInnerHTML` -- it only ever produces React elements
+  (`<strong>`/`<em>`) wrapping plain-text nodes, so a post body can never
+  inject real HTML or scripts no matter what someone types. Rendering
+  applies to every thread body regardless of the poster's own tier
+  (nothing to enforce server-side there anyway, and no real value rides
+  on it) -- Tier 2 gates the composer's toolbar, not the parser itself.
+- `app/commons/c/[slug]/page.tsx` -- a Bold/Italic toolbar above the
+  body textarea, shown once Voice Tier 2 is invested. Wraps the current
+  text selection in `**`/`*` and restores cursor position after.
+- `app/commons/t/[id]/page.tsx` -- thread bodies now render through
+  `renderRichText()` instead of as a raw string.
+- `lib/practices.ts` -- marked Voice Tier 2 BUILT.
+
+**Scope decision:** formatting only applies to original threads for
+now, same as Tier 1's image/resource attachments -- replies aren't run
+through the parser yet. Noted as a possible later extension, not built.
+
+**Verified:** diffed all three edited files against pre-edit backups
+(all additive-only) before writing. `npx tsc --noEmit` across the whole
+batch after writing -- 0 errors, exit code 0.
+
+---
+
+## Hearth (donate) node moved -- was off-screen (Sep 3, 2026)
+
+Rob: "the donate to same heart where the stripe button is at the bottom
+is out of the field of view...can you put it to the left"
+
+What was wrong: `lib/galaxyNodes.ts`'s Hearth node sat at angleDeg 95
+(almost straight down), which `orbitPosition()` in app/galaxy/page.tsx
+turns into left ~46%, top ~94% -- close enough to the container's bottom
+edge that it clipped out of view on shorter screens (the Galaxy view is
+`overflow: hidden`).
+
+What was built: moved Hearth to angleDeg 120 -- left drops to ~28%
+(further left, as asked) and top drops to ~88% (meaningfully higher, up
+off the bottom edge). Still sits in the open gap between Deep Signals
+(50deg) and the Wallet (150deg), not crowding either. Updated the two
+code comments that referenced the old 95deg position.
+
+Verified: diffed against a pre-edit backup (only the angle value + two
+comments changed, nothing else). `npx tsc --noEmit` clean. Note: this is
+a math-level fix, not something I can see rendered from here -- worth
+Rob confirming visually that it now sits fully in view.
+
+---
+
+## Birthday ask removed from onboarding (Sep 3, 2026)
+
+Rob: "make it so it doesnt ask for your birthday ever...only in the
+profile builder later in settings" / "in the the front page it asks for
+your birthday which isnt neccessary adn might drive some users away"
+
+What was wrong: Star Day (`app/star-day/page.tsx`) was a mandatory,
+blocking onboarding step -- `app/hub/page.tsx` redirected anyone with no
+`designation` straight there, and the only way to get a `designation`
+was typing a full birth date into a form. `designation`, `frequency`, and
+`archetype` (lib/starDay.ts's `computeSignal()`) were purely a function
+of that birth date -- no other way to get them.
+
+What was built: every signup now gets its designation/frequency/
+archetype automatically, computed from when the account was created
+instead of when the person was born -- no form, no click, no birthday.
+- `supabase/schema.sql` -- new `compute_signal(date)` function, a direct
+  SQL port of `lib/starDay.ts`'s `computeSignal()` (verified byte-for-byte
+  equivalent across 20,000 random dates before shipping, 0 mismatches).
+  `handle_new_user()` (the signup trigger) now calls it with the new
+  account's own `created_at` and inserts the full signal immediately.
+  `birth_date` keeps its column and name but now holds the join date
+  unless/until a real birthday is set later.
+- A one-time backfill for anyone who signed up before this and never
+  finished the old form (`designation is null`) -- gives them the same
+  automatic signal from their own `joined_at`. Never touches anyone who
+  already completed Star Day for real; their entered birthday stays
+  exactly as it was.
+- `app/hub/page.tsx` -- removed the `if (!designation) redirect to
+  /star-day` gate entirely; nothing left to gate on.
+- `app/star-day/page.tsx` -- gutted to a two-line redirect stub (straight
+  to `/hub`), kept only so an old bookmark/link doesn't 404. It will
+  never ask for anything again.
+
+What was deliberately NOT built: the "profile builder in Settings" where
+someone could later choose to enter their real birthday -- Rob's own
+phrasing described this as the future home for the field, not a request
+to build Settings itself right now. No Settings section exists yet in
+this codebase. Logged here so it's not lost -- worth a real scoping pass
+(what else lives in a "profile builder"?) whenever Rob wants to build it.
+
+Verified: the SQL formula checked against the original JS formula across
+20,000 random dates (0 mismatches) before writing anything. All three
+files diffed against pre-edit backups. `npx tsc --noEmit` clean.
+
+**Migration Rob needs to run himself** (never run migrations from here):
+adds `compute_signal()`, replaces `handle_new_user()`, and backfills
+existing designation-less profiles. Nothing destroys existing data --
+every already-completed Star Day birthday is left untouched.
+
+---
+
+## Founding rewards: first 100 verified get a prize, first 1000 get a
+## store discount (Sep 3, 2026)
+
+Rob: "also...the first 100 people who legitimately sign uo and verify
+their email will get a really good prize...and the first 1000 people
+will get a discount on the store"
+
+Clarified with Rob before building: prize = automatic store credit (not
+a physical item -- no shipping-address collection needed); discount =
+one shared code for the first 1000 (not a unique code per person, which
+would've needed Shopify Admin API access -- the site currently only has
+Storefront API access, see lib/shopify.ts); visibility = show it on the
+Hub as soon as someone qualifies, not held back for a later announcement.
+
+Why this isn't just "first 1000 signups": Same Heart gives everyone an
+anonymous session the instant they arrive (lib/session.ts's
+ensureSession()), and only attaches a real email later -- via the
+sign-up form or "Claim your account" on an existing anonymous session.
+Ranking by raw signup/spark_id order would let someone hoard early
+numbers with throwaway anonymous sessions that never become real
+people -- the opposite of "legitimately." So this ranks by VERIFIED
+email order instead: the exact moment auth.users.email_confirmed_at
+first gets set.
+
+What was built:
+- `supabase/schema.sql` -- new `email_verified_at` / `verified_rank`
+  columns on `profiles`, a `verified_rank_seq` sequence, and a new
+  `on_auth_user_email_confirmed` trigger (fires on UPDATE to
+  auth.users, only acts the moment `email_confirmed_at` goes from null
+  to set) that hands out the next sequence number permanently -- same
+  "first member is first, forever" idea `spark_id` already uses for
+  join order, just keyed to a verified account instead of a raw
+  signup. Includes a one-time backfill for anyone who already verified
+  before this trigger existed, ordered by their real
+  `email_confirmed_at` timestamp so early real members aren't bumped
+  to the back. Safe to run more than once.
+- `lib/founders.ts` (new) -- `FOUNDER_PRIZE_LIMIT` (100),
+  `FOUNDING_1000_LIMIT` (1000), and `founderStatus(verifiedRank)` which
+  returns the tier/label/code for anyone who qualifies, or null.
+- `app/hub/page.tsx` -- new "Founding Member" panel (same
+  bordered-panel style as Practices/Kindred Sparks), shown only when
+  `founderStatus(profile.verified_rank)` is non-null. Shows the
+  person's rank and their code.
+
+What's still TBD / needs Rob:
+- The actual prize behind the first-100 code isn't chosen yet --
+  `FOUNDER_PRIZE_CODE` and `FOUNDING_1000_CODE` in lib/founders.ts are
+  both placeholder strings ("...-COMING-SOON"). Once Rob creates the
+  real discount/credit codes in Shopify (Admin -> Discounts -> Create
+  discount -- no Shopify Admin API access needed for this "one shared
+  code" approach), those two constants just need swapping for the real
+  codes.
+- Anti-abuse: signup already runs behind Cloudflare Turnstile
+  (lib/turnstile.ts), which covers script/bot signups. Not built: a
+  disposable-email-domain blocklist, which would close the remaining
+  gap (a real person using a throwaway inbox just to grab a slot).
+  Worth doing before this is announced publicly if abuse becomes a
+  concern -- Rob didn't ask for it yet, so it's logged here rather than
+  built.
+
+**Migration Rob needs to run himself** (never run migrations from
+here): adds `email_verified_at` / `verified_rank` columns + a unique
+constraint on `verified_rank`, a new sequence, a new trigger on
+auth.users, and a one-time backfill. Nothing destroys existing data.
+
+**Confirmed live (Sep 3, 2026):** Rob ran the combined migration
+(Star Day fix + this) successfully -- `setval` returned 3, meaning 2
+existing profiles already had verified emails and were backfilled as
+Founding Members #1 and #2, with #3 primed as the next real
+verification. The Hub's "Founding Member" panel and the trigger are
+both live; only the two placeholder codes in `lib/founders.ts` still
+need swapping once real ones exist in Shopify.
+
+**On the docket (Sep 3, 2026):** Rob hasn't created the real Shopify
+codes yet -- "put that in the docket for now." Nothing to do until he
+has them; once he does, he can either paste the two codes into chat for
+a quick swap, or edit `FOUNDER_PRIZE_CODE` / `FOUNDING_1000_CODE` in
+`lib/founders.ts` himself (both near the top of the file, both plain
+strings, no other file or migration involved).
+
+---
+
+## Ship skins at Level 10 + welcome cards -- raised, not yet logged (Sep 3, 2026)
+
+Two ideas Rob raised mid-turn this session that never made it into this
+docket at the time (caught while reviewing the backlog for "what's
+next") -- logging them now so they're not lost:
+
+**Ship skins:** "once you hit level 10 you should have access to 20
+skins and variations for your ship..later you can unlock skins and
+others variants." This is related to, but more specific than, the
+already-logged Level 20 "pick your ship icon" entry above (Sep 2,
+2026) -- that one flagged an open question that still applies here:
+is this a NEW icon-choice mechanic, or the existing `ship_skin` field
+(lib/skins.ts, currently gated by the Aurora unlockable at keysHeld >=
+2 && tenureDays >= 30) just re-gated by Level instead? Rob's new
+framing adds specifics the old entry didn't have -- a concrete level
+(10, not 20), a concrete count (20 skins unlocked at once), and a
+later/ongoing unlock path for more. Not built: no skin assets exist
+yet (lib/skins.ts today has 3 curated palettes, not artwork), and no
+level-gating code. Blocked on Rob answering whether these are palettes
+(fast, no new assets needed) or real artwork (needs the Midjourney
+images below, plus new rendering work like the separate widget-skin
+artwork effort above), and on the open mechanic question.
+
+**Welcome cards:** "we need to think about giving people welcome cards
+and things. i can easily make midjourney photos." Raised alongside the
+ship-skins idea and the donate-button fix (which WAS built -- see the
+Hearth node entry above). No spec yet beyond the one line -- what a
+"welcome card" is (a physical mailer? a digital card sent on signup? a
+shareable image?), who receives one and when, and what's on it are all
+open. Blocked on Rob's Midjourney art either way.
+
+Not actioned by either of the last two turns' work (SQL fixes and
+founding rewards) -- surfacing both here so they're visible next time
+priorities come up, rather than only living in chat history.
+
+---
+
+## Yellow Heart String's door -- suggest a Signal source (Sep 3, 2026)
+
+Picked from the "what's next" menu: the last built Key without a
+built door. Yellow is earned by reading 10 different Signal articles
+(app/api/keys/evaluate's YELLOW_KEY_MIN_ARTICLES, moved to lib/keys.ts
+so it's shared, not duplicated) -- this gives the holder something real
+to do with it: propose an actual new source for the Signal everyone
+else reads too, not just a personal setting like Blue's accent color.
+
+Same "earned ability, Rob still gatekeeps anything that reaches
+everyone" shape as the monetization gate. A suggestion never touches
+the live `feed_sources` table directly -- it lands as a pending
+`feed_source_suggestions` row, and only becomes real once Rob approves
+it in /admin/signal.
+
+What was built:
+- `supabase/schema.sql` -- new `feed_source_suggestions` table (name,
+  url, topic, note, status, who suggested it, who/when it was
+  decided). Locked down the same way `profile_keys` is -- no
+  insert/update policy for regular users at all; every write goes
+  through a server route that re-checks things itself.
+- `app/api/signal/suggest/route.ts` (new) -- the only way a suggestion
+  gets created. Re-checks the Yellow key server-side, validates the
+  URL looks real, caps notes at 400 characters, and caps anyone at 3
+  pending suggestions at once so this can't be used to spam the queue.
+- `app/api/signal/suggestions/route.ts` (new) -- admin-only read,
+  joins in the suggester's display name server-side (mirrors
+  app/api/monetization/list's reasoning exactly -- profiles isn't
+  publicly readable, so this can't be a direct client query).
+- `app/api/signal/decide/route.ts` (new) -- the only way a suggestion
+  is approved or declined. Approving inserts a real row into
+  `feed_sources` (next sort_order, active by default) and logs a
+  personal log_entries line to the suggester ("...was added to the
+  Signal"); a duplicate URL that's already live just quietly counts as
+  approved rather than erroring. Declining just closes it out.
+- `app/signal/page.tsx` (new) -- Yellow's actual door. Locked state
+  shows real progress ("X of 10 read") using the now-shared
+  YELLOW_KEY_MIN_ARTICLES constant; unlocked state is a small form
+  (name, feed URL, topic, optional note) plus a list of the holder's
+  own past suggestions and their status. Added to app/robots.ts's
+  disallow list, same as /impact.
+- `app/admin/signal/page.tsx` -- new "Suggested by members" section
+  above the existing source list, showing only pending suggestions
+  (approved/declined quietly drop out, same as /admin/monetization's
+  applications list) with Approve/Decline buttons.
+- `app/hub/page.tsx` -- Yellow's dot in the Heart Strings row is now
+  clickable too, linking to /signal (same treatment Green's dot
+  already gets for /impact).
+
+Verified with `npx tsc --noEmit` (clean) and a diff against pre-edit
+backups on every file touched.
+
+**Migration Rob needs to run himself** (never run migrations from
+here): adds the `feed_source_suggestions` table and its one RLS
+policy. Nothing destroys existing data -- feed_sources, profile_keys,
+and everything else are untouched.

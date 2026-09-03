@@ -36,18 +36,100 @@ create policy "Users update their own profile" on profiles for update using (aut
 create policy "Users see their own log" on log_entries for select using (auth.uid() = profile_id);
 create policy "Users insert their own log" on log_entries for insert with check (auth.uid() = profile_id);
 
--- Auto-create a profile row whenever someone signs up.
+-- Star Day's frequency/archetype/designation math (lib/starDay.ts),
+-- ported into SQL so a signup can compute its own signal server-side
+-- without asking anyone anything. NOT a new formula -- verified against
+-- lib/starDay.ts's computeSignal() across 20,000 random dates (0
+-- mismatches) before this was written, so the two stay in lockstep for
+-- any date either one is ever run against.
+create or replace function public.compute_signal(for_date date)
+returns table(frequency numeric, designation text, archetype_name text)
+language plpgsql
+immutable
+as $$
+declare
+  m int := extract(month from for_date);
+  d int := extract(day from for_date);
+  y int := extract(year from for_date);
+  mdays int[] := array[31,28,31,30,31,30,31,31,30,31,30,31];
+  day_of_year int := d;
+  seed bigint;
+  archetypes text[] := array[
+    'The First Ember', 'The Quiet Beacon', 'The Waking Current', 'The Open Frequency',
+    'The Bloom Signal', 'The Steady Pulse', 'The Wildfire Wave', 'The Golden Static',
+    'The Harvest Echo', 'The Turning Tide', 'The Deep Resonance', 'The Long Transmission'
+  ];
+  i int;
+begin
+  for i in 1..(m - 1) loop
+    day_of_year := day_of_year + mdays[i];
+  end loop;
+  seed := y::bigint * 372 + day_of_year * 13 + d * 7 + m * 29;
+  frequency := round((200 + ((seed % 6700)::numeric / 10)) * 10) / 10;
+  designation := 'SH-' || lpad(m::text, 2, '0') || lpad(d::text, 2, '0') || '·' || right(y::text, 2);
+  archetype_name := archetypes[m];
+  return next;
+end;
+$$;
+
+-- Auto-create a profile row whenever someone signs up. Used to insert
+-- only id/display_name and leave birth_date/frequency/archetype/
+-- designation null until the old Star Day form filled them in by asking
+-- for a birthday -- removed (see IDEAS.md, Sep 3 2026: Rob's call was
+-- that asking for a birthday up front isn't necessary and risks losing
+-- people before they ever reach the Hub). Every signup now gets its full
+-- signal immediately, computed from the moment the account was created
+-- rather than the moment the person was born -- same "every signal has a
+-- moment it started" idea Star Day's own copy already used. birth_date
+-- keeps its name and column (nothing else reads it as "join date") but
+-- now holds the join date, unless and until someone sets their real
+-- birthday later through a profile builder in Settings -- not built yet.
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  signal record;
 begin
-  insert into public.profiles (id, display_name) values (new.id, new.email);
+  select * into signal from public.compute_signal(new.created_at::date);
+  insert into public.profiles (id, display_name, birth_date, frequency, designation, archetype)
+  values (new.id, new.email, new.created_at::date, signal.frequency, signal.designation, signal.archetype_name);
   return new;
 end;
 $$ language plpgsql security definer;
 
+-- Trigger already exists from the original setup -- create trigger has
+-- no built-in IF NOT EXISTS, so it has to be dropped and recreated (this
+-- is what tripped the "policy already exists" error on the first
+-- attempt at running this, just for a trigger instead of a policy).
+-- Dropping and recreating changes nothing about its behavior -- it's
+-- still "fire handle_new_user() after every signup" either way.
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- One-time migration: backfill anyone who signed up before this change
+-- and never finished the old Star Day form -- their designation is still
+-- null today, and app/hub/page.tsx used to redirect exactly those people
+-- to the birthday form on every visit. Gives them the same automatic
+-- signal now, computed from their own join date, so nobody already on
+-- the site can land on that form either. Only ever touches a profile
+-- whose designation is still null -- anyone who already completed Star
+-- Day for real keeps their own, already-entered birthday untouched.
+-- Safe to run more than once.
+-- Postgres won't let a LATERAL item in an UPDATE's FROM clause reference
+-- the table being updated (that's the 42P10 error this hit on the first
+-- try) -- the fix is a second alias for the same table (p2) that the
+-- LATERAL call is allowed to reference, then joining back to the real
+-- target (p) by id.
+update public.profiles p
+set frequency = signal.frequency,
+    designation = signal.designation,
+    archetype = signal.archetype_name,
+    birth_date = coalesce(p.birth_date, p.joined_at::date)
+from public.profiles p2
+cross join lateral public.compute_signal(coalesce(p2.birth_date, p2.joined_at::date)) signal
+where p.id = p2.id
+  and p.designation is null;
 
 -- One-time migration: ship_skin used to store a raw hex color (an idea
 -- that never got built). It now stores a Skin key from lib/skins.ts
@@ -970,5 +1052,138 @@ $$;
 
 revoke all on function public.get_public_profiles(uuid[]) from public;
 grant execute on function public.get_public_profiles(uuid[]) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Founding rewards: first 100 verified signups get a prize, first
+-- 1000 get a store discount (Rob, Sep 3 2026: "the first 100 people
+-- who legitimately sign up and verify their email will get a really
+-- good prize...and the first 1000 people will get a discount on the
+-- store"). See lib/founders.ts for the site-side logic and the two
+-- codes themselves -- exact prize mechanism is still TBD (Rob's
+-- direction so far: automatic store credit for the first 100, one
+-- shared discount code for the first 1000); this part only builds the
+-- ranking, which is needed no matter what's decided about the reward
+-- itself.
+--
+-- Ranked by VERIFIED email order, not raw signup order. Same Heart
+-- gives everyone an anonymous session the instant they arrive (see
+-- lib/session.ts's ensureSession()), and only attaches a real email
+-- later -- via the sign-up form or "Claim your account" on an existing
+-- anonymous session. Ranking by raw account creation would let someone
+-- hoard early numbers with throwaway anonymous sessions that never
+-- become real people, which is the opposite of "legitimately."
+-- auth.users.email_confirmed_at only gets set once someone actually
+-- verifies a real inbox, so that's the moment this counts from.
+-- ============================================================
+
+alter table public.profiles add column if not exists email_verified_at timestamptz;
+alter table public.profiles add column if not exists verified_rank integer;
+
+-- Idempotent the same way the on_auth_user_created fix earlier in this
+-- file is: ADD CONSTRAINT has no IF NOT EXISTS in Postgres, so drop
+-- first, then add.
+alter table public.profiles drop constraint if exists profiles_verified_rank_unique;
+alter table public.profiles add constraint profiles_verified_rank_unique unique (verified_rank);
+
+create sequence if not exists public.verified_rank_seq start 1;
+
+-- Fires whenever a row in auth.users changes and email_confirmed_at
+-- just went from null to set -- i.e. the exact moment someone verifies
+-- for real. Assigns the next number off the shared sequence,
+-- permanently -- same "first member is first, forever" idea spark_id
+-- already uses for join order, just keyed to a verified account
+-- instead of a raw signup.
+create or replace function public.handle_email_verified()
+returns trigger as $$
+begin
+  if new.email_confirmed_at is not null and old.email_confirmed_at is null then
+    update public.profiles
+    set email_verified_at = new.email_confirmed_at,
+        verified_rank = coalesce(verified_rank, nextval('public.verified_rank_seq'))
+    where id = new.id;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_email_confirmed on auth.users;
+create trigger on_auth_user_email_confirmed
+  after update on auth.users
+  for each row execute procedure public.handle_email_verified();
+
+-- One-time backfill: anyone who already verified their email before
+-- this trigger existed keeps their rightful place in line, ordered by
+-- when they actually verified -- not shuffled to the back just because
+-- this feature shipped after they signed up. Only ever touches a
+-- profile with no verified_rank yet, so this is safe to run more than
+-- once and never re-ranks someone the trigger already assigned for
+-- real. Uses a plain CTE rather than a LATERAL join in the UPDATE's
+-- FROM clause -- that's the same 42P10 mistake as the Star Day
+-- backfill above; a CTE computed independently first avoids it.
+with ranked as (
+  select
+    u.id,
+    u.email_confirmed_at,
+    row_number() over (order by u.email_confirmed_at asc) as rnk
+  from auth.users u
+  join public.profiles pr on pr.id = u.id
+  where u.email_confirmed_at is not null and pr.verified_rank is null
+)
+update public.profiles p
+set verified_rank = ranked.rnk,
+    email_verified_at = ranked.email_confirmed_at
+from ranked
+where p.id = ranked.id;
+
+-- Move the shared sequence past whatever the backfill just handed out,
+-- so the very next real verification doesn't collide with a backfilled
+-- rank.
+select setval(
+  'public.verified_rank_seq',
+  coalesce((select max(verified_rank) from public.profiles), 0) + 1,
+  false
+);
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Yellow Heart String's door: let a holder actually suggest a new
+-- Signal source, not just read what's already there. feed_sources
+-- itself (further up in this file) is admin-write-only for good
+-- reason -- anyone editing what the whole Commons reads unchecked
+-- would be a real risk -- so this adds a queue instead: a Yellow key
+-- holder can propose a name/URL/topic, and it only ever becomes a
+-- real feed_sources row once Rob approves it in /admin/signal. Same
+-- "earned ability, human still gatekeeps anything that reaches
+-- everyone" shape as the monetization gate above.
+--
+-- No insert/update policy for regular users here on purpose -- same
+-- lockdown as profile_keys itself. Every suggestion is written by the
+-- service role inside app/api/signal/suggest/route.ts (which
+-- re-checks the Yellow key server-side, never trusts the client) and
+-- every decision by app/api/signal/decide/route.ts (which re-checks
+-- is_admin the same way app/api/monetization/decide does).
+-- ============================================================
+
+create table if not exists feed_source_suggestions (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  name text not null,
+  url text not null,
+  topic text not null default 'world',
+  note text,
+  status text not null default 'pending',
+  created_at timestamptz default now(),
+  decided_at timestamptz,
+  decided_by uuid references profiles(id)
+);
+
+alter table feed_source_suggestions enable row level security;
+
+drop policy if exists "Users see their own suggestions" on feed_source_suggestions;
+create policy "Users see their own suggestions" on feed_source_suggestions
+  for select using (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';

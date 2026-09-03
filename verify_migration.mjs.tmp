@@ -1,0 +1,42 @@
+import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "fs";
+
+const env = Object.fromEntries(
+  readFileSync(".env.local", "utf8")
+    .split("\n")
+    .filter((l) => l.includes("="))
+    .map((l) => {
+      const idx = l.indexOf("=");
+      return [l.slice(0, idx), l.slice(idx + 1)];
+    })
+);
+
+const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+const results = {};
+
+// 1. profiles.practice_points
+{
+  const { error } = await admin.from("profiles").select("practice_points").limit(1);
+  results["profiles.practice_points"] = error ? `MISSING (${error.message})` : "OK";
+}
+
+// 2. commons_threads.image_url / resource_url
+{
+  const { error } = await admin.from("commons_threads").select("image_url, resource_url").limit(1);
+  results["commons_threads.image_url/resource_url"] = error ? `MISSING (${error.message})` : "OK";
+}
+
+// 3. commons_flags table
+{
+  const { error } = await admin.from("commons_flags").select("id").limit(1);
+  results["commons_flags table"] = error ? `MISSING (${error.message})` : "OK";
+}
+
+// 4. commons-images bucket
+{
+  const { data, error } = await admin.storage.getBucket("commons-images");
+  results["commons-images bucket"] = error ? `MISSING (${error.message})` : `OK (public: ${data.public})`;
+}
+
+console.log(JSON.stringify(results, null, 2));

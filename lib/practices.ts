@@ -49,7 +49,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     theme: "self-expression and original posting",
     tiers: [
       "Can attach one image to an original thread.", // BUILT -- composer + thread display
-      "Rich text formatting unlocked in posts (bold, italic).",
+      "Rich text formatting unlocked in posts (bold, italic).", // BUILT -- composer toolbar + lib/richText.tsx
       "Your original threads carry a quiet Voice marker next to your name.",
       "Custom post accent color.", // NOTE: overlaps with the Blue Heart String's existing commons_accent door (lib/keys.ts) -- resolve which one wins before building this tier.
       "Multi-image posts (up to 3).",

@@ -41,6 +41,7 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const bodyInputRef = useRef<HTMLTextAreaElement>(null);
   // Voice Tier 1 (image attachment) / Guidance Tier 1 (resource link) --
   // see lib/practices.ts. Gated on the poster's own invested Practice
   // points, fetched alongside ship_skin below.
@@ -126,6 +127,28 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   // insert policy actually checks. Uploads immediately on file choice
   // so the composer can show a real preview before Post is even
   // clicked, rather than holding the raw file in memory until submit.
+  // Voice Tier 2 -- wraps the current textarea selection in ** (bold) or
+  // * (italic), same convention every markdown editor uses. Actual
+  // rendering happens in lib/richText.tsx; this just makes the syntax
+  // easy to reach without typing it by hand. Uses the DOM ref directly
+  // (not just React state) so the cursor can be restored after the
+  // re-render, via requestAnimationFrame -- setSelectionRange has to run
+  // after React has actually painted the new value.
+  function wrapSelection(marker: string) {
+    const el = bodyInputRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? body.length;
+    const end = el.selectionEnd ?? body.length;
+    const selected = body.slice(start, end);
+    const next = body.slice(0, start) + marker + selected + marker + body.slice(end);
+    setBody(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const cursor = selected ? end + marker.length * 2 : start + marker.length;
+      el.setSelectionRange(cursor, cursor);
+    });
+  }
+
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
@@ -282,7 +305,28 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
               required
               style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--void)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: "0.88rem", marginBottom: "8px" }}
             />
+            {voiceTier >= 2 && (
+              <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+                <button
+                  type="button"
+                  onClick={() => wrapSelection("**")}
+                  title="Bold"
+                  style={{ width: "28px", height: "28px", borderRadius: "6px", border: "1px solid var(--border)", background: "none", color: "var(--ink-dim)", fontFamily: "var(--font-body)", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  onClick={() => wrapSelection("*")}
+                  title="Italic"
+                  style={{ width: "28px", height: "28px", borderRadius: "6px", border: "1px solid var(--border)", background: "none", color: "var(--ink-dim)", fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.85rem", cursor: "pointer" }}
+                >
+                  I
+                </button>
+              </div>
+            )}
             <textarea
+              ref={bodyInputRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="Say more..."
