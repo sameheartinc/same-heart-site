@@ -11,7 +11,9 @@ import {
   createReply,
   fetchProfilesByIds,
   fetchReactionSummaries,
+  flagContent,
   getThread,
+  hasFlagged,
   listReplies,
   setReaction,
   touchPresence,
@@ -22,6 +24,7 @@ import {
   type ReactionSummary,
   type ReactionTargetType,
 } from "@/lib/commons";
+import { EMPTY_PRACTICE_POINTS, normalizePracticePoints, practiceTier, type PracticePoints } from "@/lib/practices";
 
 const ACCENT = "#c9576a";
 const EMPTY_SUMMARY: ReactionSummary = { heartfelt: 0, heartache: 0, mine: null };
@@ -39,6 +42,14 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [replyBody, setReplyBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Stewardship Tier 1 -- flagging a thread or reply (see
+  // lib/practices.ts). Gated on invested Stewardship points; flaggedMap
+  // greys out a Flag button already used, same shape as reactions above.
+  const [myPracticePoints, setMyPracticePoints] = useState<PracticePoints>(EMPTY_PRACTICE_POINTS);
+  const stewardshipTier = practiceTier(myPracticePoints, "stewardship");
+  const [flaggedMap, setFlaggedMap] = useState<Record<string, boolean>>({});
+  const [flaggingId, setFlaggingId] = useState<string | null>(null);
+  const [flagError, setFlagError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -49,14 +60,18 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
       }
       setUserId(data.user.id);
       touchPresence(data.user.id); // fire-and-forget -- don't block the first paint on this
-      // Same Skin as the Hub and the Commons home -- see app/commons/page.tsx.
+      // Same Skin as the Hub and the Commons home -- see
+      // app/commons/page.tsx. Also pulls practice_points here, so the
+      // Flag button below only shows for someone who's actually
+      // unlocked Stewardship Tier 1 (see lib/practices.ts).
       supabase
         .from("profiles")
-        .select("ship_skin")
+        .select("ship_skin, practice_points")
         .eq("id", data.user.id)
         .single()
-        .then(({ data: skinRow }) => {
-          if (skinRow?.ship_skin) setMySkin(getSkin(skinRow.ship_skin));
+        .then(({ data: profileRow }) => {
+          if (profileRow?.ship_skin) setMySkin(getSkin(profileRow.ship_skin));
+          setMyPracticePoints(normalizePracticePoints(profileRow?.practice_points));
         });
       await load(data.user.id);
       setChecking(false);
@@ -82,6 +97,32 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
       fetchReactionSummaries("reply", r.map((rep) => rep.id), effectiveUid),
     ]);
     setReactions({ ...threadReactions, ...replyReactions });
+
+    // Which of these this person has already flagged (see lib/commons.ts's
+    // hasFlagged) -- same merged-by-id shape as reactions above, thread
+    // and reply ids never colliding.
+    const [threadFlags, replyFlags] = await Promise.all([
+      hasFlagged("thread", [t.id], effectiveUid),
+      hasFlagged("reply", r.map((rep) => rep.id), effectiveUid),
+    ]);
+    setFlaggedMap({ ...threadFlags, ...replyFlags });
+  }
+
+  // Stewardship Tier 1 -- the first real trust step (see
+  // lib/practices.ts). Nothing reviews or acts on a flag yet; this just
+  // starts the record and greys out the button so it reads as "done,"
+  // not as a vanishing click.
+  async function handleFlag(targetType: ReactionTargetType, targetId: string) {
+    if (!userId || flaggedMap[targetId]) return;
+    setFlaggingId(targetId);
+    setFlagError(null);
+    const result = await flagContent(targetType, targetId, userId);
+    if (result.ok) {
+      setFlaggedMap((prev) => ({ ...prev, [targetId]: true }));
+    } else {
+      setFlagError(result.error ?? "Couldn't flag that right now.");
+    }
+    setFlaggingId(null);
   }
 
   async function handleReply(e: React.FormEvent) {
@@ -143,6 +184,16 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         >
           &#128148;&nbsp;Heartache{summary.heartache > 0 ? ` ${summary.heartache}` : ""}
         </button>
+        {stewardshipTier >= 1 && (
+          <button
+            type="button"
+            onClick={() => handleFlag(targetType, targetId)}
+            disabled={flaggedMap[targetId] || flaggingId === targetId}
+            style={reactionButtonStyle(false, "var(--ink-faint, #5c6684)")}
+          >
+            {flaggedMap[targetId] ? "Flagged" : flaggingId === targetId ? "..." : "Flag"}
+          </button>
+        )}
       </div>
     );
   }
@@ -190,7 +241,25 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         <p style={{ fontFamily: "var(--font-body)", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.7, marginBottom: "10px", whiteSpace: "pre-wrap" }}>
           {thread.body}
         </p>
+        {thread.image_url && (
+          <img
+            src={thread.image_url}
+            alt=""
+            style={{ maxWidth: "100%", borderRadius: "12px", border: "1px solid var(--border)", marginBottom: "10px", display: "block" }}
+          />
+        )}
+        {thread.resource_url && (
+          <a
+            href={thread.resource_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: "inline-block", marginBottom: "10px", padding: "6px 12px", borderRadius: "999px", border: `1px solid ${ACCENT}`, color: ACCENT, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", textDecoration: "none" }}
+          >
+            Resource &rarr;
+          </a>
+        )}
         {reactionRow("thread", thread.id)}
+        {flagError && <p style={{ color: "#e0703a", fontSize: "0.78rem", margin: "8px 0 0" }}>{flagError}</p>}
 
         <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.95rem", margin: "36px 0 14px" }}>
           {replies.length === 0 ? "No replies yet" : `${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}

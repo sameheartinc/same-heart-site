@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SupportFinder from "@/components/SupportFinder";
 
 export const metadata = {
   title: "Support Services — Same Heart",
@@ -18,6 +19,7 @@ interface Resource {
 }
 
 interface Category {
+  id: string;
   title: string;
   resources: Resource[];
 }
@@ -32,6 +34,7 @@ interface Category {
 // organization's own independent line instead of the uncertain one.
 const CATEGORIES: Category[] = [
   {
+    id: "crisis",
     title: "Suicide & crisis support",
     resources: [
       {
@@ -71,6 +74,7 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "domestic-violence",
     title: "Domestic violence & abuse",
     resources: [
       {
@@ -99,6 +103,7 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "substance-use",
     title: "Substance use & mental health",
     resources: [
       {
@@ -112,6 +117,7 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "lgbtq",
     title: "LGBTQ+ support",
     resources: [
       {
@@ -135,6 +141,7 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "indigenous",
     title: "Indigenous peoples (Canada)",
     resources: [
       {
@@ -146,6 +153,7 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "general",
     title: "General help & referrals",
     resources: [
       {
@@ -240,8 +248,10 @@ export default function SupportPage() {
           and run by real crisis organizations in the US and Canada.
         </div>
 
+        <SupportFinder categories={CATEGORIES.map((cat) => ({ id: cat.id, title: cat.title }))} />
+
         {CATEGORIES.map((cat) => (
-          <div key={cat.title} style={{ marginBottom: "34px" }}>
+          <div key={cat.title} id={`category-${cat.id}`} style={{ marginBottom: "34px", scrollMarginTop: "24px" }}>
             <h2
               style={{
                 fontFamily: "var(--font-display)",

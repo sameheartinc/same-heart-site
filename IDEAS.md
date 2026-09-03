@@ -863,3 +863,345 @@ supabase/schema.sql in Supabase (drops the old view, creates the
 function, grants execute to anon + authenticated) for this to take
 effect -- until then the app keeps working off the old view exactly as
 before, so there's no rush/outage risk either way.
+
+## Landing page -- trimmed back for mystery (Sep 2, 2026)
+Rob's own call after seeing the Sep 2 copy refresh live: it had drifted
+too far toward spelling things out, and the whole point of the front
+door is that it stays a little mysterious. Removed three things from
+app/page.tsx:
+- "Most people haven't found this yet." -- said the quiet part out loud;
+  better left unsaid.
+- "A community built around what you care about * real recognition,
+  never bought * new discoveries, unlocked as you grow" -- concrete
+  texture that belonged inside the experience, not spoiled on the way in.
+- The whole collapsed "Or leave your email" waitlist form -- redundant
+  now that claiming an account or the /contact page both already capture
+  an email, and it was one more thing competing with the actual call to
+  action (Find Your Frequency).
+
+Nothing else on the page touched -- the nav, the two real CTAs (Find
+Your Frequency, Visit the Merch Ship), and the one remaining descriptive
+line ("Same Heart is live...") all stay. Verified purely subtractive via
+diff and a clean tsc --noEmit.
+
+## Support Services -- "What are you feeling?" finder (Sep 2, 2026)
+Rob asked for a way to type in a bubble on the Support Services page and
+get pointed at the right help from the existing list, with an explicit
+requirement that a message with nothing recognizable in it should come
+back as an honest null result -- not a forced guess.
+
+New `components/SupportFinder.tsx`, rendered on `app/support/page.tsx`
+right under the 911 notice, above the category list. Deliberately NOT an
+AI call of any kind -- it's a plain, deterministic keyword match against
+a fixed word/phrase list per category (crisis, domestic violence,
+substance use, LGBTQ+, Indigenous, general), scored by how many phrases
+appear in what was typed. Two rules on top of the raw scoring: (1) any
+hint of crisis language (suicide, self-harm, "want to die," etc.) always
+wins outright, even if other topics also matched in the same message --
+safety never gets averaged against or outscored by anything else; (2) if
+nothing matches anything, it says so plainly ("nothing here quite
+matched that") and points at 211 as a reasonable default, rather than
+picking a category with zero real signal.
+
+Clicking the matched category name smooth-scrolls to that section of the
+page (each category div now has a stable `id="category-<slug>"`,
+`scrollMarginTop` so the sticky-feeling scroll doesn't crop the heading).
+The 6 category slugs (crisis, domestic-violence, substance-use, lgbtq,
+indigenous, general) live in both `app/support/page.tsx` (as `id` on each
+CATEGORIES entry) and the component's KEYWORDS map -- titles themselves
+are still only defined once, in CATEGORIES, and passed into the
+component as a prop, so the two files can't drift on category names.
+
+Privacy: nothing typed is sent anywhere, stored, or logged -- it's pure
+client-side state, gone on refresh. Says so directly under the input so
+that's never in doubt on a page like this one.
+
+Verified: page.tsx diff is purely additive (new import, id fields, one
+new component render, one id/scrollMarginTop addition to the existing
+map); tsc --noEmit clean. (ESLint isn't configured in this project, so
+tsc remains the verification step, same as every other feature this
+session.)
+
+
+## Level 20 -- "pick your ship icon" reward + mission note (Sep 2, 2026)
+
+Rob, mid-way through the Prime Levels spreadsheet request: "say at level 20
+you get to pick your ship icon for the home screen. small changes that
+show you are the way to unlock the ultimate...the gateway to take away as
+much suffering from the world as possible in the little time we have..
+utilizing technologies and communicative, connected, and innovative coding
+and resource building for each site user"
+
+What this is: a concrete new Level-gated reward idea (Level 20 = the
+account gets to choose which ship icon shows on its home screen), plus a
+broader mission/North-Star statement about what all of this is in service
+of -- using the site's tech, community features, and reward pacing to
+reduce real-world suffering for the people using it.
+
+What was done: the Level 20 ship-icon idea is now documented on the new
+Prime Levels spreadsheet (see the Sep 2, 2026 spreadsheet entry below) as
+a clearly marked PROPOSED reward, distinct in color/label from the
+already-built rewards -- so it's visible in the leveling review but NOT
+silently treated as shipped.
+
+What was NOT built: no code changes. There is no ship-icon-picker UI yet,
+and no new column/field to store a chosen icon separate from the existing
+`ship_skin` field (which currently drives visual skinning via
+lib/skins.ts and is unlocked by the unrelated Aurora Unlockable at
+keysHeld >= 2 && tenureDays >= 30). Before building this for real, worth
+deciding with Rob: is this a NEW icon-choice mechanic, or is it meant to
+be the existing ship_skin selection just gated by Level 20 instead of (or
+in addition to) the Aurora keysHeld/tenure gate? Those are two different
+builds.
+
+Mission note, logged so it doesn't get lost: Rob's framing here is bigger
+than any one feature -- the leveling/rewards system, and the site broadly,
+should be judged against whether it's actually helping reduce suffering
+for real people, via genuine connection, technology, and resource-building
+-- not growth or engagement for their own sake. Worth keeping in mind when
+scoping future reward/pacing work (e.g. the "big gap after Level 10"
+finding on the new spreadsheet) -- the goal isn't to maximize time-on-site,
+it's to make people's real situations better.
+
+Verified: no code touched this entry; purely a spreadsheet + docket update.
+
+## Prime Levels & rewards spreadsheet (Sep 2, 2026)
+
+Rob: "i need you to create a spreadsheet showing your computations for all
+the attaimable levels and their thresholds etc...can you do that. cuz my
+one account is at level 15..i jsut want to make sure we are leveling
+people up and giving them rewards at certain levels."
+
+What was built: same_heart_prime_levels.xlsx, delivered via SendUserFile.
+Sheet 1 ("Prime Levels"): every Level 0-250 with its XP threshold (the
+Nth prime, per lib/primeLevels.ts), a live "XP since previous level"
+formula, a live Standing-tier lookup formula (INDEX/MATCH against a small
+reference table), and a Reward/Unlock column documenting every
+Level-gated feature found in the codebase: Deep Signals 1-10
+(lib/deepSignals.ts), the Hub's Trending bubble at Level 3
+(app/hub/page.tsx), the "name your ship" prompt at Level 5, and the new
+PROPOSED Level 20 ship-icon idea above (clearly marked as proposed, not
+built). Rob's current Level 15 row is highlighted. Sheet 2 ("Standing &
+Participation") documents the Standing tier ladder (Listener/Signal/
+Beacon/Constant/Same Heart) with a live formula computing the first Level
+each tier is reached at (Signal->22, Beacon->53, Constant->109, Same
+Heart->196 -- cross-checked against a from-scratch Python sieve before
+shipping), plus the two participation-based Unlockables from
+lib/evolution.ts (Aurora widget skin, Monetization Eligible) which are
+gated on keysHeld/tenureDays, NOT Level number, so they'd never otherwise
+show up on a Level-indexed sheet.
+
+Key finding surfaced for Rob's pacing review: every Level 1-10 currently
+has a reward, but after Level 10 there is nothing Level-indexed at all
+until the proposed Level 20 idea -- and nothing built past that through
+Level 250. The only other progress markers in that whole range are the
+four Standing-tier crossings, which are passive status labels, not
+unlocks. Flagged directly on sheet 2 as an "Observation for pacing
+review" note.
+
+Verified: ran scripts/recalc.py from the xlsx skill twice (once before
+and once after fixing an off-by-one in the Standing-tier lookup formula)
+-- final result status: success, total_errors: 0, 506 formulas. Spot-
+checked Level 15/16/20/22/53/109/195-197/250 threshold and tier values
+against an independent Python sieve computation; all matched exactly
+before delivery.
+
+
+## 1000-level system -- two full options, research-grounded (Sep 2, 2026)
+
+Rob: "i really need you to scalp the internet for the best interactive board
+games and MMOs and other games that play on this idea of experience...
+formulate after checking 50 different games which resource building
+mechanic is the best...build it close to how you can build your character
+out...in contrast to the purpose of this website...i want you to provide 2
+different options...i want you to have the entirety of all levels mapped
+out...but remember. 1000 levels" -- followed mid-turn by: "make sure when
+you build the list each level has the changes from previous levels...even
+if its minor...i want each user to feel like they are building out an
+army..this is where the donation thing will come in."
+
+What was built: same_heart_1000_levels.xlsx, delivered via SendUserFile.
+Ten sheets: a Research sheet grounding the design in ~40 named systems
+(WoW, RuneScape/OSRS, Path of Exile, Diablo Paragon, Destiny 2, Genshin
+Impact Adventure Rank, Duolingo, Habitica, Stack Overflow, Reddit,
+Wikipedia trust tiers, Discord, Khan Academy, Simply Piano/Yousician,
+Untappd, Nike Run Club, Strava/Peloton, TripAdvisor, Todoist, Pandemic
+Legacy, Gloomhaven, Risk Legacy, My City, D&D, Xbox/Steam achievements,
+FFXIV, Guild Wars 2 masteries, Elder Scrolls Online Champion Points,
+Pokemon/Pokemon GO, Clash of Clans, Animal Crossing, Stardew Valley,
+Minecraft, Overwatch/Valorant/LoL ranked, Fortnite/Apex battle passes,
+Sephora/Delta/loyalty tiers, Starbucks Rewards, Chess.com/Lichess Elo,
+LinkedIn SSI, GitHub contribution graph, Waze editor levels, Snapchat
+streaks) with a guardrails list distilled from that research (no public
+leaderboards, no gacha/RNG rewards given the site's own crisis/substance-
+use support content, nothing purchasable as a status shortcut, never
+renumber or take away existing free levels, streak-style mechanics need a
+kindness/grace mechanism, keep the restrained non-gamey tone Rob has
+already been steering toward).
+
+A "Shared Fleet Layer" sheet documents the mechanic used to satisfy "every
+level changes something, even if minor" and "feel like they're building
+an army": every single level adds one unit to a small, PRIVATE, personal
+fleet (never shown for comparison -- deliberately not Clash-of-Clans-style
+PvP), with a deterministic (never random/gacha) 6-tier rarity ladder
+(Common/Uncommon/Rare/Epic/Legendary/Mythic) driven off 5 cadence numbers
+that both options' 1000-row formulas reference live, so changing one
+number recomputes both ladders. That same sheet also flags the donation
+question explicitly rather than guessing at payment mechanics: proposed
+principle is that a donation counts as ONE MORE qualifying action toward
+the same progress everyone else earns for free, never an exclusive
+shortcut -- with the real open questions (what "donation" even means here,
+whether it's money to the platform vs. sponsoring another member) parked
+on a dedicated "Donations & Open Decisions" sheet for Rob to answer before
+anything gets built. Financial/payment flows were deliberately not
+designed further than that, per the standing rule against building actual
+money-movement without an explicit decision.
+
+Two full options, each with all 1000 levels present via live formulas
+(XP threshold reusing the existing prime-number Level math from
+lib/primeLevels.ts, unchanged -- level 1000's threshold, 7919, is already
+comfortably inside the existing SIEVE_LIMIT of 200,000, so no code change
+is needed there at all):
+
+- Option A ("Continuous Growth"): RuneScape/Duolingo-style dense small
+  choices. Every 5 levels earns a Resonance Point; every 10 levels the
+  member's most-invested "Signal Path" (Voice / Presence / Guidance /
+  Stewardship -- self-expression, showing up for others, resource
+  curation, and light trust-based moderation, respectively) advances one
+  real tier; every 25 levels is a universal unlock for everyone; every 100
+  extends the existing Deep Signals pattern; level 1000 is a capstone
+  ("Same Heart Luminary"). 80 real, hand-authored unlocks total (4 paths x
+  20 tiers each, on their own sheet), with tiers 21+ per path explicitly
+  called out as procedural/parametric rather than fabricating more bespoke
+  ideas than the design can support (same pattern Diablo's Paragon board
+  and WoW's late talent rows use).
+
+- Option B ("Chapters of Becoming"): Genshin-Adventure-Rank / legacy-
+  board-game-style sparse narrative arc. Only ~26 levels are a "big bang"
+  (10 of which are the already-built Deep Signals 1-10, kept exactly as
+  shipped; 1 is the already-proposed Level 20 ship-icon idea from earlier
+  today, kept identical; 15 are new -- First Watch at 35, Steady Hand at
+  55, Quiet Trust at 80, Gathering Place at 110, Kept Light at 150 (a
+  permanent irreversible profile mark, legacy-board-game style), Second
+  Voice at 200, Wide Net at 260, Steadier Hand at 330, Home Fire at 410,
+  Same Heart Halfway at 500, Mentor's Mark at 600, Council Seat at 710,
+  Elder Light at 830, Constant Keeper at 960, and The Same Heart as the
+  level-1000 capstone). Every other level still gets the shared Fleet-unit
+  tick, satisfying "every level changes, even if minor" without needing
+  1000 unique hand-written ideas.
+
+Both options include a Coding Notes sheet breaking the build into
+independently-shippable chunks (Option A needs a new resonance_points
+column + a profile_paths table + ~80 individually-gated features; Option
+B needs only one new pure function, `getChapter(level)`, in the same
+style as lib/standing.ts, plus ~15 independent small features) -- written
+so Rob can approve and build one chunk/level at a time, matching his own
+"go through each one and you can build the code for that level" framing.
+Gave Rob an honest lean toward Option B in the Read Me sheet: it costs far
+less to build, and better matches the site's already-established
+restrained/mysterious tone (the same instinct behind trimming the landing
+page copy) versus Option A's louder, more RPG-dense feel.
+
+What was NOT built: no code changes -- this is a design/planning
+deliverable only. No payment/donation mechanics were designed beyond
+flagging the open questions. No decision was made between Option A and B;
+that's explicitly left to Rob.
+
+Verified: ran scripts/recalc.py from the xlsx skill -- status: success,
+total_errors: 0, 10,998 formulas across both 1000-row ladders. Caught and
+fixed a real bug during verification: the shared cadence-parameter cells
+were first written as unqualified references (e.g. "$B$5"), which
+resolved to the wrong cell when used in formulas on a *different* sheet
+(silently computing garbage rarities instead of erroring -- level 1000
+showed "Epic" instead of "Mythic"). Fixed by adding the explicit
+'Shared Fleet Layer'! sheet-qualifier to every cross-sheet reference, then
+re-verified the full rarity distribution and spot-checked levels
+1/2/3/4/5/9/10/20/24/25/50/99/100/200/999/1000 by hand against the
+intended cadence before delivery.
+
+---
+
+## Option A build-start -- Practices & Ripple Points, Tier 1 of all four (Sep 2, 2026)
+
+Rob picked Option A ("Continuous Growth") of the two 1000-level designs
+and said to start writing real code, not just more planning. Shipped the
+whole point-economy engine plus one real, proven vertical slice: Tier 1
+of all four Practices, each wired to an actual, functioning feature --
+not placeholder text.
+
+**What shipped:**
+- `lib/practices.ts` -- the engine. Every 5 Levels earns one Ripple
+  Point; each point gets invested into Voice, Kinship, Guidance, or
+  Stewardship. Full 20-tier roadmap for all four written out (80 tiers
+  total), with only Tier 1 of each marked BUILT and actually wired to a
+  real feature. Tiers past the hand-authored 20 are procedural text, same
+  idea as Diablo's Paragon board or WoW's late talent rows.
+- `app/api/practices/invest/route.ts` -- the only writer of
+  `profiles.practice_points` (column-level revoke from `authenticated`,
+  same trust model as the Blue Key's accent picker). Recomputes Level and
+  unspent Ripple Points itself from XP rather than trusting the client.
+- `lib/commons.ts` -- added `image_url`/`resource_url` to
+  `CommonsThread`, extended `createThread()` to accept them, and added
+  `flagContent()`/`hasFlagged()` against a new `commons_flags` table.
+- `app/hub/page.tsx` -- a new "Practices" panel (same bordered-panel
+  style as Kindred Sparks, sitting right below it) showing unspent Ripple
+  Points and an Invest button per Practice.
+- `app/commons/c/[slug]/page.tsx` -- the thread composer now shows a
+  real image-upload field (Voice Tier 1, using a new Supabase Storage
+  `commons-images` bucket) and a resource-link field (Guidance Tier 1),
+  each only once that Practice's first point is invested.
+- `app/commons/t/[id]/page.tsx` -- displays an attached image or
+  resource link on a thread, and adds a gated Flag button (Stewardship
+  Tier 1) next to the existing Heartfelt/Heartache reactions, on both
+  threads and replies.
+
+**Tier 1 choices, per Practice:**
+- Voice: attach one image to an original thread (Rob's own explicit
+  choice, via AskUserQuestion, over a smaller "quiet marker" default I'd
+  recommended -- bigger scope, but his call, made with full awareness it
+  needed new upload infrastructure).
+- Kinship: your own reaction history becomes visible to you (a quiet,
+  private list).
+- Guidance: attach one external resource link to an original thread
+  (threads only for now, confirmed with Rob -- replies later).
+- Stewardship: flag a thread or reply for review -- the first real trust
+  primitive this site has. Confirmed to ship now even though nothing
+  reviews or acts on a flag yet; a real review side is a later tier.
+
+**Naming, caught before writing code:** the original design doc's
+"Signal Paths" / "Presence" language collided with things this site
+already has -- `lib/paths.ts`'s Path (guardian/seeker/weaver/flame), the
+Signal Standing tier + Deep Signals, and `touchPresence()` (who's online
+right now). Renamed to Practices / Kinship / Ripple Points, confirmed
+collision-free by grep before Rob signed off on the name.
+
+**Design-doc ideas invalidated by the real codebase, caught before
+writing code:** Voice's original Tier 1 ("extended post length") --
+no post-length limit exists anywhere to extend. The original Presence
+Tier 1 ("second reaction type unlocked early") -- both reaction kinds
+are already free for everyone. Voice's later "custom post accent color"
+tier collides with the already-built Blue Heart String's
+`commons_accent` door -- left unbuilt with an inline comment flagging the
+conflict rather than building a duplicate. Stewardship's whole premise
+assumed a flagging/moderation system that didn't exist -- built it from
+scratch as Tier 1 instead of assuming it.
+
+**Migration Rob needs to run himself** (never run migrations from here):
+adds `profiles.practice_points` (jsonb, revoked from `authenticated`),
+`commons_threads.image_url` / `.resource_url`, the `commons-images`
+Storage bucket with public-read/own-folder-write policies, and the new
+`commons_flags` table with its own RLS. Nothing removes or alters
+existing data -- every change is additive.
+
+**What was deliberately deferred:** Tiers 2-20 of all four Practices
+(the full roadmap is already written in `lib/practices.ts`, ready to
+build one at a time as Rob greenlights each). The Voice/accent-color
+naming conflict (flagged, not resolved). Any server-side re-check of
+Voice/Guidance eligibility on `createThread()` -- today a client-gated
+field with no matching server enforcement, a cosmetic gap rather than a
+security one, since nothing of real value rides on those two columns.
+
+**Verified:** every file diffed against a pre-edit backup, confirming
+each change was additive-only, before writing anything. `npx tsc
+--noEmit` run across the whole batch after all five files were written --
+0 errors, exit code 0.

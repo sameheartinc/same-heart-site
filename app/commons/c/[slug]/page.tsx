@@ -19,6 +19,7 @@ import {
   type CommonsThread,
   type PublicProfile,
 } from "@/lib/commons";
+import { EMPTY_PRACTICE_POINTS, normalizePracticePoints, practiceTier, type PracticePoints } from "@/lib/practices";
 
 export default function CommunityPage({ params }: { params: { slug: string } }) {
   const router = useRouter();
@@ -40,6 +41,16 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  // Voice Tier 1 (image attachment) / Guidance Tier 1 (resource link) --
+  // see lib/practices.ts. Gated on the poster's own invested Practice
+  // points, fetched alongside ship_skin below.
+  const [myPracticePoints, setMyPracticePoints] = useState<PracticePoints>(EMPTY_PRACTICE_POINTS);
+  const voiceTier = practiceTier(myPracticePoints, "voice");
+  const guidanceTier = practiceTier(myPracticePoints, "guidance");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [resourceUrl, setResourceUrl] = useState("");
 
   // Joining used to be a dead end -- Rob's own report was that after
   // clicking Join, there was nothing left to click to actually say
@@ -60,14 +71,18 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
       }
       setUserId(data.user.id);
       touchPresence(data.user.id); // fire-and-forget -- don't block the first paint on this
-      // Same Skin as the Hub and the rest of the Commons -- see app/commons/page.tsx.
+      // Same Skin as the Hub and the rest of the Commons -- see
+      // app/commons/page.tsx. Also pulls practice_points here, so the
+      // composer below can show the Voice/Guidance fields only to
+      // someone who's actually unlocked them (see lib/practices.ts).
       supabase
         .from("profiles")
-        .select("ship_skin")
+        .select("ship_skin, practice_points")
         .eq("id", data.user.id)
         .single()
-        .then(({ data: skinRow }) => {
-          if (skinRow?.ship_skin) setMySkin(getSkin(skinRow.ship_skin));
+        .then(({ data: profileRow }) => {
+          if (profileRow?.ship_skin) setMySkin(getSkin(profileRow.ship_skin));
+          setMyPracticePoints(normalizePracticePoints(profileRow?.practice_points));
         });
 
       const c = await getCommunityBySlug(params.slug);
@@ -105,13 +120,46 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
     }
   }
 
+  // Voice Tier 1 -- uploads straight into the commons-images bucket
+  // (see supabase/schema.sql's Option A migration), into a folder
+  // prefixed with this person's own uid, which is what the bucket's
+  // insert policy actually checks. Uploads immediately on file choice
+  // so the composer can show a real preview before Post is even
+  // clicked, rather than holding the raw file in memory until submit.
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    setImageUploading(true);
+    setImageError(null);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${userId}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("commons-images").upload(path, file);
+      if (uploadError) throw uploadError;
+      const { data: publicUrlData } = supabase.storage.from("commons-images").getPublicUrl(path);
+      setImageUrl(publicUrlData.publicUrl);
+    } catch {
+      setImageError("Couldn't upload that image -- try again in a moment.");
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
   async function handleCreateThread(e: React.FormEvent) {
     e.preventDefault();
     if (!userId || !community || !title.trim() || !body.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const thread = await createThread({ communityId: community.id, profileId: userId, kind, title, body });
+      const thread = await createThread({
+        communityId: community.id,
+        profileId: userId,
+        kind,
+        title,
+        body,
+        imageUrl: voiceTier >= 1 ? imageUrl : null,
+        resourceUrl: guidanceTier >= 1 ? resourceUrl.trim() || null : null,
+      });
       router.push(`/commons/t/${thread.id}`);
     } catch {
       setError("Couldn't post that -- try again in a moment.");
@@ -242,6 +290,38 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
               required
               style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--void)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: "0.88rem", marginBottom: "8px", resize: "vertical" }}
             />
+            {voiceTier >= 1 && (
+              <div style={{ marginBottom: "8px" }}>
+                <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)", marginBottom: "6px" }}>
+                  Attach an image (Voice)
+                </label>
+                {imageUrl ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <img src={imageUrl} alt="" style={{ width: "56px", height: "56px", objectFit: "cover", borderRadius: "8px", border: "1px solid var(--border)" }} />
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl(null)}
+                      style={{ padding: "4px 10px", borderRadius: "999px", border: "1px solid var(--border)", background: "none", color: "var(--ink-dim)", fontFamily: "var(--font-mono)", fontSize: "9px", textTransform: "uppercase", cursor: "pointer" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <input type="file" accept="image/*" onChange={handleImageChange} disabled={imageUploading} style={{ fontFamily: "var(--font-body)", fontSize: "0.82rem", color: "var(--ink-dim)" }} />
+                )}
+                {imageUploading && <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "var(--ink-dim)" }}>Uploading...</p>}
+                {imageError && <p style={{ margin: "6px 0 0", color: "#e0703a", fontSize: "0.78rem" }}>{imageError}</p>}
+              </div>
+            )}
+            {guidanceTier >= 1 && (
+              <input
+                value={resourceUrl}
+                onChange={(e) => setResourceUrl(e.target.value)}
+                placeholder="Resource link (Guidance) -- optional"
+                type="url"
+                style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--void)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: "0.88rem", marginBottom: "8px" }}
+              />
+            )}
             {error && <p style={{ color: "#e0703a", fontSize: "0.8rem", margin: "0 0 8px" }}>{error}</p>}
             <button type="submit" disabled={busy} style={{ padding: "10px 18px", borderRadius: "10px", border: "none", background: accent, color: "#1a0d10", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer" }}>
               {busy ? "Posting..." : "Post"}

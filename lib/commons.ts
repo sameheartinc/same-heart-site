@@ -40,6 +40,12 @@ export interface CommonsThread {
   created_at: string;
   reply_count: number;
   last_activity_at: string;
+  // Voice Tier 1 (image_url) and Guidance Tier 1 (resource_url) --
+  // both nullable and additive, see supabase/schema.sql's Option A
+  // migration. Every existing thread keeps working exactly as before
+  // with these left unset.
+  image_url: string | null;
+  resource_url: string | null;
 }
 
 export interface CommonsReply {
@@ -324,6 +330,15 @@ export async function createThread(input: {
   kind: "discussion" | "question";
   title: string;
   body: string;
+  // Voice Tier 1 / Guidance Tier 1 -- both optional, gated client-side
+  // on the poster's own Practice tier before the composer even shows
+  // these fields (see app/commons/c/[slug]/page.tsx). Nothing here
+  // re-checks eligibility server-side yet: worst case today is a
+  // thread with an image or link from someone who hasn't unlocked the
+  // tier, which is a cosmetic gap, not a security one -- commons_threads
+  // has no XP/money/trust value riding on these two columns.
+  imageUrl?: string | null;
+  resourceUrl?: string | null;
 }) {
   const { data, error } = await supabase
     .from("commons_threads")
@@ -333,6 +348,8 @@ export async function createThread(input: {
       kind: input.kind,
       title: input.title.trim(),
       body: input.body.trim(),
+      image_url: input.imageUrl ?? null,
+      resource_url: input.resourceUrl ?? null,
     })
     .select()
     .single();
@@ -513,5 +530,51 @@ export async function listMyNotifications(limit = 20): Promise<CommonsNotificati
 export async function markNotificationsRead(ids: string[]) {
   if (ids.length === 0) return;
   await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", ids);
+}
+
+// Stewardship Tier 1 -- the first real trust step (see lib/practices.ts).
+// Nothing reviews or acts on a flag yet; this just starts the record.
+// The unique(profile_id, target_type, target_id) constraint on
+// commons_flags means a repeat flag from the same person on the same
+// thing is a harmless no-op via upsert, never a duplicate row.
+export async function flagContent(
+  targetType: ReactionTargetType,
+  targetId: string,
+  profileId: string,
+  category?: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("commons_flags")
+    .upsert(
+      { profile_id: profileId, target_type: targetType, target_id: targetId, category: category ?? null },
+      { onConflict: "profile_id,target_type,target_id" }
+    );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// Batch-check which of a set of targets this person has already flagged
+// -- same shape as fetchReactionSummaries, so a thread page can grey out
+// (rather than re-submit) a Flag button for something already flagged.
+// RLS on commons_flags only lets someone see their own flags, so this
+// never leaks who else flagged what.
+export async function hasFlagged(
+  targetType: ReactionTargetType,
+  targetIds: string[],
+  profileId: string | null
+): Promise<Record<string, boolean>> {
+  const unique = Array.from(new Set(targetIds)).filter(Boolean);
+  const flagged: Record<string, boolean> = {};
+  for (const id of unique) flagged[id] = false;
+  if (unique.length === 0 || !profileId) return flagged;
+  const { data, error } = await supabase
+    .from("commons_flags")
+    .select("target_id")
+    .eq("target_type", targetType)
+    .eq("profile_id", profileId)
+    .in("target_id", unique);
+  if (error || !data) return flagged;
+  for (const row of data as Array<{ target_id: string }>) flagged[row.target_id] = true;
+  return flagged;
 }
 

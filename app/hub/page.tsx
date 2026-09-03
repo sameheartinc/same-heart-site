@@ -24,6 +24,18 @@ import { listMyUnlocks, evaluateEvolution } from "@/lib/evolution";
 import { getMyMonetizationStatus, applyForMonetization, type MonetizationStatus } from "@/lib/monetization";
 import { findKindredSparks, setKindredOptOut, type KindredMatch } from "@/lib/kindredSparks";
 import { FALLBACK_SKINS, loadWidgetSkins, type WidgetSkin, type WidgetSkinKey } from "@/lib/widgetSkins";
+import {
+  PRACTICE_ORDER,
+  PRACTICES,
+  EMPTY_PRACTICE_POINTS,
+  normalizePracticePoints,
+  investRipplePoint,
+  practiceTier,
+  practiceTierText,
+  unspentRipplePoints,
+  type PracticeKey,
+  type PracticePoints,
+} from "@/lib/practices";
 import WidgetFrame from "@/components/WidgetFrame";
 
 type Profile = {
@@ -43,6 +55,7 @@ type Profile = {
   commons_accent: string | null;
   hub_background_url: string | null;
   kindred_opt_out: boolean;
+  practice_points: unknown;
 };
 
 type LogEntry = {
@@ -106,6 +119,13 @@ export default function HubPage() {
   const [nameDraft, setNameDraft] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+  // Practices / Ripple Points -- Option A of the two 1000-level designs
+  // (see lib/practices.ts and IDEAS.md's build-start entry). Every 5
+  // Levels earns one Ripple Point to invest into Voice, Kinship,
+  // Guidance, or Stewardship.
+  const [practicePoints, setPracticePoints] = useState<PracticePoints>(EMPTY_PRACTICE_POINTS);
+  const [investingPractice, setInvestingPractice] = useState<PracticeKey | null>(null);
+  const [practiceError, setPracticeError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -118,7 +138,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points"
         )
         .eq("id", userData.user.id)
         .single();
@@ -218,6 +238,7 @@ export default function HubPage() {
            missed celebration banner isn't worth surfacing an error for. */
       }
       setKeys(myKeys);
+      setPracticePoints(normalizePracticePoints(currentProfile.practice_points));
       setUnlockedIds(new Set(myUnlocks));
       setMonetizationStatus(myMonetizationStatus);
       setNotifications(myNotifications);
@@ -288,6 +309,22 @@ export default function HubPage() {
   async function signOut() {
     await supabase.auth.signOut();
     router.replace("/login");
+  }
+
+  // Spends one unspent Ripple Point into a Practice. The server
+  // (app/api/practices/invest/route.ts) is the real gate -- this just
+  // reflects whatever it confirms back, same trust posture as the Blue
+  // key's accent picker.
+  async function investPractice(key: PracticeKey) {
+    setInvestingPractice(key);
+    setPracticeError(null);
+    const result = await investRipplePoint(key);
+    if (result.ok && result.points) {
+      setPracticePoints(result.points);
+    } else {
+      setPracticeError(result.error ?? "Couldn't invest that point right now.");
+    }
+    setInvestingPractice(null);
   }
 
   // Monetization gate, part 6 -- the Hub's own apply button. Eligibility
@@ -1806,6 +1843,145 @@ export default function HubPage() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Practices -- Voice, Kinship, Guidance, Stewardship (Option A
+            of the two 1000-level designs; see lib/practices.ts and
+            IDEAS.md's build-start entry). Every 5 Levels earns a Ripple
+            Point to invest into whichever Practice this person wants to
+            grow -- deliberately never automatic, so leveling up is also
+            a small, real choice. Sits right below Kindred Sparks, same
+            bordered-panel styling. Only Tier 1 of each is a real,
+            shipped feature so far (see lib/practices.ts's BUILT
+            markers) -- further tiers show as roadmap text either way,
+            same honesty as the rest of this page. */}
+        {profile && (
+          <div
+            style={{
+              marginBottom: "22px",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel, transparent)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginBottom: "10px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Practices
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                {unspentRipplePoints(getLevel(profile.xp), practicePoints)} unspent Ripple Point
+                {unspentRipplePoints(getLevel(profile.xp), practicePoints) === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {PRACTICE_ORDER.map((key) => {
+                const def = PRACTICES[key];
+                const tier = practiceTier(practicePoints, key);
+                const unspent = unspentRipplePoints(getLevel(profile.xp), practicePoints);
+                return (
+                  <div
+                    key={key}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      background: "var(--widget-panel-soft, rgba(255,255,255,0.03))",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          fontFamily: "var(--font-display)",
+                          fontWeight: 700,
+                          fontSize: "0.85rem",
+                          color: "var(--widget-text)",
+                        }}
+                      >
+                        {def.name}
+                        {tier > 0 ? ` -- Tier ${tier}` : ""}
+                      </p>
+                      {unspent > 0 && (
+                        <button
+                          onClick={() => investPractice(key)}
+                          disabled={investingPractice !== null}
+                          style={{
+                            padding: "3px 9px",
+                            borderRadius: "8px",
+                            border: "1px solid var(--widget-border)",
+                            background: "none",
+                            color: "var(--widget-text-faint)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "8px",
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {investingPractice === key ? "..." : "Invest"}
+                        </button>
+                      )}
+                    </div>
+                    <p
+                      style={{
+                        margin: "3px 0 0",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "9px",
+                        letterSpacing: "0.02em",
+                        color: "var(--widget-text-faint)",
+                      }}
+                    >
+                      {tier > 0
+                        ? practiceTierText(key, tier)
+                        : `Invest a Ripple Point to unlock ${def.name}'s first tier.`}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            {practiceError && (
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-rose)",
+                }}
+              >
+                {practiceError}
+              </p>
             )}
           </div>
         )}

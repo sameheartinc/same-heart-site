@@ -197,18 +197,6 @@ export default function Home() {
           Same Heart&trade; &middot; First Signal
         </p>
 
-        <p
-          style={{
-            fontFamily: "var(--font-body)",
-            fontStyle: "italic",
-            color: "var(--ink-dim)",
-            fontSize: "1.02rem",
-            margin: "0 0 26px",
-          }}
-        >
-          Most people haven&rsquo;t found this yet.
-        </p>
-
         <Link
           href="/login"
           className="frequency-cta"
@@ -246,84 +234,10 @@ export default function Home() {
           keep coming back.
         </p>
 
-        <p
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "9px",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--ink-faint, #5c6684)",
-            maxWidth: "46ch",
-            margin: "0 0 26px",
-            lineHeight: 1.9,
-          }}
-        >
-          A community built around what you care about &middot; real
-          recognition, never bought &middot; new discoveries, unlocked as
-          you grow
-        </p>
-
-        <Link href="/shop" className="merch-cta" style={{ marginTop: "4px" }}>
+        <Link href="/shop" className="merch-cta" style={{ marginTop: "18px" }}>
           Visit the Merch Ship
         </Link>
 
-        {/* Collapsed by default -- nothing shows until someone clicks it.
-            Replace with a real waitlist write to Supabase later if wanted
-            (see the "profiles" table in supabase/schema.sql). */}
-        <details style={{ marginTop: "22px" }}>
-          <summary
-            style={{
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: "var(--ink-faint, #5c6684)",
-            }}
-          >
-            Or leave your email
-          </summary>
-          <form
-            style={{
-              marginTop: "14px",
-              display: "flex",
-              gap: "8px",
-              flexWrap: "wrap",
-              justifyContent: "center",
-            }}
-          >
-            <input
-              type="email"
-              placeholder="your@email.com"
-              style={{
-                background: "var(--panel)",
-                border: "1px solid var(--border)",
-                borderRadius: "999px",
-                padding: "9px 14px",
-                color: "var(--ink)",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.85rem",
-                minWidth: "200px",
-              }}
-            />
-            <button
-              type="submit"
-              style={{
-                background: "none",
-                border: "1px solid var(--gold)",
-                borderRadius: "999px",
-                padding: "9px 16px",
-                color: "var(--gold)",
-                fontFamily: "var(--font-display)",
-                fontWeight: 600,
-                fontSize: "0.8rem",
-                cursor: "pointer",
-              }}
-            >
-              Notify me
-            </button>
-          </form>
-        </details>
       </div>
 
       {/* Plays a soft heartbeat chime on tap/click -- browsers only allow
