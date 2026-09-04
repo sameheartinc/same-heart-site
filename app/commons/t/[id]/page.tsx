@@ -15,6 +15,7 @@ import {
   getThread,
   hasFlagged,
   listReplies,
+  sendEncouragementNote,
   setReaction,
   touchPresence,
   type CommonsReply,
@@ -60,6 +61,20 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [shelfUrls, setShelfUrls] = useState<Set<string>>(new Set());
   const [savingShelf, setSavingShelf] = useState(false);
   const [shelfError, setShelfError] = useState<string | null>(null);
+  // Kinship Tier 2 -- a private encouragement note on someone else's
+  // reply (see lib/commons.ts's sendEncouragementNote). encouragedIds is
+  // just this session's own "already sent" memory -- RLS only lets a
+  // reader see notifications addressed TO them, not ones they sent, so
+  // there's no query that could ask "did I already note this reply"
+  // across visits. Harmless: the DB function itself still blocks a
+  // second note on the same reply either way, this just keeps the
+  // button from re-opening once it already worked.
+  const kinshipTier = practiceTier(myPracticePoints, "kinship");
+  const [encouragingReplyId, setEncouragingReplyId] = useState<string | null>(null);
+  const [encourageText, setEncourageText] = useState("");
+  const [sendingEncourage, setSendingEncourage] = useState(false);
+  const [encourageError, setEncourageError] = useState<string | null>(null);
+  const [encouragedIds, setEncouragedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
@@ -154,6 +169,33 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
       setFlagError(result.error ?? "Couldn't flag that right now.");
     }
     setFlaggingId(null);
+  }
+
+  function openEncourage(replyId: string) {
+    setEncouragingReplyId(replyId);
+    setEncourageText("");
+    setEncourageError(null);
+  }
+
+  function cancelEncourage() {
+    setEncouragingReplyId(null);
+    setEncourageText("");
+    setEncourageError(null);
+  }
+
+  async function submitEncourage(replyId: string) {
+    if (!encourageText.trim()) return;
+    setSendingEncourage(true);
+    setEncourageError(null);
+    const result = await sendEncouragementNote(replyId, encourageText);
+    setSendingEncourage(false);
+    if (!result.ok) {
+      setEncourageError(result.error ?? "Couldn't send that right now.");
+      return;
+    }
+    setEncouragedIds((prev) => new Set(prev).add(replyId));
+    setEncouragingReplyId(null);
+    setEncourageText("");
   }
 
   async function handleReply(e: React.FormEvent) {
@@ -327,6 +369,56 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
                 {r.body}
               </p>
               {reactionRow("reply", r.id)}
+              {/* Kinship Tier 2 -- see lib/commons.ts's
+                  sendEncouragementNote. Never shown on your own reply --
+                  the note is for showing up for someone else. */}
+              {kinshipTier >= 2 && r.profile_id !== userId && (
+                <div style={{ marginTop: "8px" }}>
+                  {encouragedIds.has(r.id) ? (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-faint, #a29cb0)" }}>
+                      Note sent
+                    </span>
+                  ) : encouragingReplyId === r.id ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <textarea
+                        value={encourageText}
+                        onChange={(e) => setEncourageText(e.target.value)}
+                        placeholder="A private word of encouragement, just for them..."
+                        rows={2}
+                        maxLength={280}
+                        style={{ width: "100%", padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--panel)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: "0.85rem", resize: "vertical" }}
+                      />
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          type="button"
+                          onClick={() => submitEncourage(r.id)}
+                          disabled={sendingEncourage || !encourageText.trim()}
+                          style={{ padding: "5px 12px", borderRadius: "999px", border: "none", background: "#5b5fc7", color: "#fff", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", cursor: sendingEncourage ? "default" : "pointer" }}
+                        >
+                          {sendingEncourage ? "Sending..." : "Send privately"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEncourage}
+                          disabled={sendingEncourage}
+                          style={{ padding: "5px 12px", borderRadius: "999px", border: "1px solid var(--border)", background: "none", color: "var(--ink-dim)", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", cursor: "pointer" }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {encourageError && <p style={{ color: "#e0703a", fontSize: "0.76rem", margin: 0 }}>{encourageError}</p>}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openEncourage(r.id)}
+                      style={{ padding: "5px 11px", borderRadius: "999px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink-dim)", fontFamily: "var(--font-mono)", fontSize: "10px", letterSpacing: "0.02em", cursor: "pointer" }}
+                    >
+                      &#128172;&nbsp;Encourage
+                    </button>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>

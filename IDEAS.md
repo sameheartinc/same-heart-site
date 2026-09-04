@@ -1594,3 +1594,69 @@ Verified with `npx tsc --noEmit` on the actual device files after
 committing (clean) and diffs against pre-edit backups on every file
 touched. Migration SQL given to Rob to paste into Supabase separately
 (same "paste only this block" instruction as every prior migration).
+
+## Kinship Tier 2: private encouragement notes on a reply (Sep 4, 2026)
+
+Picked from a menu after Guidance Tier 2 shipped. Recommended and chosen
+over Voice Tier 3 (simpler, but Kinship Tier 2 had been explicitly
+deferred once already, when Guidance Tier 2 got picked instead) and
+over pulling something else off the general docket.
+
+Different trust shape than Guidance Tier 2's Resource Shelf: a
+Resource Shelf row only ever touches the saver's own data, so RLS alone
+was enough. An encouragement note lands on SOMEONE ELSE's notifications
+row -- a real cross-user write -- so it follows the existing
+notify_thread_reply() pattern instead: notifications has no insert
+policy for anyone, and a single narrow SECURITY DEFINER function
+(send_encouragement_note) is the only way a row gets created. That
+function re-derives the sender's real Kinship Tier from
+profiles.practice_points itself before doing anything, so a client-side
+bypass of the Tier 2 check in the UI can't actually send a note early --
+the database is the real gate here, not the button being hidden.
+
+What was built:
+- supabase/schema.sql: `notifications` gets a new nullable `reply_id`
+  column (purely additive), plus `send_encouragement_note(p_reply_id,
+  p_note)` -- validates the note is 1-280 chars, checks the sender's
+  real Kinship Tier >= 2, looks up the reply's real author, blocks
+  self-notes, blocks sending a second note to the same reply, then
+  inserts a notification of kind 'encouragement' addressed to the
+  reply's author.
+- lib/commons.ts: sendEncouragementNote(replyId, note) wraps the RPC
+  call.
+- app/commons/t/[id]/page.tsx: once Kinship Tier 2 is unlocked, every
+  reply that ISN'T yours gets a small "Encourage" button. Clicking it
+  opens an inline textarea (280 char cap) with Send/Cancel; sending
+  clears to a quiet "Note sent" label for the rest of that visit.
+- No Hub changes needed -- the existing notifications bell/panel
+  already renders any notification generically ({author} {body}), so
+  an encouragement note just shows up there as "Jane left you a note on
+  your reply: '...'" the same way a reply notification already does.
+
+Note: the "Note sent" state is session-local only (component state, not
+persisted) -- RLS only lets someone read notifications addressed TO
+them, not ones they sent, so there's no query that could reconstruct
+"have I already encouraged this reply" across visits. Harmless: the
+database function still blocks a real duplicate note either way: this
+is purely about the button not re-opening after it already worked.
+
+Verified with `npx tsc --noEmit` on the actual device files after
+committing (clean) and diffs against pre-edit backups on every file
+touched (lib/commons.ts, lib/practices.ts,
+app/commons/t/[id]/page.tsx, supabase/schema.sql).
+
+**Follow-up (same day):** Rob's paste of just the Kinship Tier 2 block
+hit `42P01: relation "notifications" does not exist` -- turned out the
+much older "Notifications, v1" migration (the `notifications` table +
+`notify_thread_reply()`, already sitting in schema.sql from before this
+session) had never actually been run against the live database. Reply
+notifications have therefore been silently failing this whole time
+(best-effort try/catch in lib/commons.ts's createReply swallows the
+error, so replying itself was never affected -- just the notification
+never landed, and the Hub's notification bell has just been quietly
+empty). Gave Rob one combined block covering both the original
+Notifications, v1 migration and the new Kinship Tier 2 additions, so
+this single paste turns on reply notifications AND encouragement notes
+at once. Nothing here is new app behavior beyond what was already
+built and described above -- just closing a gap where old code was
+running against a table that never existed.

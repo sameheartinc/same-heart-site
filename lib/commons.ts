@@ -578,3 +578,16 @@ export async function hasFlagged(
   return flagged;
 }
 
+// Kinship Tier 2 -- a private encouragement note left on someone else's
+// reply (see lib/practices.ts). Unlike Guidance Tier 2's Resource Shelf,
+// this write lands on someone ELSE's notifications row, not the
+// sender's own, so it can't be a plain client insert behind RLS --
+// routed through the send_encouragement_note() function instead (see
+// supabase/schema.sql), which re-derives the sender's real Kinship Tier
+// from their profile itself rather than trusting anything from here.
+export async function sendEncouragementNote(replyId: string, note: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.rpc("send_encouragement_note", { p_reply_id: replyId, p_note: note });
+  if (error) return { ok: false, error: error.message || "Couldn't send that right now." };
+  return { ok: true };
+}
+

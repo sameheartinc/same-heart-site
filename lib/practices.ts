@@ -76,7 +76,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     theme: "showing up for other people",
     tiers: [
       "Your own reaction history becomes visible to you -- a quiet list only you can see.", // BUILT
-      "Can leave a private encouragement note on someone's reply.",
+      "Can leave a private encouragement note on someone's reply.", // BUILT -- lib/commons.ts's sendEncouragementNote, "Encourage" button on replies, delivered via the existing notifications panel
       "Private 'Steady Kinship' streak tracker (never shown publicly, never punishing).",
       "Can send a one-time 'thinking of you' nudge to a thread's author.",
       "Reaction combinations on long threads.",

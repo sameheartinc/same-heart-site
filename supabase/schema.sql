@@ -1222,3 +1222,70 @@ create policy "Users manage their own resource shelf" on resource_shelf
   with check (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Kinship Tier 2: a private encouragement note on someone else's reply
+-- (see lib/practices.ts's PRACTICES.kinship.tiers[1]). Different trust
+-- shape than Guidance Tier 2's Resource Shelf just above -- this write
+-- lands on SOMEONE ELSE's notifications row, not the sender's own, so
+-- it can't be a plain client insert behind ordinary RLS the way
+-- resource_shelf is. Same posture as notify_thread_reply's comment
+-- above: notifications has no insert policy for anyone, only a narrow
+-- SECURITY DEFINER function may write into it. This function re-derives
+-- the sender's real Kinship Tier from profiles.practice_points itself
+-- -- never trusts a client claim -- so the Tier check in the UI is a
+-- courtesy for a good default experience, not the real gate.
+-- ============================================================
+
+alter table notifications add column if not exists reply_id uuid references commons_replies(id) on delete cascade;
+
+create or replace function public.send_encouragement_note(p_reply_id uuid, p_note text)
+returns void as $$
+declare
+  v_recipient uuid;
+  v_thread_id uuid;
+  v_sender uuid := auth.uid();
+  v_kinship_tier integer;
+  v_clean text := trim(p_note);
+begin
+  if v_sender is null then
+    raise exception 'Sign in first.';
+  end if;
+
+  if v_clean = '' or char_length(v_clean) > 280 then
+    raise exception 'Notes must be between 1 and 280 characters.';
+  end if;
+
+  select coalesce((practice_points->>'kinship')::int, 0) into v_kinship_tier
+  from profiles where id = v_sender;
+
+  if coalesce(v_kinship_tier, 0) < 2 then
+    raise exception 'Kinship Tier 2 not unlocked yet.';
+  end if;
+
+  select profile_id, thread_id into v_recipient, v_thread_id
+  from commons_replies where id = p_reply_id;
+
+  if v_recipient is null then
+    raise exception 'That reply no longer exists.';
+  end if;
+
+  if v_recipient = v_sender then
+    raise exception 'You can''t send yourself an encouragement note.';
+  end if;
+
+  if exists (
+    select 1 from notifications
+    where kind = 'encouragement' and actor_id = v_sender and reply_id = p_reply_id
+  ) then
+    raise exception 'Already sent a note on this reply.';
+  end if;
+
+  insert into notifications (profile_id, actor_id, kind, thread_id, reply_id, body)
+  values (v_recipient, v_sender, 'encouragement', v_thread_id, p_reply_id, 'left you a note on your reply: "' || v_clean || '"');
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function public.send_encouragement_note(uuid, text) to authenticated;
+
+notify pgrst, 'reload schema';
