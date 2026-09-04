@@ -37,6 +37,7 @@ import {
   type PracticeKey,
   type PracticePoints,
 } from "@/lib/practices";
+import { listMyShelf, removeFromShelf, RESOURCE_SHELF_CAP, type ShelfItem } from "@/lib/resourceShelf";
 import WidgetFrame from "@/components/WidgetFrame";
 
 type Profile = {
@@ -128,6 +129,11 @@ export default function HubPage() {
   const [practicePoints, setPracticePoints] = useState<PracticePoints>(EMPTY_PRACTICE_POINTS);
   const [investingPractice, setInvestingPractice] = useState<PracticeKey | null>(null);
   const [practiceError, setPracticeError] = useState<string | null>(null);
+  // Guidance Tier 2 -- the personal Resource Shelf (see
+  // lib/resourceShelf.ts).
+  const [shelf, setShelf] = useState<ShelfItem[]>([]);
+  const [removingShelfId, setRemovingShelfId] = useState<string | null>(null);
+  const [shelfError, setShelfError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -296,6 +302,27 @@ export default function HubPage() {
       }
     })();
   }, [router]);
+
+  // Guidance Tier 2 -- loads the Resource Shelf once both userId and
+  // practicePoints have actually landed from the effect above, same
+  // "wait for the real tier, don't guess" pattern the Signal suggestion
+  // list on app/signal/page.tsx uses.
+  useEffect(() => {
+    if (!userId || practiceTier(practicePoints, "guidance") < 2) return;
+    listMyShelf(userId).then(setShelf);
+  }, [userId, practicePoints]);
+
+  async function removeShelfItem(itemId: string) {
+    setRemovingShelfId(itemId);
+    setShelfError(null);
+    const result = await removeFromShelf(itemId);
+    setRemovingShelfId(null);
+    if (!result.ok) {
+      setShelfError(result.error ?? "Couldn't remove that right now.");
+      return;
+    }
+    setShelf((prev) => prev.filter((item) => item.id !== itemId));
+  }
 
   // Kindred Sparks opt-out -- flips profiles.kindred_opt_out and clears
   // (or reloads) the widget's matches to match the new state immediately,
@@ -2065,6 +2092,134 @@ export default function HubPage() {
                 }}
               >
                 {practiceError}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Resource Shelf -- Guidance Tier 2 (see lib/resourceShelf.ts).
+            Only shows once the Tier is actually reached; the "Save to
+            Shelf" button that fills this lives on each thread's own
+            page (app/commons/t/[id]/page.tsx), next to its resource
+            link. */}
+        {practiceTier(practicePoints, "guidance") >= 2 && (
+          <div
+            style={{
+              marginBottom: "22px",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel, transparent)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginBottom: "10px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Resource Shelf
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                {shelf.length} of {RESOURCE_SHELF_CAP} saved
+              </span>
+            </div>
+            {shelf.length === 0 ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Nothing saved yet -- look for "Save to Shelf" next to a resource link in the Commons.
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {shelf.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      padding: "8px 10px",
+                      borderRadius: "8px",
+                      background: "var(--widget-panel-soft, rgba(255,255,255,0.03))",
+                    }}
+                  >
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        fontFamily: "var(--font-display)",
+                        fontWeight: 600,
+                        fontSize: "0.85rem",
+                        color: "var(--widget-text)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      {item.title}
+                    </a>
+                    <button
+                      onClick={() => removeShelfItem(item.id)}
+                      disabled={removingShelfId === item.id}
+                      style={{
+                        flexShrink: 0,
+                        padding: "3px 9px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--widget-border)",
+                        background: "none",
+                        color: "var(--widget-text-faint)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {removingShelfId === item.id ? "..." : "Remove"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {shelfError && (
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-rose)",
+                }}
+              >
+                {shelfError}
               </p>
             )}
           </div>

@@ -1547,3 +1547,50 @@ can't flip past vertical), and the icon flicker's opacity swing deepened
 from a barely-there 0.88-1 to a real, noticeable 0.55-1 on a quicker
 2.6s cycle (was 3.8s). Verified with `npx tsc --noEmit` (clean) and a
 diff against the pre-"bolder" version.
+
+**Toned back (same day, second follow-up):** "just a little too
+aggressive" once the bolder version was live. Settled between the two
+prior passes -- BASE_TILT_X 44 -> 40, sensitivity -170/190 -> -140/160,
+clamp widened slightly to 8-70deg / -65-65deg. Verified with
+`npx tsc --noEmit` (clean) and a diff against the "bolder" version.
+
+## Guidance Tier 2: the personal "Resource Shelf" (Sep 4, 2026)
+
+Rob picked "More Practices tiers" from a menu of what to build next
+after the Galaxy polish passes. Considered all four Practices' Tier 2s
+before picking one: Kinship Tier 2 (private encouragement notes) is a
+real interpersonal feature with more surface area than a single sitting
+warrants; Stewardship Tier 2 explicitly says in lib/practices.ts that it
+needs a review queue that doesn't exist yet, so it's blocked; Voice
+Tier 3 (a quiet marker next to original-thread authors' names) is
+comparatively trivial and better saved for a smaller day. Guidance
+Tier 2 -- a personal, capped "Resource Shelf" -- was buildable end to
+end in one sitting and had an obvious first hook (the "Save to Shelf"
+button on a thread's existing resource_url).
+
+What was built:
+- New table `resource_shelf` (profile_id, url, title, source_thread_id
+  nullable, created_at) -- migration below, not yet run by Rob.
+- lib/resourceShelf.ts (new file): RESOURCE_SHELF_CAP = 5,
+  listMyShelf(), addToShelf() (checks duplicate URL + the 5-item cap
+  client-side before insert), removeFromShelf().
+- Trust posture: followed the exact precedent lib/commons.ts's
+  createThread() already established for Tier 1's image_url/
+  resource_url -- gated client-side only, enforced by RLS (own rows
+  only), no service-role route. resource_shelf carries no XP, trust, or
+  money, so the worst case of someone bypassing the Tier 2 check or the
+  5-cap is a personal list existing a little early or a 6th row sitting
+  in it -- cosmetic, not a security hole.
+- app/commons/t/[id]/page.tsx: once Guidance Tier 2 is unlocked, the
+  existing resource_url line on a thread gets a "Save to Shelf" button
+  next to it (becomes "Saved to your Shelf" once it's on the shelf).
+- app/hub/page.tsx: new "Resource Shelf" panel (same bordered-panel
+  style as Practices/Founding Member), gated on Guidance Tier 2 --
+  shows "N of 5 saved", the list with Remove buttons, and an empty
+  state pointing back at the Commons "Save to Shelf" button.
+- lib/practices.ts: Guidance tier 2 text marked BUILT.
+
+Verified with `npx tsc --noEmit` on the actual device files after
+committing (clean) and diffs against pre-edit backups on every file
+touched. Migration SQL given to Rob to paste into Supabase separately
+(same "paste only this block" instruction as every prior migration).

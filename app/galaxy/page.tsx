@@ -28,18 +28,20 @@ function orbitPosition(angleDeg: number, radiusPct: number) {
 const SHIP_CURSOR =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 100 100'%3E%3Cpath d='M50 4 L79 63 L50 48 L21 63 Z' fill='%23f0d9a8' stroke='%23c9a15a' stroke-width='3'/%3E%3Cpath d='M50 48 L50 95 L37 77 Z M50 48 L50 95 L63 77 Z' fill='%23c9a15a' fill-opacity='0.55'/%3E%3C/svg%3E\") 15 6, auto";
 
-// Rob, Sep 3 2026: "10x its currently tilt," then "bolder" on the
-// follow-up look. Taken literally against the resting angle (originally
-// 28deg) a true 10x would land past vertical (a rotateX wraps every
-// 360deg) and look broken, so the boldness lives in the part that
-// actually reads as "tilt" while using the page: how hard the console
-// leans as the cursor moves (see handleMouseMove below), pushed further
-// again on the "bolder" pass. BASE_TILT_X also climbed a second time for
-// a noticeably steeper resting pose. clampTilt keeps this much wider,
-// much more sensitive range from ever wrapping past vertical.
-const BASE_TILT_X = 44; // degrees -- the resting "looking down at the console" angle
-const TILT_X_RANGE: [number, number] = [5, 78];
-const TILT_Y_RANGE: [number, number] = [-75, 75];
+// Rob, Sep 3 2026: "10x its currently tilt," then "bolder," then
+// "tone back... just a little too aggressive" once the bolder version
+// was live. Settled here, between the first 10x pass (38deg base,
+// -120/140 sensitivity) and the bolder overshoot (44deg,
+// -170/190) -- still noticeably more responsive than the original
+// 28deg/-12/14, just not as extreme as the "bolder" peak. Taken
+// literally, "10x" against the original resting angle would land the
+// console past vertical (a rotateX wraps every 360deg) and look broken,
+// so the boldness lives in how hard the console leans as the cursor
+// moves (see handleMouseMove below) rather than the resting angle
+// itself. clampTilt keeps this from ever wrapping past vertical.
+const BASE_TILT_X = 40; // degrees -- the resting "looking down at the console" angle
+const TILT_X_RANGE: [number, number] = [8, 70];
+const TILT_Y_RANGE: [number, number] = [-65, 65];
 
 function clampTilt(value: number, [min, max]: [number, number]) {
   return Math.min(max, Math.max(min, value));
@@ -80,8 +82,8 @@ export default function GalaxyPage() {
     const relX = (e.clientX - rect.left) / rect.width - 0.5; // -0.5 .. 0.5
     const relY = (e.clientY - rect.top) / rect.height - 0.5;
     setTilt({
-      x: clampTilt(BASE_TILT_X + relY * -170, TILT_X_RANGE),
-      y: clampTilt(relX * 190, TILT_Y_RANGE),
+      x: clampTilt(BASE_TILT_X + relY * -140, TILT_X_RANGE),
+      y: clampTilt(relX * 160, TILT_Y_RANGE),
     });
   }
 

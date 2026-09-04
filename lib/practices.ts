@@ -103,7 +103,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     theme: "curating resources and links for others",
     tiers: [
       "Can attach one external resource link to an original thread.", // BUILT -- composer + thread display
-      "Personal 'Resource Shelf' starts (up to 5 saved).",
+      "Personal 'Resource Shelf' starts (up to 5 saved).", // BUILT -- lib/resourceShelf.ts, Hub panel, "Save" button on thread pages
       "Can tag a resource with a category.",
       "Shelf capacity increases (up to 15).",
       "Can pin one resource to a community's sidebar.",

@@ -1187,3 +1187,38 @@ create policy "Users see their own suggestions" on feed_source_suggestions
   for select using (auth.uid() = profile_id);
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Guidance Tier 2: the personal "Resource Shelf" (see lib/practices.ts
+-- and lib/resourceShelf.ts). A standing, capped (5 items, enforced in
+-- lib/resourceShelf.ts) collection of links someone saves for
+-- themselves -- distinct from Guidance Tier 1's resource_url on
+-- commons_threads, which is one link attached to a single post.
+--
+-- Same trust posture as Tier 1's image_url/resource_url columns (see
+-- lib/commons.ts's createThread comment): the Tier gate and the 5-item
+-- cap are both enforced client-side, not by a service-role route --
+-- this table carries no XP, trust, or money, so RLS restricting every
+-- operation to a profile's own rows is enough. Worst case of someone
+-- bypassing the Tier check client-side is a personal list existing a
+-- little early, a cosmetic gap, not a security one.
+-- ============================================================
+
+create table if not exists resource_shelf (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  url text not null,
+  title text not null,
+  source_thread_id uuid references commons_threads(id) on delete set null,
+  created_at timestamptz default now()
+);
+
+alter table resource_shelf enable row level security;
+
+drop policy if exists "Users manage their own resource shelf" on resource_shelf;
+create policy "Users manage their own resource shelf" on resource_shelf
+  for all
+  using (auth.uid() = profile_id)
+  with check (auth.uid() = profile_id);
+
+notify pgrst, 'reload schema';

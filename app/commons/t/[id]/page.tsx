@@ -25,6 +25,7 @@ import {
   type ReactionTargetType,
 } from "@/lib/commons";
 import { EMPTY_PRACTICE_POINTS, normalizePracticePoints, practiceTier, type PracticePoints } from "@/lib/practices";
+import { addToShelf, listMyShelf } from "@/lib/resourceShelf";
 import { renderRichText } from "@/lib/richText";
 
 const ACCENT = "#c9576a";
@@ -51,6 +52,14 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [flaggedMap, setFlaggedMap] = useState<Record<string, boolean>>({});
   const [flaggingId, setFlaggingId] = useState<string | null>(null);
   const [flagError, setFlagError] = useState<string | null>(null);
+  // Guidance Tier 2 -- "Save to my Resource Shelf" on a thread's own
+  // resource link (see lib/resourceShelf.ts). shelfUrls is just the set
+  // of URLs already on this viewer's shelf, so the button can read
+  // "Saved" instead of letting them save the same link twice.
+  const guidanceTier = practiceTier(myPracticePoints, "guidance");
+  const [shelfUrls, setShelfUrls] = useState<Set<string>>(new Set());
+  const [savingShelf, setSavingShelf] = useState(false);
+  const [shelfError, setShelfError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -78,6 +87,27 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
       setChecking(false);
     })();
   }, [router, params.id]);
+
+  // Only fetch the shelf once Guidance Tier 2 is actually confirmed --
+  // myPracticePoints starts empty and fills in from the profile fetch
+  // above, so this naturally re-runs the moment that lands.
+  useEffect(() => {
+    if (!userId || guidanceTier < 2) return;
+    listMyShelf(userId).then((items) => setShelfUrls(new Set(items.map((item) => item.url))));
+  }, [userId, guidanceTier]);
+
+  async function handleSaveToShelf() {
+    if (!userId || !thread?.resource_url) return;
+    setSavingShelf(true);
+    setShelfError(null);
+    const result = await addToShelf(userId, thread.resource_url, thread.title, thread.id);
+    setSavingShelf(false);
+    if (!result.ok) {
+      setShelfError(result.error ?? "Couldn't save that right now.");
+      return;
+    }
+    setShelfUrls((prev) => new Set(prev).add(thread.resource_url as string));
+  }
 
   async function load(uid?: string | null) {
     const effectiveUid = uid !== undefined ? uid : userId;
@@ -250,15 +280,36 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
           />
         )}
         {thread.resource_url && (
-          <a
-            href={thread.resource_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ display: "inline-block", marginBottom: "10px", padding: "6px 12px", borderRadius: "999px", border: `1px solid ${ACCENT}`, color: ACCENT, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", textDecoration: "none" }}
-          >
-            Resource &rarr;
-          </a>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+            <a
+              href={thread.resource_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "inline-block", padding: "6px 12px", borderRadius: "999px", border: `1px solid ${ACCENT}`, color: ACCENT, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", textDecoration: "none" }}
+            >
+              Resource &rarr;
+            </a>
+            {/* Guidance Tier 2 -- see lib/resourceShelf.ts. Hidden below
+                Tier 2 the same way Voice/Guidance Tier 1's own fields are
+                gated in the composer -- cosmetic, not a security gate. */}
+            {guidanceTier >= 2 &&
+              (shelfUrls.has(thread.resource_url) ? (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-faint, #a29cb0)" }}>
+                  Saved to your Shelf
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSaveToShelf}
+                  disabled={savingShelf}
+                  style={{ padding: "5px 10px", borderRadius: "999px", border: "1px solid var(--border)", background: "none", color: "var(--ink-dim)", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", cursor: savingShelf ? "default" : "pointer" }}
+                >
+                  {savingShelf ? "Saving..." : "Save to Shelf"}
+                </button>
+              ))}
+          </div>
         )}
+        {shelfError && <p style={{ color: "#e0703a", fontSize: "0.78rem", margin: "0 0 10px" }}>{shelfError}</p>}
         {reactionRow("thread", thread.id)}
         {flagError && <p style={{ color: "#e0703a", fontSize: "0.78rem", margin: "8px 0 0" }}>{flagError}</p>}
 
