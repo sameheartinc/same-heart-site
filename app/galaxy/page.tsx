@@ -28,17 +28,18 @@ function orbitPosition(angleDeg: number, radiusPct: number) {
 const SHIP_CURSOR =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 100 100'%3E%3Cpath d='M50 4 L79 63 L50 48 L21 63 Z' fill='%23f0d9a8' stroke='%23c9a15a' stroke-width='3'/%3E%3Cpath d='M50 48 L50 95 L37 77 Z M50 48 L50 95 L63 77 Z' fill='%23c9a15a' fill-opacity='0.55'/%3E%3C/svg%3E\") 15 6, auto";
 
-// Rob, Sep 3 2026: "10x its currently tilt." Taken literally against the
-// resting angle (28deg) that's a ~-80deg console -- past vertical, into
-// "flipped over" territory, since a rotateX wraps every 360deg -- so the
-// 10x instead lands on the part of this that actually reads as "tilt"
-// while using the page: how hard the console leans as the cursor moves
-// (see handleMouseMove below). BASE_TILT_X itself only got a modest bump
-// for a bolder resting pose. clampTilt keeps the now much more sensitive
-// interactive range from ever wrapping past vertical and looking broken.
-const BASE_TILT_X = 38; // degrees -- the resting "looking down at the console" angle
-const TILT_X_RANGE: [number, number] = [10, 65];
-const TILT_Y_RANGE: [number, number] = [-60, 60];
+// Rob, Sep 3 2026: "10x its currently tilt," then "bolder" on the
+// follow-up look. Taken literally against the resting angle (originally
+// 28deg) a true 10x would land past vertical (a rotateX wraps every
+// 360deg) and look broken, so the boldness lives in the part that
+// actually reads as "tilt" while using the page: how hard the console
+// leans as the cursor moves (see handleMouseMove below), pushed further
+// again on the "bolder" pass. BASE_TILT_X also climbed a second time for
+// a noticeably steeper resting pose. clampTilt keeps this much wider,
+// much more sensitive range from ever wrapping past vertical.
+const BASE_TILT_X = 44; // degrees -- the resting "looking down at the console" angle
+const TILT_X_RANGE: [number, number] = [5, 78];
+const TILT_Y_RANGE: [number, number] = [-75, 75];
 
 function clampTilt(value: number, [min, max]: [number, number]) {
   return Math.min(max, Math.max(min, value));
@@ -79,8 +80,8 @@ export default function GalaxyPage() {
     const relX = (e.clientX - rect.left) / rect.width - 0.5; // -0.5 .. 0.5
     const relY = (e.clientY - rect.top) / rect.height - 0.5;
     setTilt({
-      x: clampTilt(BASE_TILT_X + relY * -120, TILT_X_RANGE),
-      y: clampTilt(relX * 140, TILT_Y_RANGE),
+      x: clampTilt(BASE_TILT_X + relY * -170, TILT_X_RANGE),
+      y: clampTilt(relX * 190, TILT_Y_RANGE),
     });
   }
 
@@ -120,7 +121,7 @@ export default function GalaxyPage() {
           50% { transform: translateY(var(--float-amp, -6px)); }
         }
         @keyframes galaxyIconFlicker {
-          0%, 100% { opacity: 0.88; }
+          0%, 100% { opacity: 0.55; }
           50%      { opacity: 1; }
         }
         @keyframes galaxyRingSpin {
@@ -211,13 +212,15 @@ export default function GalaxyPage() {
            reads fine for a simple line-art glyph like this. */
         .galaxy-node-icon {
           transform-origin: 50% 50%;
-          /* Oh-so-faint per Rob's request -- opacity only ever drifts
-             between 0.88 and 1, and each icon's own inline
-             animation-delay (set where it's rendered below) staggers
-             the phase so all eight never flicker in unison. Already
-             covered by the prefers-reduced-motion rule further down,
-             same as every other animation on this page. */
-          animation: galaxyIconFlicker 3.8s ease-in-out infinite;
+          /* Started at a barely-there 0.88-1 opacity swing; Rob asked
+             for bolder, so this now dips much further (0.55-1) on a
+             quicker ~2.6s cycle -- a real, noticeable pulse rather than
+             a faint shimmer. Each icon's own inline animation-delay
+             (set where it's rendered below) still staggers the phase so
+             all eight never flicker in unison. Already covered by the
+             prefers-reduced-motion rule further down, same as every
+             other animation on this page. */
+          animation: galaxyIconFlicker 2.6s ease-in-out infinite;
         }
         .galaxy-node:hover .galaxy-node-icon {
           animation: galaxyIconSpin 2.4s linear infinite;

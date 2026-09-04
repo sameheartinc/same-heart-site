@@ -1538,3 +1538,12 @@ What was built:
 Verified with `npx tsc --noEmit` (clean) and diffs against pre-edit
 backups on both files touched (app/galaxy/page.tsx, lib/galaxyNodes.ts).
 No migration -- purely visual/client-side.
+
+**Bolder pass (same day, immediate follow-up):** Rob's one-word
+follow-up after seeing it live -- "bolder." Pushed both the tilt and
+the flicker further: BASE_TILT_X 38 -> 44, interactive sensitivity
+-120/140 -> -170/190 (clamp widened to 5-78deg / -75-75deg so it still
+can't flip past vertical), and the icon flicker's opacity swing deepened
+from a barely-there 0.88-1 to a real, noticeable 0.55-1 on a quicker
+2.6s cycle (was 3.8s). Verified with `npx tsc --noEmit` (clean) and a
+diff against the pre-"bolder" version.
