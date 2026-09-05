@@ -55,6 +55,12 @@ type Profile = {
   current_streak: number;
   longest_streak: number;
   last_visit_date: string | null;
+  // Kinship Tier 3 -- "Steady Kinship" (see lib/practices.ts). Only
+  // written server-side, inside send_encouragement_note's
+  // security-definer function; last_date isn't needed client-side, so
+  // it's not selected below.
+  kinship_streak_current: number;
+  kinship_streak_longest: number;
   commons_accent: string | null;
   hub_background_url: string | null;
   kindred_opt_out: boolean;
@@ -158,7 +164,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at, kinship_streak_current, kinship_streak_longest"
         )
         .eq("id", userData.user.id)
         .single();
@@ -2330,6 +2336,88 @@ export default function HubPage() {
                 {shelfError}
               </p>
             )}
+          </div>
+        )}
+
+        {/* Steady Kinship -- Kinship Tier 3 (see lib/practices.ts). A
+            private streak of calendar days you've sent at least one
+            encouragement note, updated server-side inside
+            send_encouragement_note. Deliberately quiet: no one else
+            ever sees this, and there is no "streak broken" state --
+            only ever the current and longest counts, however small. */}
+        {practiceTier(practicePoints, "kinship") >= 3 && (
+          <div
+            style={{
+              marginBottom: "22px",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel, transparent)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginBottom: "10px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Steady Kinship
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Private -- only you see this
+              </span>
+            </div>
+            {(() => {
+              const kinshipCurrent = profile.kinship_streak_current ?? 0;
+              const kinshipLongest = profile.kinship_streak_longest ?? 0;
+              return (
+                <>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.85rem",
+                      color: "var(--widget-text)",
+                    }}
+                  >
+                    {kinshipCurrent > 0
+                      ? `${kinshipCurrent} day${kinshipCurrent === 1 ? "" : "s"} showing up for someone, so far.`
+                      : "Send an encouragement note today to start a streak."}
+                  </p>
+                  {kinshipLongest > 0 && (
+                    <p
+                      style={{
+                        margin: "4px 0 0",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "9px",
+                        color: "var(--widget-text-faint)",
+                      }}
+                    >
+                      Longest so far: {kinshipLongest} day{kinshipLongest === 1 ? "" : "s"}
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 

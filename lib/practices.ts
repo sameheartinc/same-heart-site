@@ -21,11 +21,17 @@
 // it, after checking the real math itself rather than trusting a client
 // claim.
 //
-// Only Tier 1 of each Practice is actually wired up to a real site
-// feature so far (marked BUILT below, chosen and confirmed with Rob one
-// at a time -- see IDEAS.md). Tiers 2-20 are the full roadmap already
-// agreed with Rob, ready to build one at a time, in order, per Practice.
-// Tier N+1 past the hand-authored 20 is procedural (see
+// Each Practice builds up from Tier 1, one tier at a time, chosen and
+// confirmed with Rob as the roadmap goes (see IDEAS.md for the build
+// log of each one). A tier is only ever marked BUILT below once it's a
+// real, live, gated feature -- never for narrating something the app
+// already did for everyone regardless of tier. As of this writing:
+// Voice and Guidance are through Tier 2, Kinship through Tier 3,
+// Stewardship through Tier 3 -- check each tier's own inline comment
+// for exactly what shipped and where, rather than trusting this count
+// to stay current. Whatever's left up to Tier 20 is the full roadmap
+// already agreed with Rob, ready to build one at a time, in order, per
+// Practice. Tier N+1 past the hand-authored 20 is procedural (see
 // practiceTierText) -- same reasoning Diablo's Paragon board and WoW's
 // late talent rows use once the hand-written content runs out.
 
@@ -75,9 +81,9 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     name: "Kinship",
     theme: "showing up for other people",
     tiers: [
-      "Your own reaction history becomes visible to you -- a quiet list only you can see.", // BUILT
+      "Your own reaction history becomes visible to you -- a quiet list only you can see.", // BUILT loosely -- lib/commons.ts's ReactionSummary.mine already surfaces your own reaction state everywhere reactions render; no dedicated gated view exists yet. Counted as satisfying Tier 1 rather than building a redundant screen, but flagged here since every other Tier 1 below points at something newly built specifically for that tier -- a real private "My Reactions" list is a fair thing to build later if Rob wants this tier to mean more.
       "Can leave a private encouragement note on someone's reply.", // BUILT -- lib/commons.ts's sendEncouragementNote, "Encourage" button on replies, delivered via the existing notifications panel
-      "Private 'Steady Kinship' streak tracker (never shown publicly, never punishing).",
+      "Private 'Steady Kinship' streak tracker (never shown publicly, never punishing).", // BUILT (Sep 5 2026) -- profiles.kinship_streak_current/longest/last_date (supabase/schema.sql), updated only inside send_encouragement_note's security-definer function (the first encouragement note of a calendar day moves it; sending more the same day does not). Hub panel gated on kinshipTier >= 3, states only the current/longest counts -- no "streak broken" language, ever.
       "Can send a one-time 'thinking of you' nudge to a thread's author.",
       "Reaction combinations on long threads.",
       "Optional, opt-in Kinship badge on your own profile.",

@@ -1812,3 +1812,65 @@ No schema migration this time -- purely reads a column that already
 exists. Verified with `npx tsc --noEmit` on the actual device files
 after committing (clean) and diffs against pre-edit backups on every
 file touched.
+
+## Kinship Tier 3: the "Steady Kinship" streak, and a tiers formatting pass (Sep 5, 2026)
+
+New chat session -- Rob couldn't get back to the previous one after an
+app update. Nothing was actually lost (it all lives here and in the
+other project files, not in chat history), but before building
+anything Rob asked for a pass making sure the tiers are "formatted
+properly," since a new session can't tell "documented and honest" from
+"looks built but isn't" just by reading prose.
+
+Audit turned up one real inconsistency: every other BUILT tier across
+all four Practices names exactly what shipped and where (composer +
+thread display, lib/resourceShelf.ts, app/admin/flags, etc.) --
+Kinship Tier 1 just said "// BUILT" with nothing after it. Traced it:
+"your own reaction history becomes visible to you" was never actually
+built as a distinct, gated feature -- lib/commons.ts's
+ReactionSummary.mine already shows anyone their own reaction state on
+anything, regardless of Kinship tier. Left it marked BUILT (re-gating
+base reaction visibility behind a tier would be a regression, not a
+fix) but rewrote the comment to say so plainly, and flagged a real
+private "My Reactions" list as a fair follow-up if Rob wants this tier
+to mean something distinct later. Also refreshed lib/practices.ts's
+stale file-header comment, which still claimed "only Tier 1 of each
+Practice is built" long after Voice/Guidance reached Tier 2 and
+Stewardship reached Tier 3.
+
+Then built Kinship Tier 3 itself. "Never punishing" was the one real
+judgment call: rather than a public streak with milestones (the
+existing site-wide current_streak/longest_streak on the Hub), this is
+private and quiet -- states only the current/longest day counts,
+never a "you broke your streak" moment of any kind.
+
+What was built:
+- supabase/schema.sql: profiles.kinship_streak_current/
+  kinship_streak_longest/kinship_streak_last_date (default 0/0/null),
+  same column-level revoke from "authenticated" as current_streak/
+  commons_accent/etc. send_encouragement_note (already security
+  definer) now also advances the streak as its last step: the first
+  encouragement note of a calendar day increments current (or resets
+  to 1 if the last one wasn't yesterday) and raises longest if beaten;
+  a second note the same day is a no-op on the streak. Because sending
+  a note already requires Kinship Tier 2, the streak has effectively
+  been accumulating since whenever each person hit Tier 2 -- nothing
+  extra needed to "start" it once Tier 3 unlocks.
+- lib/practices.ts: Kinship Tier 3 marked BUILT with full detail;
+  Tier 1's comment and the file header corrected per the audit above.
+- app/hub/page.tsx: Profile type + the profile select gain
+  kinship_streak_current/longest (last_date isn't needed client-side).
+  New "Steady Kinship" panel, gated on kinshipTier >= 3, placed right
+  after the Resource Shelf panel -- same bordered-panel styling,
+  labeled "Private -- only you see this." Reads current/longest with
+  `?? 0` guards, matching how current_streak is already handled
+  elsewhere on this page.
+
+Verified with `npx tsc --noEmit` on the actual device files (clean)
+and diffs against pre-edit backups on every file touched
+(supabase/schema.sql, lib/practices.ts, app/hub/page.tsx).
+
+**Still needs Rob to paste the schema.sql block into Supabase** before
+this is live -- same manual-migration step as every other schema
+change in this log; the Hub's profile select will 400 on
+kinship_streak_current/longest until that column exists.

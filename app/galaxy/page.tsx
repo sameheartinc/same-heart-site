@@ -30,16 +30,12 @@ const SHIP_CURSOR =
 
 // Rob, Sep 3 2026: "10x its currently tilt," then "bolder," then
 // "tone back... just a little too aggressive" once the bolder version
-// was live. Sep 5 2026: still too extreme -- toned the mouse-move
-// sensitivity back down to 20% of that settled value (-140/160 -->
-// -28/32), keeping the resting base angle at 40deg. Original (pre-10x)
-// was 28deg/-12/14. Taken literally, "10x" against the original resting
-// angle would land the console past vertical (a rotateX wraps every
-// 360deg) and look broken, so the boldness lives in how hard the console
-// leans as the cursor moves (see handleMouseMove below) rather than the
-// resting angle itself. clampTilt keeps this from ever wrapping past
-// vertical.
-const BASE_TILT_X = 40; // degrees -- the resting "looking down at the console" angle
+// was live. Sep 5 2026: first cut (20% of the settled -140/160 -->
+// -28/32, base left at 40deg) was STILL too extreme -- rolled all the
+// way back to the original pre-10x values here: 28deg base, -12/14
+// sensitivity. If this needs to move again, treat this as the new
+// zero point rather than cutting the escalated numbers further.
+const BASE_TILT_X = 28; // degrees -- the resting "looking down at the console" angle
 const TILT_X_RANGE: [number, number] = [8, 70];
 const TILT_Y_RANGE: [number, number] = [-65, 65];
 
@@ -82,8 +78,8 @@ export default function GalaxyPage() {
     const relX = (e.clientX - rect.left) / rect.width - 0.5; // -0.5 .. 0.5
     const relY = (e.clientY - rect.top) / rect.height - 0.5;
     setTilt({
-      x: clampTilt(BASE_TILT_X + relY * -28, TILT_X_RANGE),
-      y: clampTilt(relX * 32, TILT_Y_RANGE),
+      x: clampTilt(BASE_TILT_X + relY * -12, TILT_X_RANGE),
+      y: clampTilt(relX * 14, TILT_Y_RANGE),
     });
   }
 
