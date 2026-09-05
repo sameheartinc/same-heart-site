@@ -1954,3 +1954,44 @@ Verified with `npx tsc --noEmit` on the actual device files after
 committing (clean) and reviewed the full diff by eye (no test runner
 in this project, and this is presentation-layer-only -- no schema
 change, so nothing for Rob to paste into Supabase this time).
+
+## Voice Tier 3: a quiet marker on your original threads (Sep 5, 2026)
+
+Straightforward compared to the last two builds -- no reward math, no
+streak logic, just "your original threads carry a quiet Voice marker
+next to your name." The one real decision: this marker has to be
+visible to whoever's LOOKING at someone's thread, not just to that
+person themselves -- unlike Kinship Tier 3's private streak or
+Guidance's Resource Shelf, which only ever the owner sees. That meant
+get_public_profiles (the one function every visitor's browser calls to
+resolve a thread author's name) needed to start returning
+practice_points, which it never had before. Postgres won't let CREATE
+OR REPLACE change a RETURNS TABLE function's column list -- same wall
+hit before on other functions in this file -- so this one drops and
+recreates instead.
+
+What was built:
+- supabase/schema.sql: get_public_profiles now also returns
+  practice_points (jsonb, straight off the profiles column). No more
+  revealing than xp/standing, which the Roster already makes public.
+- lib/commons.ts: PublicProfile gained practice_points: unknown.
+- components/VoiceMarker.tsx (new): a single small glyph (✦), rendered
+  only once practiceTier(..., "voice") >= 3, with a title tooltip.
+  Deliberately just a glyph, not a badge/pill -- "quiet" was the actual
+  word Rob used for this tier.
+- Wired into the three places a THREAD's own author name renders --
+  app/commons/page.tsx's ThreadList, app/commons/c/[slug]/page.tsx's
+  thread cards, app/commons/t/[id]/page.tsx's thread header. Deliberately
+  NOT on reply authors (app/commons/t/[id]/page.tsx also shows those) --
+  Voice's theme is original posting specifically, and the tier text says
+  "original threads."
+- lib/practices.ts: Voice Tier 3 marked BUILT; refreshed the file
+  header's tier-count summary (now stale again already -- Voice and
+  Kinship both through Tier 3, Guidance through Tier 2, Stewardship
+  through Tier 3).
+
+Verified with `npx tsc --noEmit` (clean) and reviewed the full diff by
+eye across all six touched files.
+
+**Needs Rob to paste the schema.sql block into Supabase** before the
+marker can actually appear -- same as every schema change in this log.

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { getSkin } from "@/lib/skins";
 import PageLoading from "@/components/PageLoading";
+import VoiceMarker from "@/components/VoiceMarker";
 import {
   authorName,
   createThread,
@@ -390,7 +391,8 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
                     {t.title}
                   </p>
                   <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint, #5c6684)" }}>
-                    <span style={{ color: authors[t.profile_id]?.commons_accent || undefined }}>{authorName(authors[t.profile_id])}</span> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}
+                    <span style={{ color: authors[t.profile_id]?.commons_accent || undefined }}>{authorName(authors[t.profile_id])}</span>
+                    <VoiceMarker practicePoints={authors[t.profile_id]?.practice_points} /> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}
                   </p>
                 </Link>
               </li>

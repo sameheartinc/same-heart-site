@@ -8,6 +8,7 @@ import { getSkin } from "@/lib/skins";
 import PageLoading from "@/components/PageLoading";
 import CommonsSphere from "@/components/CommonsSphere";
 import CommonsGuide from "@/components/CommonsGuide";
+import VoiceMarker from "@/components/VoiceMarker";
 import {
   authorName,
   createCommunity,
@@ -1568,7 +1569,8 @@ function ThreadList({ threads, authors }: { threads: CommonsThread[]; authors: R
               )}
             </p>
             <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.05em", color: "var(--ink-faint, #5c6684)" }}>
-              <span style={{ color: authors[t.profile_id]?.commons_accent || undefined }}>{authorName(authors[t.profile_id])}</span> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}
+              <span style={{ color: authors[t.profile_id]?.commons_accent || undefined }}>{authorName(authors[t.profile_id])}</span>
+              <VoiceMarker practicePoints={authors[t.profile_id]?.practice_points} /> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}
             </p>
           </Link>
         </li>

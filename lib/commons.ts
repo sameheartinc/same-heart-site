@@ -17,6 +17,12 @@ export interface PublicProfile {
   designation: string | null;
   commons_accent: string | null;
   kindred_opt_out: boolean;
+  // Voice Tier 3's public marker (see components/VoiceMarker.tsx) is
+  // the first thing that needed another profile's practice_points to
+  // be publicly readable -- raw jsonb here, same as profiles' own
+  // column; normalize with lib/practices.ts's normalizePracticePoints
+  // before reading a tier out of it.
+  practice_points: unknown;
 }
 
 export interface Community {

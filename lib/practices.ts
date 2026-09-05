@@ -26,7 +26,7 @@
 // log of each one). A tier is only ever marked BUILT below once it's a
 // real, live, gated feature -- never for narrating something the app
 // already did for everyone regardless of tier. As of this writing:
-// Voice and Guidance are through Tier 2, Kinship through Tier 3,
+// Voice and Kinship are through Tier 3, Guidance through Tier 2,
 // Stewardship through Tier 3 -- check each tier's own inline comment
 // for exactly what shipped and where, rather than trusting this count
 // to stay current. Whatever's left up to Tier 20 is the full roadmap
@@ -56,7 +56,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     tiers: [
       "Can attach one image to an original thread.", // BUILT -- composer + thread display
       "Rich text formatting unlocked in posts (bold, italic).", // BUILT -- composer toolbar + lib/richText.tsx
-      "Your original threads carry a quiet Voice marker next to your name.",
+      "Your original threads carry a quiet Voice marker next to your name.", // BUILT (Sep 5 2026) -- components/VoiceMarker.tsx, rendered next to a thread's own author (never a reply's) in app/commons/page.tsx's ThreadList, app/commons/c/[slug]/page.tsx's thread cards, and app/commons/t/[id]/page.tsx's thread header. Needed practice_points exposed on get_public_profiles for the first time (supabase/schema.sql) since this marker has to be visible to every viewer, not just the author themselves.
       "Custom post accent color.", // NOTE: overlaps with the Blue Heart String's existing commons_accent door (lib/keys.ts) -- resolve which one wins before building this tier.
       "Multi-image posts (up to 3).",
       "Can save a personal draft between visits.",
