@@ -9,6 +9,7 @@ import PageLoading from "@/components/PageLoading";
 import {
   authorName,
   createReply,
+  fetchMyFlagStatuses,
   fetchProfilesByIds,
   fetchReactionSummaries,
   flagContent,
@@ -20,6 +21,7 @@ import {
   touchPresence,
   type CommonsReply,
   type CommonsThread,
+  type FlagStatus,
   type PublicProfile,
   type ReactionKind,
   type ReactionSummary,
@@ -28,6 +30,8 @@ import {
 import { EMPTY_PRACTICE_POINTS, normalizePracticePoints, practiceTier, type PracticePoints } from "@/lib/practices";
 import { addToShelf, listMyShelf } from "@/lib/resourceShelf";
 import { renderRichText } from "@/lib/richText";
+import { listMyUnlocks } from "@/lib/evolution";
+import { activateBoost } from "@/lib/abilities";
 
 const ACCENT = "#c9576a";
 const EMPTY_SUMMARY: ReactionSummary = { heartfelt: 0, heartache: 0, mine: null };
@@ -51,6 +55,11 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [myPracticePoints, setMyPracticePoints] = useState<PracticePoints>(EMPTY_PRACTICE_POINTS);
   const stewardshipTier = practiceTier(myPracticePoints, "stewardship");
   const [flaggedMap, setFlaggedMap] = useState<Record<string, boolean>>({});
+  // Stewardship Tier 3 -- "you can see whether a flag you raised was
+  // acted on" (see lib/commons.ts's fetchMyFlagStatuses). Fetched
+  // unconditionally, same as flaggedMap itself -- the Tier gate below
+  // only controls whether the result is actually shown.
+  const [flagStatusMap, setFlagStatusMap] = useState<Record<string, FlagStatus>>({});
   const [flaggingId, setFlaggingId] = useState<string | null>(null);
   const [flagError, setFlagError] = useState<string | null>(null);
   // Guidance Tier 2 -- "Save to my Resource Shelf" on a thread's own
@@ -75,6 +84,14 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [sendingEncourage, setSendingEncourage] = useState(false);
   const [encourageError, setEncourageError] = useState<string | null>(null);
   const [encouragedIds, setEncouragedIds] = useState<Set<string>>(new Set());
+  // Post Boost -- see lib/evolution.ts's "ability-post-boost" and
+  // app/api/abilities/boost/route.ts (the only writer of
+  // boosted_until). unlockedIds is the same "which Evolution rewards do
+  // I hold" set the Hub already tracks -- just fetched here too, since
+  // this page needs to know about this one specifically.
+  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [boosting, setBoosting] = useState(false);
+  const [boostError, setBoostError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -98,6 +115,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
           if (profileRow?.ship_skin) setMySkin(getSkin(profileRow.ship_skin));
           setMyPracticePoints(normalizePracticePoints(profileRow?.practice_points));
         });
+      listMyUnlocks().then((ids) => setUnlockedIds(new Set(ids)));
       await load(data.user.id);
       setChecking(false);
     })();
@@ -122,6 +140,19 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
       return;
     }
     setShelfUrls((prev) => new Set(prev).add(thread.resource_url as string));
+  }
+
+  async function handleBoost() {
+    if (!thread) return;
+    setBoosting(true);
+    setBoostError(null);
+    const result = await activateBoost(thread.id);
+    setBoosting(false);
+    if (!result.ok) {
+      setBoostError(result.error ?? "Couldn't boost that right now.");
+      return;
+    }
+    setThread({ ...thread, boosted_until: result.boostedUntil ?? thread.boosted_until });
   }
 
   async function load(uid?: string | null) {
@@ -152,6 +183,13 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
       hasFlagged("reply", r.map((rep) => rep.id), effectiveUid),
     ]);
     setFlaggedMap({ ...threadFlags, ...replyFlags });
+
+    // Stewardship Tier 3 -- see lib/commons.ts's fetchMyFlagStatuses.
+    const [threadFlagStatuses, replyFlagStatuses] = await Promise.all([
+      fetchMyFlagStatuses("thread", [t.id], effectiveUid),
+      fetchMyFlagStatuses("reply", r.map((rep) => rep.id), effectiveUid),
+    ]);
+    setFlagStatusMap({ ...threadFlagStatuses, ...replyFlagStatuses });
   }
 
   // Stewardship Tier 1 -- the first real trust step (see
@@ -239,6 +277,18 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
     await setReaction(targetType, targetId, userId, kind, current);
   }
 
+  // Stewardship Tier 3 -- "you can see whether a flag you raised was
+  // acted on" (see lib/practices.ts). Below Tier 3, or while it's still
+  // pending, the button just reads "Flagged" -- same as it always has.
+  function flagLabel(targetId: string): string {
+    if (stewardshipTier >= 3) {
+      const status = flagStatusMap[targetId];
+      if (status === "resolved") return "Flag resolved";
+      if (status === "dismissed") return "Flag dismissed";
+    }
+    return "Flagged";
+  }
+
   function reactionRow(targetType: ReactionTargetType, targetId: string) {
     const summary = reactions[targetId] ?? EMPTY_SUMMARY;
     return (
@@ -264,7 +314,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
             disabled={flaggedMap[targetId] || flaggingId === targetId}
             style={reactionButtonStyle(false, "var(--ink-faint, #5c6684)")}
           >
-            {flaggedMap[targetId] ? "Flagged" : flaggingId === targetId ? "..." : "Flag"}
+            {flaggedMap[targetId] ? flagLabel(targetId) : flaggingId === targetId ? "..." : "Flag"}
           </button>
         )}
       </div>
@@ -311,6 +361,43 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "0 0 16px", lineHeight: 1.3 }}>
           {thread.title}
         </h1>
+
+        {/* Post Boost -- see lib/evolution.ts's "ability-post-boost" and
+            app/api/abilities/boost/route.ts. Only ever shown to the
+            thread's own author, and only once they've actually earned
+            the ability -- same "stay silent until it's real" posture
+            every other gated control on this page follows. */}
+        {userId === thread.profile_id && unlockedIds.has("ability-post-boost") && (
+          <div style={{ marginBottom: "14px" }}>
+            {thread.boosted_until && new Date(thread.boosted_until).getTime() > Date.now() ? (
+              <span
+                style={{
+                  padding: "5px 11px",
+                  borderRadius: "999px",
+                  border: "1px solid #c9a15a",
+                  color: "#c9a15a",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Boosted until {new Date(thread.boosted_until).toLocaleString()}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleBoost}
+                disabled={boosting}
+                style={{ padding: "6px 13px", borderRadius: "999px", border: "1px solid #c9a15a", background: "none", color: "#c9a15a", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", cursor: boosting ? "default" : "pointer" }}
+              >
+                {boosting ? "Boosting..." : "Boost this thread"}
+              </button>
+            )}
+            {boostError && <p style={{ color: "#e0703a", fontSize: "0.78rem", margin: "6px 0 0" }}>{boostError}</p>}
+          </div>
+        )}
+
         <p style={{ fontFamily: "var(--font-body)", color: "var(--ink)", fontSize: "0.98rem", lineHeight: 1.7, marginBottom: "10px", whiteSpace: "pre-wrap" }}>
           {renderRichText(thread.body)}
         </p>

@@ -1289,3 +1289,101 @@ $$ language plpgsql security definer set search_path = public;
 grant execute on function public.send_encouragement_note(uuid, text) to authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Stewardship's review queue -- the human-moderation side of
+-- Stewardship Tier 1's Flag button (lib/commons.ts's flagContent), and
+-- what several later Stewardship tiers in lib/practices.ts are
+-- explicitly blocked on ("once a review queue exists"). Turns out
+-- commons_flags itself was never actually defined anywhere in this
+-- file or migrated to the live database -- flagContent has been
+-- calling a table that doesn't exist this whole time, so the Flag
+-- button has been silently failing (same class of gap as the
+-- notifications table found and fixed earlier today). This migration
+-- both finally creates it and adds the review-queue columns in one
+-- pass, so there's no in-between state where flags exist but can't be
+-- reviewed.
+--
+-- Trust shape: a flagger can create and update their OWN flag (RLS,
+-- same shape as commons_reactions above), but resolving or dismissing
+-- a flag is a genuine admin action on someone else's row --
+-- status/resolved_at/resolved_by are locked down with a column-level
+-- revoke (same pattern as profiles.commons_accent and profiles.xp
+-- elsewhere in this file), so only the service role, from
+-- app/api/stewardship/decide/route.ts, can ever move a flag out of
+-- "pending." That route re-checks is_admin itself, same as every other
+-- admin write on this site.
+--
+-- Correction (same day, immediate follow-up): commons_flags turned out
+-- to already exist live -- just without a status/resolved_at/
+-- resolved_by, since nothing had ever needed them before -- so the
+-- "create table if not exists" below was a silent no-op and the
+-- column-level revoke failed with 42703 (column doesn't exist). Same
+-- lesson as Founding Rewards' verified_rank earlier this session:
+-- explicit `alter table add column if not exists` for a column landing
+-- on a table that might already exist, never assume `create table if
+-- not exists` will add it for you.
+-- ============================================================
+
+create table if not exists commons_flags (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  target_type text not null,
+  target_id uuid not null,
+  category text,
+  created_at timestamptz default now(),
+  unique (profile_id, target_type, target_id)
+);
+
+alter table commons_flags add column if not exists status text not null default 'pending';
+alter table commons_flags add column if not exists resolved_at timestamptz;
+alter table commons_flags add column if not exists resolved_by uuid references profiles(id);
+
+alter table commons_flags enable row level security;
+
+drop policy if exists "Users see their own flags" on commons_flags;
+create policy "Users see their own flags" on commons_flags for select using (auth.uid() = profile_id);
+
+drop policy if exists "Users create their own flags" on commons_flags;
+create policy "Users create their own flags" on commons_flags for insert with check (auth.uid() = profile_id);
+
+drop policy if exists "Users update their own flags" on commons_flags;
+create policy "Users update their own flags" on commons_flags for update using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
+
+revoke update (status, resolved_at, resolved_by) on commons_flags from authenticated;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Ability unlocks: Post Boost + Double XP Hour (see the "Big Sep 1
+-- batch" entry in IDEAS.md and lib/evolution.ts's two new UNLOCKABLES
+-- entries). Scoped down from Rob's original "boosting posts, double
+-- xp, content cards" note to the two concretely-decided pieces --
+-- content cards stayed deferred. Both are real, server-metered
+-- abilities, not cosmetic unlocks: Post Boost gives a thread a
+-- temporary trending-score bonus, Double XP Hour doubles Commons reply
+-- Heartbeats for an hour -- so both need real cooldowns and a real
+-- write somewhere nobody but a trusted server route can reach.
+--
+-- commons_threads already has no general UPDATE policy for
+-- "authenticated" at all (see its own comment further up this file) --
+-- bump_thread_activity is the only sanctioned write path -- so
+-- boosted_until needs no separate column-level revoke; there is
+-- already no client route that could touch it.
+--
+-- profiles is different: it has a broad "Users update their own
+-- profile" policy with no column restriction, so the three new columns
+-- below get the same column-level revoke treatment as commons_accent
+-- and xp/standing/streaks above -- otherwise anyone could just set
+-- their own double_xp_until into the future directly.
+-- ============================================================
+
+alter table commons_threads add column if not exists boosted_until timestamptz;
+
+alter table profiles add column if not exists last_boost_at timestamptz;
+alter table profiles add column if not exists double_xp_until timestamptz;
+alter table profiles add column if not exists last_double_xp_at timestamptz;
+
+revoke update (last_boost_at, double_xp_until, last_double_xp_at) on profiles from authenticated;
+
+notify pgrst, 'reload schema';

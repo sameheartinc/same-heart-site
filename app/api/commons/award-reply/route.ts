@@ -46,14 +46,14 @@ export async function POST(request: NextRequest) {
   }
 
   const todaysTotal = (todaysLog ?? []).reduce((sum, r) => sum + (r.xp_awarded ?? 0), 0);
-  const award = Math.min(REPLY_HEARTBEATS, Math.max(0, DAILY_REPLY_HEARTBEATS_CAP - todaysTotal));
-  if (award <= 0) {
+  const baseAward = Math.min(REPLY_HEARTBEATS, Math.max(0, DAILY_REPLY_HEARTBEATS_CAP - todaysTotal));
+  if (baseAward <= 0) {
     return NextResponse.json({ awarded: 0 });
   }
 
   const { data: profileRow, error: profileError } = await admin
     .from("profiles")
-    .select("xp")
+    .select("xp, double_xp_until")
     .eq("id", profileId)
     .single();
 
@@ -61,6 +61,16 @@ export async function POST(request: NextRequest) {
     console.error("Reply heartbeats: profile read failed:", profileError?.message);
     return NextResponse.json({ awarded: 0 }, { status: 503 });
   }
+
+  // Double XP Hour (see lib/evolution.ts's "ability-double-xp" and
+  // app/api/abilities/double-xp/route.ts, the only place that ever sets
+  // this). Deliberately doubles AFTER the daily cap check above, not
+  // before -- the whole point of the ability is to let an active hour
+  // genuinely exceed a normal day's Heartbeats, not just reach the cap
+  // faster. Still bounded: only real replies posted during that one
+  // real hour ever produce doubled rows.
+  const doubleXpActive = Boolean(profileRow.double_xp_until && new Date(profileRow.double_xp_until).getTime() > Date.now());
+  const award = doubleXpActive ? baseAward * 2 : baseAward;
 
   const newXp = (profileRow.xp ?? 0) + award;
   const { error: updateError } = await admin

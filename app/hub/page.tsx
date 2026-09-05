@@ -38,6 +38,7 @@ import {
   type PracticePoints,
 } from "@/lib/practices";
 import { listMyShelf, removeFromShelf, RESOURCE_SHELF_CAP, type ShelfItem } from "@/lib/resourceShelf";
+import { activateDoubleXp } from "@/lib/abilities";
 import WidgetFrame from "@/components/WidgetFrame";
 
 type Profile = {
@@ -59,6 +60,10 @@ type Profile = {
   kindred_opt_out: boolean;
   practice_points: unknown;
   verified_rank: number | null;
+  // Double XP Hour -- see lib/evolution.ts's "ability-double-xp" and
+  // app/api/abilities/double-xp/route.ts, the only writer of either.
+  double_xp_until: string | null;
+  last_double_xp_at: string | null;
 };
 
 type LogEntry = {
@@ -114,6 +119,13 @@ export default function HubPage() {
   const [replyBubbleDismissed, setReplyBubbleDismissed] = useState(false);
   const [trendingBubbleDismissed, setTrendingBubbleDismissed] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  // Double XP Hour -- see lib/evolution.ts's "ability-double-xp" and
+  // app/api/abilities/double-xp/route.ts. The actual doubling happens
+  // server-side in app/api/commons/award-reply/route.ts; this state is
+  // just for showing whether it's currently running, on cooldown, or
+  // ready to activate.
+  const [activatingDoubleXp, setActivatingDoubleXp] = useState(false);
+  const [doubleXpError, setDoubleXpError] = useState<string | null>(null);
   const [monetizationStatus, setMonetizationStatus] = useState<MonetizationStatus>("none");
   const [monetizationSubmitting, setMonetizationSubmitting] = useState(false);
   const [monetizationError, setMonetizationError] = useState<string | null>(null);
@@ -146,7 +158,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at"
         )
         .eq("id", userData.user.id)
         .single();
@@ -360,6 +372,23 @@ export default function HubPage() {
       setPracticeError(result.error ?? "Couldn't invest that point right now.");
     }
     setInvestingPractice(null);
+  }
+
+  // Double XP Hour -- see lib/evolution.ts's "ability-double-xp" and
+  // app/api/abilities/double-xp/route.ts, which re-checks the unlock and
+  // the once-a-week cooldown itself. On success, just patches
+  // double_xp_until into the already-loaded profile -- no full refetch
+  // needed for one field.
+  async function activateDoubleXpHour() {
+    setActivatingDoubleXp(true);
+    setDoubleXpError(null);
+    const result = await activateDoubleXp();
+    setActivatingDoubleXp(false);
+    if (!result.ok) {
+      setDoubleXpError(result.error ?? "Couldn't activate that right now.");
+      return;
+    }
+    setProfile((prev) => (prev ? { ...prev, double_xp_until: result.doubleXpUntil ?? prev.double_xp_until } : prev));
   }
 
   // Monetization gate, part 6 -- the Hub's own apply button. Eligibility
@@ -1955,6 +1984,85 @@ export default function HubPage() {
                 {founderStatus(profile.verified_rank)!.code}
               </span>
             </p>
+          </div>
+        )}
+
+        {/* Double XP Hour -- see lib/evolution.ts's "ability-double-xp"
+            and IDEAS.md's "Big Sep 1 batch" (scoped down from "boosting
+            posts, double xp, content cards" to the two pieces that got
+            a real design decided). Post Boost's own control lives on
+            the thread page itself (app/commons/t/[id]/page.tsx) since
+            it acts on one specific thread; this one needs a home of its
+            own since it isn't tied to anything. Stays silent, same as
+            every other gated panel, until the ability is actually
+            unlocked. */}
+        {profile && unlockedIds.has("ability-double-xp") && (
+          <div
+            style={{
+              marginBottom: "22px",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel, transparent)",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--widget-text-faint)",
+              }}
+            >
+              Double XP Hour
+            </span>
+            {(() => {
+              const now = Date.now();
+              const activeUntil = profile.double_xp_until ? new Date(profile.double_xp_until).getTime() : 0;
+              if (activeUntil > now) {
+                return (
+                  <p style={{ margin: "8px 0 0", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.95rem", color: "var(--widget-text)" }}>
+                    Active until {new Date(activeUntil).toLocaleTimeString()} -- double Heartbeats from replying in the Commons.
+                  </p>
+                );
+              }
+              const readyAt = profile.last_double_xp_at ? new Date(profile.last_double_xp_at).getTime() + 7 * 24 * 60 * 60 * 1000 : 0;
+              if (readyAt > now) {
+                const days = Math.ceil((readyAt - now) / (24 * 60 * 60 * 1000));
+                return (
+                  <p style={{ margin: "8px 0 0", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.02em", color: "var(--widget-text-faint)" }}>
+                    Available again in {days} {days === 1 ? "day" : "days"}.
+                  </p>
+                );
+              }
+              return (
+                <div style={{ marginTop: "8px" }}>
+                  <p style={{ margin: "0 0 8px", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.02em", color: "var(--widget-text-faint)" }}>
+                    One hour of double Heartbeats from replying in the Commons, once a week.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={activateDoubleXpHour}
+                    disabled={activatingDoubleXp}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: "var(--gold)",
+                      color: "var(--void)",
+                      fontFamily: "var(--font-display)",
+                      fontWeight: 700,
+                      fontSize: "0.78rem",
+                      cursor: activatingDoubleXp ? "default" : "pointer",
+                    }}
+                  >
+                    {activatingDoubleXp ? "Activating..." : "Activate"}
+                  </button>
+                </div>
+              );
+            })()}
+            {doubleXpError && <p style={{ color: "var(--rose)", fontSize: "0.78rem", margin: "8px 0 0" }}>{doubleXpError}</p>}
           </div>
         )}
 

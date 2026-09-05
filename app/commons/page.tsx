@@ -1514,6 +1514,27 @@ function ThreadList({ threads, authors }: { threads: CommonsThread[]; authors: R
             <p style={{ margin: "0 0 4px", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.9rem" }}>
               {t.kind === "question" ? "? " : ""}
               {t.title}
+              {/* Post Boost -- see lib/evolution.ts's "ability-post-boost".
+                  Purely informational here; the actual trending bonus
+                  lives in lib/commons.ts's getTrendingThread. */}
+              {t.boosted_until && new Date(t.boosted_until).getTime() > Date.now() && (
+                <span
+                  style={{
+                    marginLeft: "8px",
+                    padding: "2px 7px",
+                    borderRadius: "999px",
+                    border: "1px solid #c9a15a",
+                    color: "#c9a15a",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "8px",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  Boosted
+                </span>
+              )}
             </p>
             <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.05em", color: "var(--ink-faint, #5c6684)" }}>
               <span style={{ color: authors[t.profile_id]?.commons_accent || undefined }}>{authorName(authors[t.profile_id])}</span> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}

@@ -129,9 +129,9 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     name: "Stewardship",
     theme: "trust and light, human moderation",
     tiers: [
-      "Can flag a thread or reply for review -- the first real trust step.", // BUILT -- flag button + commons_flags
-      "Flag carries a bit more review weight, once a review queue exists.",
-      "You can see whether a flag you raised was acted on.",
+      "Can flag a thread or reply for review -- the first real trust step.", // BUILT -- flag button + commons_flags (commons_flags itself had never actually been migrated until the Sep 4 2026 review-queue build below -- fixed there)
+      "Flag carries a bit more review weight, once a review queue exists.", // BUILT -- app/admin/flags, app/api/stewardship/{flags,decide}. "Weight" isn't a literal number yet -- what this tier really promised was a human on the other end, and now there is one.
+      "You can see whether a flag you raised was acted on.", // BUILT -- lib/commons.ts's fetchMyFlagStatuses, the Flag button on app/commons/t/[id]/page.tsx reads "Flag resolved"/"Flag dismissed" once acted on
       "Can categorize a flag (spam, distress, off-topic, etc.).",
       "'Quiet Trust' -- your flags get reviewed faster.",
       "Can request a second opinion before flagging something borderline.",

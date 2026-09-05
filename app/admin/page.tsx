@@ -14,6 +14,7 @@ const DASHBOARDS: { href: string; name: string; description: string }[] = [
   { href: "/admin/skins", name: "Widget Skins", description: "The color palettes and artwork offered in the audio player and Hub Capsule." },
   { href: "/admin/signal", name: "Signal Sources", description: "The RSS feeds the hourly Signal fetch reads from." },
   { href: "/admin/monetization", name: "Monetization Applications", description: "Everyone who's earned all four Heart Strings and applied -- yours to approve or deny." },
+  { href: "/admin/flags", name: "Flagged Content", description: "Every flag raised via Stewardship Tier 1's Flag button -- resolve or dismiss." },
 ];
 
 export default function AdminIndexPage() {

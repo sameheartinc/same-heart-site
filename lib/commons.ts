@@ -46,6 +46,12 @@ export interface CommonsThread {
   // with these left unset.
   image_url: string | null;
   resource_url: string | null;
+  // Post Boost ability (see lib/evolution.ts's "ability-post-boost" and
+  // app/api/abilities/boost/route.ts, the only writer). Null or in the
+  // past means not boosted; a future timestamp gives getTrendingThread
+  // below a real, temporary trending bonus and lets the UI show a
+  // "Boosted" badge.
+  boosted_until: string | null;
 }
 
 export interface CommonsReply {
@@ -499,6 +505,14 @@ export interface TrendingThread {
 // ones without a separate date filter.
 const TRENDING_MIN_SCORE = 3;
 
+// Post Boost's actual payoff (see lib/evolution.ts's "ability-post-boost"
+// and app/api/abilities/boost/route.ts): a flat, bounded addition to the
+// same score every thread is already judged by, for as long as
+// boosted_until is in the future -- never a separate ranking path, so a
+// boosted thread still has to have some real engagement to place at all
+// once TRENDING_MIN_SCORE is checked.
+const BOOST_SCORE_BONUS = 5;
+
 export async function getTrendingThread(): Promise<TrendingThread | null> {
   const candidates = await listThreads({ limit: 40 });
   if (candidates.length === 0) return null;
@@ -507,10 +521,12 @@ export async function getTrendingThread(): Promise<TrendingThread | null> {
     candidates.map((t) => t.id),
     null
   );
+  const now = Date.now();
   let best: TrendingThread | null = null;
   for (const t of candidates) {
     const r = reactions[t.id] ?? { heartfelt: 0, heartache: 0, mine: null };
-    const score = t.reply_count + r.heartfelt + r.heartache;
+    const isBoosted = Boolean(t.boosted_until && new Date(t.boosted_until).getTime() > now);
+    const score = t.reply_count + r.heartfelt + r.heartache + (isBoosted ? BOOST_SCORE_BONUS : 0);
     if (score < TRENDING_MIN_SCORE) continue;
     if (!best || score > best.score) best = { id: t.id, title: t.title, score };
   }
@@ -576,6 +592,36 @@ export async function hasFlagged(
   if (error || !data) return flagged;
   for (const row of data as Array<{ target_id: string }>) flagged[row.target_id] = true;
   return flagged;
+}
+
+export type FlagStatus = "pending" | "resolved" | "dismissed";
+
+// Stewardship Tier 3 -- "you can see whether a flag you raised was
+// acted on" (see lib/practices.ts and app/admin/flags/page.tsx, which is
+// the only place status ever actually changes). Same RLS as hasFlagged
+// above -- a flagger can only ever read their own flags -- just reads
+// one more column. Safe to expose status to the flagger even though
+// they can never write it themselves (see supabase/schema.sql's
+// column-level revoke on commons_flags).
+export async function fetchMyFlagStatuses(
+  targetType: ReactionTargetType,
+  targetIds: string[],
+  profileId: string | null
+): Promise<Record<string, FlagStatus>> {
+  const unique = Array.from(new Set(targetIds)).filter(Boolean);
+  const statuses: Record<string, FlagStatus> = {};
+  if (unique.length === 0 || !profileId) return statuses;
+  const { data, error } = await supabase
+    .from("commons_flags")
+    .select("target_id, status")
+    .eq("target_type", targetType)
+    .eq("profile_id", profileId)
+    .in("target_id", unique);
+  if (error || !data) return statuses;
+  for (const row of data as Array<{ target_id: string; status: FlagStatus }>) {
+    statuses[row.target_id] = row.status ?? "pending";
+  }
+  return statuses;
 }
 
 // Kinship Tier 2 -- a private encouragement note left on someone else's

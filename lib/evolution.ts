@@ -34,8 +34,9 @@
 // UI wiring for another widget-skin-kind reward.
 
 import { supabase } from "@/lib/supabaseClient";
+import { getLevel } from "@/lib/primeLevels";
 
-export type UnlockKind = "widget-skin" | "milestone"; // more kinds join this union as they ship
+export type UnlockKind = "widget-skin" | "milestone" | "ability"; // more kinds join this union as they ship
 
 // Every signal here is a plain, already-trustworthy derived number --
 // never a raw client claim. See computeSignals() in the evaluate route
@@ -82,6 +83,28 @@ export const UNLOCKABLES: Unlockable[] = [
     name: "Monetization Eligible",
     description: "Hold all four Heart Strings -- Green, Blue, Red, and Yellow.",
     isEligible: (s) => s.keysHeld >= 4,
+  },
+  // Ability unlocks -- from the "Big Sep 1 batch" in IDEAS.md ("boosting
+  // posts, double xp, content cards"), scoped down to the two pieces
+  // that got a real design decided (content cards stayed deferred).
+  // A new "ability" kind: unlike widget-skin/milestone, holding one of
+  // these doesn't grant a passive thing -- it unlocks the *ability to
+  // take an action* elsewhere (see app/api/abilities/{boost,double-xp}/
+  // route.ts, the only places that ever act on them, each re-checking
+  // this exact unlock server-side rather than trusting the client).
+  {
+    id: "ability-post-boost",
+    kind: "ability",
+    name: "Post Boost",
+    description: "Reach Level 10 to unlock boosting one of your own threads -- a temporary trending bonus, once a week.",
+    isEligible: (s) => getLevel(s.totalXP) >= 10,
+  },
+  {
+    id: "ability-double-xp",
+    kind: "ability",
+    name: "Double XP Hour",
+    description: "Reach Level 15 to unlock an hour of double Heartbeats from replying in the Commons, once a week.",
+    isEligible: (s) => getLevel(s.totalXP) >= 15,
   },
 ];
 

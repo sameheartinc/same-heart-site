@@ -1660,3 +1660,155 @@ this single paste turns on reply notifications AND encouragement notes
 at once. Nothing here is new app behavior beyond what was already
 built and described above -- just closing a gap where old code was
 running against a table that never existed.
+
+## Stewardship's review queue (Sep 4, 2026)
+
+Rob picked this over Voice Tier 3 -- a bigger lift, but it unblocks a
+whole branch of the Stewardship roadmap that's been stuck since Tier 1
+shipped: lib/practices.ts's Tier 2 through 5+ are all written against
+"once a review queue exists."
+
+Building this surfaced a real, pre-existing production gap: commons_flags
+-- the table Stewardship Tier 1's Flag button (lib/commons.ts's
+flagContent/hasFlagged) has been writing to and reading from since it
+shipped -- was never actually defined anywhere in schema.sql or migrated
+to the live database. Same class of bug as the notifications table found
+earlier today: the Flag button has been silently failing this whole
+time (flagContent's error path just sets a local error message, so
+nothing crashed, it just never actually recorded a flag). This build's
+migration finally creates commons_flags for real, alongside the
+review-queue columns, so there's no in-between state where flags exist
+but nobody can act on them.
+
+What was built:
+- supabase/schema.sql: commons_flags (finally defined -- profile_id,
+  target_type/target_id same polymorphic shape as commons_reactions,
+  category, status default 'pending', resolved_at, resolved_by).
+  RLS lets a flagger see/create/update their own row (matching what
+  hasFlagged's existing comment already promised); status/resolved_at/
+  resolved_by are locked away from the "authenticated" role with a
+  column-level revoke -- same pattern as profiles.commons_accent and
+  profiles.xp -- so only the service role can ever move a flag out of
+  pending.
+- app/api/stewardship/flags/route.ts (GET, admin-only): joins pending
+  and decided flags against commons_threads/commons_replies for a
+  content preview, plus profiles for both the reporter's and the
+  target's author name. Same shape as app/api/monetization/list.
+- app/api/stewardship/decide/route.ts (POST, admin-only): the only path
+  that can set a flag to resolved/dismissed. Re-checks is_admin itself,
+  same as every other admin write on this site.
+- app/admin/flags/page.tsx: the actual queue -- Pending and Decided
+  sections, a content preview per flag, a link to the live thread, and
+  Resolved/Dismiss buttons. Added to the /admin index dashboard list.
+- lib/practices.ts: Stewardship Tier 2 marked BUILT. "Review weight"
+  isn't a literal number in v1 -- what the tier's flavor text really
+  promised was a human on the other end of a flag, and now there is
+  one. Tier 1's comment updated to note the commons_flags gap and that
+  it's fixed here.
+
+Verified with `npx tsc --noEmit` on the actual device files after
+committing (clean) and diffs against pre-edit backups on every file
+touched (supabase/schema.sql, lib/practices.ts, app/admin/page.tsx);
+the three new files (app/admin/flags/page.tsx,
+app/api/stewardship/flags/route.ts, app/api/stewardship/decide/route.ts)
+had nothing to diff against, being new.
+
+**Follow-up (same day, second correction):** Rob's paste hit
+`42703: column "status" of relation "commons_flags" does not exist`.
+Turned out commons_flags DID already exist live -- just an older,
+minimal version (profile_id, target_type, target_id, category,
+created_at) predating this session, never written back into
+schema.sql. "create table if not exists" is a full no-op against an
+existing table, so it silently skipped adding the new columns, and the
+column-level revoke then failed against columns that were never
+actually created. Fixed schema.sql in place (this block had never
+successfully run, so there was nothing live to preserve) to use
+explicit `alter table add column if not exists` for status/resolved_at/
+resolved_by instead of relying on the create-table block -- same fix
+shape as Founding Rewards' verified_rank earlier this session. Gave Rob
+the corrected block to paste.
+
+## Ability unlocks: Post Boost + Double XP Hour (Sep 5, 2026)
+
+Rob picked "ability unlocks" from the Big Sep 1 batch to scope and
+build. That entry originally bundled three vague ideas ("boosting
+posts, double xp, content cards that help your spread of information")
+-- talked through the two decisions that actually needed a human call
+before anything could be built responsibly:
+- Post Boost: a temporary trending-score bonus (not a pin, not purely
+  cosmetic) -- reuses lib/commons.ts's existing getTrendingThread
+  scoring rather than a separate ranking path.
+- Double XP Hour: a timed activation you unlock at a level and then use
+  on a cooldown, not a permanent standing bonus -- keeps the XP economy
+  bounded and matches the "ability you use" framing.
+- Content cards stayed explicitly deferred -- still too vague to build
+  ("what does it even render as") and Rob agreed it's fine to wait.
+
+Both gated behind new Level-based entries in lib/evolution.ts's
+UNLOCKABLES (a new "ability" kind, alongside widget-skin/milestone):
+Post Boost at Level 10, Double XP Hour at Level 15 -- my own judgment
+call on thresholds since neither was specified; easy to change if Rob
+wants them different (see getLevel in lib/primeLevels.ts for what a
+given Level number costs in XP).
+
+What was built:
+- supabase/schema.sql: commons_threads.boosted_until (no column-level
+  revoke needed -- that table already has no general UPDATE policy for
+  "authenticated" at all); profiles.last_boost_at, double_xp_until,
+  last_double_xp_at (all three revoked from "authenticated", same
+  pattern as commons_accent/xp, since profiles DOES have a broad
+  update-your-own-row policy).
+- app/api/abilities/boost/route.ts: the only writer of boosted_until.
+  Re-checks the unlock, ownership of the thread, and a 7-day cooldown
+  (profiles.last_boost_at) itself. Sets a 24-hour window.
+- app/api/abilities/double-xp/route.ts: the only writer of
+  double_xp_until/last_double_xp_at. Same re-check shape, 7-day
+  cooldown, 1-hour window.
+- app/api/commons/award-reply/route.ts: checks double_xp_until and
+  doubles the Heartbeats awarded for that reply if it's active.
+  Deliberately doubles AFTER the existing daily cap check, so an active
+  hour can genuinely exceed a normal day's Heartbeats -- otherwise the
+  ability would be pointless once someone hit the cap anyway.
+- lib/commons.ts: getTrendingThread adds a flat +5 to a thread's score
+  while boosted_until is in the future -- still has to clear
+  TRENDING_MIN_SCORE like anything else, so a boost alone can't surface
+  a thread with zero real engagement.
+- lib/abilities.ts (new): client wrapper for the two activation calls.
+- UI: a "Boost this thread" button on a thread's own page (only shown
+  to its author, once Post Boost is unlocked), a small "Boosted" badge
+  wherever threads list (Commons home + the thread page itself), and a
+  new "Double XP Hour" panel on the Hub (Activate button / "Active
+  until..." / "Available again in N days", depending on state).
+
+Verified with `npx tsc --noEmit` on the actual device files after
+committing (clean) and diffs against pre-edit backups on every file
+touched (supabase/schema.sql, lib/evolution.ts, lib/commons.ts,
+app/api/commons/award-reply/route.ts, app/commons/page.tsx,
+app/commons/t/[id]/page.tsx, app/hub/page.tsx); the three new files
+(lib/abilities.ts, app/api/abilities/boost/route.ts,
+app/api/abilities/double-xp/route.ts) had nothing to diff against.
+
+## Stewardship Tier 3: seeing whether your flag was acted on (Sep 5, 2026)
+
+Natural, small follow-up now that the review queue exists. Once
+someone's at Stewardship Tier 3, the "Flagged" label on something they
+flagged updates to "Flag resolved" or "Flag dismissed" once Rob's
+actually decided it in /admin/flags -- no separate page, just the same
+button they already used to flag it in the first place.
+
+What was built:
+- lib/commons.ts: fetchMyFlagStatuses(targetType, targetIds, profileId)
+  -- reads commons_flags' status column for the caller's own flags.
+  Same RLS as the existing hasFlagged (own rows only); safe to expose
+  status to the flagger even though only the admin route can ever
+  change it (see the column-level revoke from yesterday's build).
+- app/commons/t/[id]/page.tsx: fetches this alongside the existing
+  flaggedMap, gated display-side on stewardshipTier >= 3 -- below Tier
+  3, or while still pending, the button still just says "Flagged,"
+  exactly as before.
+- lib/practices.ts: Tier 3 marked BUILT.
+
+No schema migration this time -- purely reads a column that already
+exists. Verified with `npx tsc --noEmit` on the actual device files
+after committing (clean) and diffs against pre-edit backups on every
+file touched.
