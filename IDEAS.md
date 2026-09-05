@@ -1874,3 +1874,83 @@ and diffs against pre-edit backups on every file touched
 this is live -- same manual-migration step as every other schema
 change in this log; the Hub's profile select will 400 on
 kinship_streak_current/longest until that column exists.
+
+## Comms Deck reskin: feature transmissions instead of listing them, military look, button uniformity (Sep 5, 2026)
+
+Rob's ask had three parts, all about the Exchange panel ("Comms Deck")
+on the Commons page: stop showing a flat list of transmissions under
+the composer; instead, weighty ones should get "featured in the
+commons as its own individual bubble that shows up at random"; give
+the panel more of a military look; and, a separate small aesthetic
+note, put the "Start a community" / "Start a discussion" buttons close
+together.
+
+Worth noting: the actual scoring/reward algorithm Rob described
+("analyzed against other contributions and their relevance to global
+topics and current issues... rewarded for contribution") already
+exists -- app/api/exchange/transmit/route.ts's scoreTransmission
+weighs every transmission against WORLD_ISSUES and awards Heartbeats
+from a 0-100 impact_score. Nothing needed building there; this pass is
+entirely about what happens to a transmission after it's scored.
+
+Also found the "individual bubble that shows up at random" mechanic
+already exists in a different form: SignalBubble (this file), a
+glowing rotating circular card sitting at the very top of the Commons
+page, currently cycling only through the curated Signal Feed (RSS
+headlines). Rather than inventing a second, separate bubble UI,
+extended this one to also carry transmissions -- consistent with the
+"own individual bubble" framing, since each slide already is its own
+distinct bubble instance in the rotation.
+
+What was built:
+- FEATURED_TRANSMISSION_THRESHOLD = 70 (impact_score floor to earn a
+  spot). Judgment call, not specified by Rob: leaves room above the
+  scoring prompt's own 80+ "genuinely substantive" band while keeping
+  out the "modest 20-50" run-of-the-mill links. Easy to move.
+- featuredItems: a useMemo merging curated Signal Feed articles with
+  qualifying transmissions into one common shape (FeaturedItem),
+  Fisher-Yates shuffled so which one leads -- and the press/community
+  mix -- differs per page load ("shows up at random," not a fixed
+  press-then-transmissions order). SignalBubble now takes
+  FeaturedItem[] instead of NewsArticle[]; a transmission slide reads
+  "Comms Deck · Featured" instead of "The Signal · Live" and its
+  byline shows the sender's ship ID, world issue, and impact score.
+  recordSignalEngagement (Signal Feed click-tracking, keyed to
+  news_articles.id) only fires for kind: "press" slides -- a
+  transmission's id would just FK-fail it silently otherwise.
+- Removed the old flat "incoming transmissions" list entirely (was
+  transmissions.slice(0,6).map(...) right under the composer). A
+  transmission's reward still surfaces immediately via the existing
+  transmitSuccess message; browsing your own past transmissions is
+  still possible on the Impact History page (Green Key door,
+  lib/exchange.ts's listMyTransmissions) even though nothing lists
+  them here anymore. Cleaned up TAGLINE_COLORS/randomTaglineColor,
+  which existed only for that removed block.
+- Military look, scoped to just this panel (not a full site reskin):
+  sharpened border-radius from 16px/999px/10px pill-and-round shapes
+  down to 4px/3px across the panel, its buttons, and its inputs; swapped
+  the panel's ad-hoc soft blue (#7c9fd9 / rgba(124,159,217,*)) for the
+  site's existing var(--gold) amber token (rgb(184,134,63)) instead of
+  introducing a new color; darkened the background toward black with an
+  inset shadow; added four small absolutely-positioned corner brackets
+  (a targeting-reticle look) around the panel; added a small pulsing
+  amber dot next to the "Comms Deck · The Exchange" label (new scoped
+  commsLiveDotPulse keyframes, respects prefers-reduced-motion, same
+  pattern as the existing signalDotPulse elsewhere in this file).
+- Start a Community / Start a Discussion: previously two
+  differently-styled buttons (communityActionStyle vs the now-deleted
+  smallActionStyle) living in two section headers far apart on the
+  page (Communities up top; Live Now well below The Signal and the
+  curated news grid). Pulled both into one shared toolbar right below
+  the Exchange panel, same style, side by side. Each button still
+  toggles its real composer inline in its own section (nothing about
+  where Community/Discussion forms actually render changed) -- added
+  id="communities-section" / id="discussions-section" wrapper divs and
+  a scrollIntoView so clicking the toolbar button still takes you to
+  where the form actually opens, even though the button itself no
+  longer lives next to it.
+
+Verified with `npx tsc --noEmit` on the actual device files after
+committing (clean) and reviewed the full diff by eye (no test runner
+in this project, and this is presentation-layer-only -- no schema
+change, so nothing for Rob to paste into Supabase this time).

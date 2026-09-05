@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -30,25 +30,29 @@ import { getWorldIssue } from "@/lib/worldIssues";
 const SEEN_KEY = "commons-entrance-seen";
 const ACCENT = "#c9576a";
 
-// Bright colors a submitted tagline can render in -- picked fresh (not
-// stored) every time a transmission renders, so the same tagline can show
-// up in a different color on a later render/reload. Chosen to read clearly
-// against the dark Commons background.
-const TAGLINE_COLORS = [
-  "#ff5f6d",
-  "#ffd166",
-  "#06d6a0",
-  "#4cc9f0",
-  "#c77dff",
-  "#ff70a6",
-  "#f72585",
-  "#7bf1a8",
-  "#ff9f1c",
-];
+// A transmission needs to clear this impact_score (0-100, see
+// app/api/exchange/transmit/route.ts's scoreTransmission -- 80+ is
+// reserved there for content that "clearly and substantively" engages a
+// real issue) before it's weighty enough to earn a shot at the rotating
+// bubble up top. Rob, Sep 5 2026: transmissions shouldn't just sit in a
+// permanent list -- the ones that actually matter should surface the
+// same way a real headline does. 70 leaves real room above the 80+ "genuinely
+// substantive" band while still keeping out the "modest 20-50" run of the mill
+// links -- easy to move if it turns out to feature too much or too little.
+const FEATURED_TRANSMISSION_THRESHOLD = 70;
 
-function randomTaglineColor(): string {
-  return TAGLINE_COLORS[Math.floor(Math.random() * TAGLINE_COLORS.length)];
-}
+// What the rotating bubble up top actually renders -- deliberately the
+// same shape for a curated Signal Feed headline and a stand-out
+// transmission, so SignalBubble doesn't need to know which kind of
+// thing it's showing.
+type FeaturedItem = {
+  id: string;
+  url: string;
+  image_url: string | null;
+  title: string;
+  source_name: string | null;
+  kind: "press" | "transmission";
+};
 
 export default function CommonsPage() {
   const router = useRouter();
@@ -329,6 +333,47 @@ export default function CommonsPage() {
     setTransmitImageUrl(publicUrlData.publicUrl);
   }
 
+  // Feeds the rotating SignalBubble up top -- curated Signal Feed
+  // headlines plus any transmission weighty enough to clear
+  // FEATURED_TRANSMISSION_THRESHOLD, shuffled together so which one
+  // leads (and the mix of press vs. community) is different per load.
+  // Only recomputed when the underlying data actually changes, so the
+  // shuffle doesn't reshuffle itself out from under the bubble's own
+  // rotation index on every render.
+  const featuredItems = useMemo<FeaturedItem[]>(() => {
+    const press: FeaturedItem[] = signal.map((a) => ({
+      id: a.id,
+      url: a.url,
+      image_url: a.image_url,
+      title: a.title,
+      source_name: a.source_name,
+      kind: "press",
+    }));
+
+    const featuredTransmissions: FeaturedItem[] = transmissions
+      .filter((t) => (t.impact_score ?? 0) >= FEATURED_TRANSMISSION_THRESHOLD)
+      .map((t) => {
+        const sender = authors[t.profile_id];
+        const shipId = sender?.designation || sender?.display_name || "Unknown ship";
+        const issue = getWorldIssue(t.issue_key);
+        return {
+          id: t.id,
+          url: t.url,
+          image_url: t.image_url,
+          title: t.tagline || t.title || t.domain || t.url,
+          source_name: `${shipId} · ${issue ? issue.label + " · " : ""}Impact ${t.impact_score}`,
+          kind: "transmission" as const,
+        };
+      });
+
+    const combined = [...press, ...featuredTransmissions];
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+    return combined;
+  }, [signal, transmissions, authors]);
+
   if (checking) return <PageLoading />;
 
   if (stage === "entrance") {
@@ -563,8 +608,8 @@ export default function CommonsPage() {
           The world is talking.
         </h1>
 
-        {!showingSearch && signal.length > 0 && (
-          <SignalBubble articles={signal} userId={userId} brokenImageIds={brokenImageIds} />
+        {!showingSearch && featuredItems.length > 0 && (
+          <SignalBubble articles={featuredItems} userId={userId} brokenImageIds={brokenImageIds} />
         )}
 
         {/* Live presence bar -- every number here is real, queried fresh
@@ -593,13 +638,52 @@ export default function CommonsPage() {
             lib/exchange.ts / app/api/exchange/transmit/route.ts. */}
         <div
           style={{
-            background: "linear-gradient(180deg, rgba(124,159,217,0.06), transparent)",
-            border: "1px solid rgba(124,159,217,0.35)",
-            borderRadius: "16px",
+            position: "relative",
+            background: "linear-gradient(180deg, rgba(184,134,63,0.09), rgba(8,10,18,0.45))",
+            border: "1px solid rgba(184,134,63,0.45)",
+            borderRadius: "4px",
             padding: "22px",
             marginBottom: "34px",
+            boxShadow: "inset 0 0 46px rgba(0,0,0,0.35)",
           }}
         >
+          {/* Corner brackets -- the one deliberately "military HUD" touch
+              Rob asked for (Sep 5 2026: "more of a military look"),
+              scoped to just this panel rather than a full site reskin.
+              Four small targeting-reticle corners, aria-hidden since
+              they're pure decoration. */}
+          {[
+            { top: "-1px", left: "-1px", borderWidth: "2px 0 0 2px" },
+            { top: "-1px", right: "-1px", borderWidth: "2px 2px 0 0" },
+            { bottom: "-1px", left: "-1px", borderWidth: "0 0 2px 2px" },
+            { bottom: "-1px", right: "-1px", borderWidth: "0 2px 2px 0" },
+          ].map((corner, i) => (
+            <span
+              key={i}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                width: "16px",
+                height: "16px",
+                borderColor: "rgba(184,134,63,0.85)",
+                borderStyle: "solid",
+                pointerEvents: "none",
+                ...corner,
+              }}
+            />
+          ))}
+
+          <style>{`
+            @keyframes commsLiveDotPulse {
+              0%, 100% { opacity: 0.5; transform: scale(1); }
+              50%      { opacity: 1; transform: scale(1.4); }
+            }
+            .comms-live-dot { animation: commsLiveDotPulse 1.8s ease-in-out infinite; }
+            @media (prefers-reduced-motion: reduce) {
+              .comms-live-dot { animation: none; opacity: 0.9; }
+            }
+          `}</style>
+
           <div
             style={{
               display: "flex",
@@ -614,13 +698,20 @@ export default function CommonsPage() {
               <p
                 style={{
                   margin: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "7px",
                   fontFamily: "var(--font-mono)",
                   fontSize: "9px",
                   letterSpacing: "0.2em",
                   textTransform: "uppercase",
-                  color: "#7c9fd9",
+                  color: "var(--gold)",
                 }}
               >
+                <span
+                  className="comms-live-dot"
+                  style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--gold)", display: "inline-block", flexShrink: 0 }}
+                />
                 Comms Deck &middot; The Exchange
               </p>
               <p
@@ -644,10 +735,10 @@ export default function CommonsPage() {
                   fontSize: "9px",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
-                  color: "#7c9fd9",
+                  color: "var(--gold)",
                   textDecoration: "none",
-                  border: "1px solid rgba(124,159,217,0.5)",
-                  borderRadius: "999px",
+                  border: "1px solid rgba(184,134,63,0.5)",
+                  borderRadius: "3px",
                   padding: "8px 14px",
                   whiteSpace: "nowrap",
                 }}
@@ -664,7 +755,7 @@ export default function CommonsPage() {
                   color: "#d9503f",
                   textDecoration: "none",
                   border: "1px solid rgba(217,80,63,0.5)",
-                  borderRadius: "999px",
+                  borderRadius: "3px",
                   padding: "8px 14px",
                   whiteSpace: "nowrap",
                 }}
@@ -687,8 +778,8 @@ export default function CommonsPage() {
               style={{
                 flex: "2 1 320px",
                 padding: "12px 14px",
-                borderRadius: "10px",
-                border: "1px solid rgba(124,159,217,0.4)",
+                borderRadius: "3px",
+                border: "1px solid rgba(184,134,63,0.4)",
                 background: "var(--panel)",
                 color: "var(--ink)",
                 fontFamily: "var(--font-mono)",
@@ -704,8 +795,8 @@ export default function CommonsPage() {
               style={{
                 flex: "1 1 160px",
                 padding: "12px 14px",
-                borderRadius: "10px",
-                border: "1px solid rgba(124,159,217,0.4)",
+                borderRadius: "3px",
+                border: "1px solid rgba(184,134,63,0.4)",
                 background: "var(--panel)",
                 color: "var(--ink)",
                 fontFamily: "var(--font-display)",
@@ -718,10 +809,10 @@ export default function CommonsPage() {
                 display: "flex",
                 alignItems: "center",
                 padding: "0 14px",
-                borderRadius: "10px",
-                border: "1px solid rgba(124,159,217,0.4)",
-                background: transmitImageUrl ? "rgba(124,159,217,0.12)" : "var(--panel)",
-                color: "#7c9fd9",
+                borderRadius: "3px",
+                border: "1px solid rgba(184,134,63,0.4)",
+                background: transmitImageUrl ? "rgba(184,134,63,0.12)" : "var(--panel)",
+                color: "var(--gold)",
                 fontFamily: "var(--font-mono)",
                 fontSize: "0.78rem",
                 cursor: transmitImageUploading ? "default" : "pointer",
@@ -747,10 +838,10 @@ export default function CommonsPage() {
               disabled={transmitBusy}
               style={{
                 padding: "12px 20px",
-                borderRadius: "10px",
-                border: "1px solid #7c9fd9",
-                background: "rgba(124,159,217,0.12)",
-                color: "#7c9fd9",
+                borderRadius: "3px",
+                border: "1px solid var(--gold)",
+                background: "rgba(184,134,63,0.12)",
+                color: "var(--gold)",
                 fontFamily: "var(--font-display)",
                 fontWeight: 700,
                 fontSize: "0.8rem",
@@ -769,7 +860,7 @@ export default function CommonsPage() {
               <img
                 src={transmitImageUrl}
                 alt=""
-                style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(124,159,217,0.4)" }}
+                style={{ width: "48px", height: "48px", borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(184,134,63,0.4)" }}
               />
               <button
                 type="button"
@@ -807,7 +898,7 @@ export default function CommonsPage() {
                 margin: "0 0 14px",
                 fontFamily: "var(--font-mono)",
                 fontSize: "11px",
-                color: "#7c9fd9",
+                color: "var(--gold)",
               }}
             >
               +{transmitSuccess.heartbeats} Heartbeats received.
@@ -815,96 +906,15 @@ export default function CommonsPage() {
             </p>
           )}
 
-          {/* Incoming transmissions -- other ships' signals, most recent
-              first. Deliberately styled like a comms log, not a social
-              feed. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {transmissions.length === 0 ? (
-              <p
-                style={{
-                  margin: 0,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "11px",
-                  color: "var(--ink-faint, #5c6684)",
-                }}
-              >
-                No transmissions yet. Be the first ship to send one.
-              </p>
-            ) : (
-              transmissions.slice(0, 6).map((t) => {
-                const sender = authors[t.profile_id];
-                const shipId = sender?.designation || sender?.display_name || "Unknown ship";
-                const issue = getWorldIssue(t.issue_key);
-                return (
-                  <div
-                    key={t.id}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      background: "rgba(124,159,217,0.05)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "11px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
-                      <span style={{ color: "#7c9fd9", flexShrink: 0 }}>&#9679;</span>
-                      <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{shipId}</span>
-                      <a
-                        href={t.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          color: "var(--ink-dim)",
-                          textDecoration: "none",
-                          flex: 1,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={t.title ?? t.url}
-                      >
-                        {t.title ?? t.domain ?? t.url}
-                      </a>
-                      {issue && (
-                        <span style={{ color: "var(--ink-faint, #5c6684)", flexShrink: 0 }}>{issue.label}</span>
-                      )}
-                      <span style={{ color: "var(--gold)", flexShrink: 0 }}>+{t.heartbeats_awarded}</span>
-                    </div>
-                    {t.tagline && (
-                      <div
-                        style={{
-                          paddingLeft: "20px",
-                          fontFamily: "var(--font-display)",
-                          fontWeight: 700,
-                          fontSize: "12px",
-                          color: randomTaglineColor(),
-                        }}
-                      >
-                        {t.tagline}
-                      </div>
-                    )}
-                    {t.image_url && (
-                      <img
-                        src={t.image_url}
-                        alt=""
-                        style={{
-                          marginLeft: "20px",
-                          width: "72px",
-                          height: "72px",
-                          borderRadius: "8px",
-                          objectFit: "cover",
-                          border: "1px solid rgba(124,159,217,0.3)",
-                        }}
-                      />
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
+          {/* No visible feed here on purpose (Rob, Sep 5 2026: "not a
+              list underneath"). A transmission's reward already lands
+              in transmitSuccess above the moment it's scanned; anything
+              scoring well enough gets its shot at the rotating
+              SignalBubble up top instead of sitting in a permanent
+              scrollable log -- see featuredItems below. Your own past
+              transmissions are still all visible on your Impact History
+              page (the Green Key door, lib/exchange.ts's
+              listMyTransmissions) even though nothing renders here. */}
         </div>
 
         <form
@@ -991,14 +1001,39 @@ export default function CommonsPage() {
           </Section>
         ) : (
           <>
-            <Section
-              title="Communities"
-              action={
-                <button onClick={() => setNewCommunityOpen((v) => !v)} style={communityActionStyle}>
-                  {newCommunityOpen ? "Cancel" : "+ Start a community"}
-                </button>
-              }
-            >
+            {/* Rob, Sep 5 2026: "start a community, start a discussion
+                should be close together to make things more uniform" --
+                these used to live as two differently-styled action
+                buttons in two section headers, one right at the top and
+                one much further down the page, past The Signal and the
+                curated news grid. Pulled both into one shared toolbar,
+                same style, right next to each other; each button still
+                opens its real composer inline in its own section below,
+                just scrolled into view instead of leaving you to hunt
+                for it. */}
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "34px" }}>
+              <button
+                onClick={() => {
+                  setNewCommunityOpen((v) => !v);
+                  document.getElementById("communities-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                style={communityActionStyle}
+              >
+                {newCommunityOpen ? "Cancel" : "+ Start a community"}
+              </button>
+              <button
+                onClick={() => {
+                  setNewThreadOpen((v) => !v);
+                  document.getElementById("discussions-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                style={communityActionStyle}
+              >
+                {newThreadOpen ? "Cancel" : "+ Start a discussion"}
+              </button>
+            </div>
+
+            <div id="communities-section">
+            <Section title="Communities">
               <p
                 style={{
                   margin: "0 0 16px",
@@ -1066,6 +1101,7 @@ export default function CommonsPage() {
                 </div>
               )}
             </Section>
+            </div>
 
             {signal.length > 0 && (
               <Section title="The Signal">
@@ -1153,14 +1189,8 @@ export default function CommonsPage() {
               </Section>
             )}
 
-            <Section
-              title="Live now"
-              action={
-                <button onClick={() => setNewThreadOpen((v) => !v)} style={smallActionStyle}>
-                  {newThreadOpen ? "Cancel" : "+ Start a discussion"}
-                </button>
-              }
-            >
+            <div id="discussions-section">
+            <Section title="Live now">
               {newThreadOpen && (
                 <NewThreadForm
                   kind={newThreadKind}
@@ -1180,6 +1210,7 @@ export default function CommonsPage() {
                 <ThreadList threads={liveThreads} authors={authors} />
               )}
             </Section>
+            </div>
 
             <Section title="Unanswered">
               {questionThreads.length === 0 ? (
@@ -1225,7 +1256,7 @@ function SignalBubble({
   userId,
   brokenImageIds,
 }: {
-  articles: NewsArticle[];
+  articles: FeaturedItem[];
   userId: string | null;
   brokenImageIds: Set<string>;
 }) {
@@ -1292,7 +1323,7 @@ function SignalBubble({
             color: ACCENT,
           }}
         >
-          The Signal &middot; Live
+          {article.kind === "transmission" ? "Comms Deck \u00b7 Featured" : "The Signal \u00b7 Live"}
         </p>
       </div>
 
@@ -1301,7 +1332,7 @@ function SignalBubble({
         href={article.url}
         target="_blank"
         rel="noreferrer"
-        onClick={() => userId && recordSignalEngagement(userId, article.id)}
+        onClick={() => userId && article.kind === "press" && recordSignalEngagement(userId, article.id)}
         className="signal-bubble"
         style={{
           position: "relative",
@@ -1650,17 +1681,6 @@ const communityActionStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const smallActionStyle: React.CSSProperties = {
-  padding: "6px 12px",
-  borderRadius: "999px",
-  border: "1px solid var(--border)",
-  background: "none",
-  color: "var(--ink-dim)",
-  fontFamily: "var(--font-mono)",
-  fontSize: "9px",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
 
 const linkButtonStyle: React.CSSProperties = {
   background: "none",
