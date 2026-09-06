@@ -26,8 +26,8 @@
 // log of each one). A tier is only ever marked BUILT below once it's a
 // real, live, gated feature -- never for narrating something the app
 // already did for everyone regardless of tier. As of this writing:
-// Voice and Kinship are through Tier 3, Guidance through Tier 2,
-// Stewardship through Tier 3 -- check each tier's own inline comment
+// Voice, Kinship, and Guidance are through Tier 3, Stewardship also
+// through Tier 3 -- check each tier's own inline comment
 // for exactly what shipped and where, rather than trusting this count
 // to stay current. Whatever's left up to Tier 20 is the full roadmap
 // already agreed with Rob, ready to build one at a time, in order, per
@@ -110,7 +110,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     tiers: [
       "Can attach one external resource link to an original thread.", // BUILT -- composer + thread display
       "Personal 'Resource Shelf' starts (up to 5 saved).", // BUILT -- lib/resourceShelf.ts, Hub panel, "Save" button on thread pages
-      "Can tag a resource with a category.",
+      "Can tag a resource with a category.", // BUILT (Sep 5 2026) -- resource_shelf.issue_key (supabase/schema.sql), lib/resourceShelf.ts's setShelfItemCategory, components/ShelfCategoryPicker.tsx rendered per shelf item in the Hub, gated on guidanceTier >= 3. Reuses lib/worldIssues.ts's WORLD_ISSUES -- the Exchange's own issue taxonomy -- rather than inventing a second category list.
       "Shelf capacity increases (up to 15).",
       "Can pin one resource to a community's sidebar.",
       "Can annotate why a resource helped.",

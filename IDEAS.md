@@ -1995,3 +1995,49 @@ eye across all six touched files.
 
 **Needs Rob to paste the schema.sql block into Supabase** before the
 marker can actually appear -- same as every schema change in this log.
+
+## Guidance Tier 3: tagging a Resource Shelf item with a category (Sep 5, 2026)
+
+"Can tag a resource with a category" -- the simplest of today's three
+tier builds. One real decision: what taxonomy of categories to use.
+Rather than inventing a second list, reused lib/worldIssues.ts's
+WORLD_ISSUES -- the exact fixed set the Exchange already scores every
+transmission against -- so a Resource Shelf item and a transmission
+about, say, climate, share one vocabulary instead of two incompatible
+category systems living side by side.
+
+Chose to let people tag (and re-tag) a shelf item any time from the
+Hub, rather than adding a category field to the one-click "Save to
+Shelf" button on a thread page -- that button intentionally has zero
+friction today (grabs the thread's own resource_url/title and saves
+immediately), and turning it into a form to ask for a category up
+front would undo that. Tagging from the Hub, where the Shelf already
+lives and is already being managed (the "Remove" button is right
+there), fit better.
+
+What was built:
+- supabase/schema.sql: resource_shelf.issue_key (text, nullable, no DB
+  constraint -- validated app-side, same posture as
+  exchange_transmissions.issue_key already has). No RLS change needed:
+  the table's existing "for all... own rows only" policy already covers
+  updating this column.
+- lib/resourceShelf.ts: ShelfItem gained issue_key; listMyShelf selects
+  it; new setShelfItemCategory(itemId, issueKey) -- a plain client
+  update, same trust shape as everything else in this file.
+- components/ShelfCategoryPicker.tsx (new): a plain <select> over
+  WORLD_ISSUES plus "Uncategorized" (writes null, not empty string).
+- app/hub/page.tsx: Resource Shelf panel's per-item row now stacks the
+  existing title/Remove row over a ShelfCategoryPicker, shown only once
+  guidanceTier >= 3 (below that, a shelf item looks exactly as it did
+  before this tier existed). changeShelfItemCategory does an optimistic
+  local update with rollback on failure, same pattern as the rest of
+  this page's small inline actions.
+- lib/practices.ts: Guidance Tier 3 marked BUILT; refreshed the file
+  header's tier-count summary again (Voice, Kinship, and Guidance now
+  all through Tier 3; Stewardship also through Tier 3).
+
+Verified with `npx tsc --noEmit` (clean) and reviewed the full diff by
+eye across all five touched files.
+
+**Needs Rob to paste the schema.sql block into Supabase** before the
+category picker will actually save anything.

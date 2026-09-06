@@ -1227,6 +1227,17 @@ create table if not exists resource_shelf (
   created_at timestamptz default now()
 );
 
+-- Guidance Tier 3 -- "can tag a resource with a category" (Sep 5 2026,
+-- see lib/practices.ts). Reuses lib/worldIssues.ts's WORLD_ISSUES --
+-- the same fixed issue taxonomy the Exchange already scores
+-- transmissions against -- rather than inventing a second category
+-- system, so a resource and a transmission about the same real-world
+-- issue share one vocabulary. Validated app-side against that list,
+-- same posture as exchange_transmissions.issue_key: no DB-level check
+-- constraint or FK, since the list lives in code and can grow without
+-- a migration.
+alter table resource_shelf add column if not exists issue_key text;
+
 alter table resource_shelf enable row level security;
 
 drop policy if exists "Users manage their own resource shelf" on resource_shelf;

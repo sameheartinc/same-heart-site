@@ -28,12 +28,18 @@ export interface ShelfItem {
   title: string;
   source_thread_id: string | null;
   created_at: string;
+  // Guidance Tier 3 -- a WORLD_ISSUES key (lib/worldIssues.ts), or null
+  // for a not-yet-categorized item. Nothing enforces this is one of the
+  // real keys at the database level (see supabase/schema.sql's comment
+  // on this column) -- setShelfItemCategory below is the one place
+  // that's meant to write it, and it validates against the real list.
+  issue_key: string | null;
 }
 
 export async function listMyShelf(profileId: string): Promise<ShelfItem[]> {
   const { data, error } = await supabase
     .from("resource_shelf")
-    .select("id, url, title, source_thread_id, created_at")
+    .select("id, url, title, source_thread_id, created_at, issue_key")
     .eq("profile_id", profileId)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
@@ -70,5 +76,19 @@ export async function addToShelf(
 export async function removeFromShelf(itemId: string): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from("resource_shelf").delete().eq("id", itemId);
   if (error) return { ok: false, error: error.message || "Couldn't remove that right now." };
+  return { ok: true };
+}
+
+// Guidance Tier 3 -- tag (or clear, with issueKey null) one of your own
+// shelf items with a WORLD_ISSUES category. A plain client update
+// behind resource_shelf's existing "own rows only" RLS, same trust
+// posture as everything else in this file -- nothing here carries XP,
+// trust, or money, so there's no need for a service-role route. Validity
+// of issueKey against the real WORLD_ISSUES list is the caller's job
+// (see components/ShelfCategoryPicker.tsx) -- this function just writes
+// whatever string it's given.
+export async function setShelfItemCategory(itemId: string, issueKey: string | null): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.from("resource_shelf").update({ issue_key: issueKey }).eq("id", itemId);
+  if (error) return { ok: false, error: error.message || "Couldn't tag that right now." };
   return { ok: true };
 }

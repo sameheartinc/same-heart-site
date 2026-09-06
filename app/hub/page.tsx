@@ -37,7 +37,8 @@ import {
   type PracticeKey,
   type PracticePoints,
 } from "@/lib/practices";
-import { listMyShelf, removeFromShelf, RESOURCE_SHELF_CAP, type ShelfItem } from "@/lib/resourceShelf";
+import { listMyShelf, removeFromShelf, setShelfItemCategory, RESOURCE_SHELF_CAP, type ShelfItem } from "@/lib/resourceShelf";
+import ShelfCategoryPicker from "@/components/ShelfCategoryPicker";
 import { activateDoubleXp } from "@/lib/abilities";
 import WidgetFrame from "@/components/WidgetFrame";
 
@@ -340,6 +341,21 @@ export default function HubPage() {
       return;
     }
     setShelf((prev) => prev.filter((item) => item.id !== itemId));
+  }
+
+  // Guidance Tier 3 -- optimistic update, same shape as the rest of
+  // this page's small inline actions; setShelfItemCategory itself is a
+  // plain client update behind resource_shelf's own RLS (see
+  // lib/resourceShelf.ts), so there's nothing to await before trusting
+  // the new value locally, only to roll back if it somehow fails.
+  async function changeShelfItemCategory(itemId: string, issueKey: string | null) {
+    const previous = shelf;
+    setShelf((prev) => prev.map((item) => (item.id === itemId ? { ...item, issue_key: issueKey } : item)));
+    const result = await setShelfItemCategory(itemId, issueKey);
+    if (!result.ok) {
+      setShelf(previous);
+      setShelfError(result.error ?? "Couldn't tag that right now.");
+    }
   }
 
   // Kindred Sparks opt-out -- flips profiles.kindred_opt_out and clears
@@ -2275,51 +2291,62 @@ export default function HubPage() {
                     key={item.id}
                     style={{
                       display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "8px",
+                      flexDirection: "column",
+                      gap: "6px",
                       padding: "8px 10px",
                       borderRadius: "8px",
                       background: "var(--widget-panel-soft, rgba(255,255,255,0.03))",
                     }}
                   >
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        minWidth: 0,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        fontFamily: "var(--font-display)",
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                        color: "var(--widget-text)",
-                        textDecoration: "none",
-                      }}
-                    >
-                      {item.title}
-                    </a>
-                    <button
-                      onClick={() => removeShelfItem(item.id)}
-                      disabled={removingShelfId === item.id}
-                      style={{
-                        flexShrink: 0,
-                        padding: "3px 9px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--widget-border)",
-                        background: "none",
-                        color: "var(--widget-text-faint)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "8px",
-                        letterSpacing: "0.04em",
-                        textTransform: "uppercase",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {removingShelfId === item.id ? "..." : "Remove"}
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontFamily: "var(--font-display)",
+                          fontWeight: 600,
+                          fontSize: "0.85rem",
+                          color: "var(--widget-text)",
+                          textDecoration: "none",
+                        }}
+                      >
+                        {item.title}
+                      </a>
+                      <button
+                        onClick={() => removeShelfItem(item.id)}
+                        disabled={removingShelfId === item.id}
+                        style={{
+                          flexShrink: 0,
+                          padding: "3px 9px",
+                          borderRadius: "8px",
+                          border: "1px solid var(--widget-border)",
+                          background: "none",
+                          color: "var(--widget-text-faint)",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "8px",
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {removingShelfId === item.id ? "..." : "Remove"}
+                      </button>
+                    </div>
+                    {/* Guidance Tier 3 -- see lib/resourceShelf.ts's
+                        setShelfItemCategory. Only shown once the tier is
+                        actually reached; below it a shelf item just has
+                        no category, exactly like before this tier existed. */}
+                    {practiceTier(practicePoints, "guidance") >= 3 && (
+                      <ShelfCategoryPicker
+                        value={item.issue_key}
+                        onChange={(issueKey) => changeShelfItemCategory(item.id, issueKey)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
