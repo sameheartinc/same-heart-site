@@ -71,6 +71,8 @@ type Profile = {
   // app/api/abilities/double-xp/route.ts, the only writer of either.
   double_xp_until: string | null;
   last_double_xp_at: string | null;
+  // Voice Tier 4 -- see lib/practices.ts and components/VoiceSignature.tsx.
+  voice_signature: string | null;
 };
 
 type LogEntry = {
@@ -153,6 +155,15 @@ export default function HubPage() {
   const [shelf, setShelf] = useState<ShelfItem[]>([]);
   const [removingShelfId, setRemovingShelfId] = useState<string | null>(null);
   const [shelfError, setShelfError] = useState<string | null>(null);
+  // Voice Tier 4 -- the personal signature line (see
+  // components/VoiceSignature.tsx). Same editingName/nameDraft shape as
+  // the call-sign editor above, kept separate since the two save
+  // independently and gate on different things.
+  const [editingSignature, setEditingSignature] = useState(false);
+  const [signatureDraft, setSignatureDraft] = useState("");
+  const [signatureSaving, setSignatureSaving] = useState(false);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const SIGNATURE_MAX = 80;
 
   useEffect(() => {
     (async () => {
@@ -165,7 +176,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at, kinship_streak_current, kinship_streak_longest"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at, kinship_streak_current, kinship_streak_longest, voice_signature"
         )
         .eq("id", userData.user.id)
         .single();
@@ -601,6 +612,46 @@ export default function HubPage() {
       return;
     }
     setEditingName(false);
+  }
+
+  // Voice Tier 4 -- start/save/cancel for the signature line, same
+  // shape as startEditName/saveDisplayName above. A plain client update
+  // straight to profiles (own row, RLS-protected) rather than a
+  // service-role route -- see this tier's comment in
+  // supabase/schema.sql for why that's the right trust level here.
+  function startEditSignature() {
+    if (!profile) return;
+    setSignatureDraft(profile.voice_signature?.trim() || "");
+    setSignatureError(null);
+    setEditingSignature(true);
+  }
+
+  function cancelEditSignature() {
+    setEditingSignature(false);
+    setSignatureError(null);
+  }
+
+  async function saveVoiceSignature(e: React.FormEvent) {
+    e.preventDefault();
+    if (!userId || !profile || signatureSaving) return;
+    const trimmed = signatureDraft.trim().slice(0, SIGNATURE_MAX);
+    const nextValue = trimmed.length > 0 ? trimmed : null;
+    if (nextValue === profile.voice_signature) {
+      setEditingSignature(false);
+      return;
+    }
+    const previous = profile.voice_signature;
+    setSignatureError(null);
+    setProfile({ ...profile, voice_signature: nextValue });
+    setSignatureSaving(true);
+    const { error } = await supabase.from("profiles").update({ voice_signature: nextValue }).eq("id", userId);
+    setSignatureSaving(false);
+    if (error) {
+      setProfile((p) => (p ? { ...p, voice_signature: previous } : p));
+      setSignatureError("Couldn't save -- try again.");
+      return;
+    }
+    setEditingSignature(false);
   }
 
   // A separate, self-contained save path for the Level 5 prompt banner
@@ -2222,6 +2273,168 @@ export default function HubPage() {
                 }}
               >
                 {practiceError}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Voice Tier 4 -- the personal signature line (see
+            lib/practices.ts and components/VoiceSignature.tsx). Shown
+            under your own name on the full page of any thread you
+            started -- this is where you set it. */}
+        {practiceTier(practicePoints, "voice") >= 4 && (
+          <div
+            style={{
+              marginBottom: "22px",
+              padding: "14px 16px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel, transparent)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+                marginBottom: "10px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Signature Line
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-text-faint)",
+                }}
+              >
+                Shown on threads you start
+              </span>
+            </div>
+            {editingSignature ? (
+              <form onSubmit={saveVoiceSignature} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <input
+                  type="text"
+                  value={signatureDraft}
+                  onChange={(e) => setSignatureDraft(e.target.value.slice(0, SIGNATURE_MAX))}
+                  placeholder="A short line under your name -- e.g. a quiet motto."
+                  autoFocus
+                  style={{
+                    padding: "7px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--widget-border)",
+                    background: "var(--widget-panel-soft, rgba(255,255,255,0.03))",
+                    color: "var(--widget-text)",
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.85rem",
+                  }}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "8px",
+                      color: "var(--widget-text-faint)",
+                    }}
+                  >
+                    {signatureDraft.length}/{SIGNATURE_MAX}
+                  </span>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      type="button"
+                      onClick={cancelEditSignature}
+                      disabled={signatureSaving}
+                      style={{
+                        padding: "3px 9px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--widget-border)",
+                        background: "none",
+                        color: "var(--widget-text-faint)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={signatureSaving}
+                      style={{
+                        padding: "3px 9px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--gold)",
+                        background: "none",
+                        color: "var(--gold)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {signatureSaving ? "..." : "Save"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-body)",
+                    fontStyle: profile.voice_signature ? "italic" : "normal",
+                    fontSize: "0.85rem",
+                    color: profile.voice_signature ? "var(--widget-text)" : "var(--widget-text-faint)",
+                  }}
+                >
+                  {profile.voice_signature || "Not set yet."}
+                </p>
+                <button
+                  onClick={startEditSignature}
+                  style={{
+                    flexShrink: 0,
+                    padding: "3px 9px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--widget-border)",
+                    background: "none",
+                    color: "var(--widget-text-faint)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "8px",
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  {profile.voice_signature ? "Edit" : "Set"}
+                </button>
+              </div>
+            )}
+            {signatureError && (
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  color: "var(--widget-rose)",
+                }}
+              >
+                {signatureError}
               </p>
             )}
           </div>

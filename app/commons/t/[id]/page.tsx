@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getSkin } from "@/lib/skins";
 import PageLoading from "@/components/PageLoading";
 import VoiceMarker from "@/components/VoiceMarker";
+import VoiceSignature from "@/components/VoiceSignature";
 import {
   authorName,
   createReply,
@@ -410,7 +411,11 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
           {thread.kind === "question" ? "Question" : "Discussion"} &middot; <span style={{ color: authors[thread.profile_id]?.commons_accent || undefined }}>{authorName(authors[thread.profile_id])}</span>
           <VoiceMarker practicePoints={authors[thread.profile_id]?.practice_points} />
         </p>
-        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "0 0 16px", lineHeight: 1.3 }}>
+        <VoiceSignature
+          practicePoints={authors[thread.profile_id]?.practice_points}
+          signature={authors[thread.profile_id]?.voice_signature}
+        />
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "8px 0 16px", lineHeight: 1.3 }}>
           {thread.title}
         </h1>
 

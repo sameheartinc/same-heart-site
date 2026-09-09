@@ -1520,3 +1520,61 @@ alter table profiles add column if not exists last_heart_tap_bonus_date date;
 revoke update (last_heart_tap_bonus_date) on profiles from authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Voice Tier 4 (Sep 9 2026) -- a short personal "signature line" shown
+-- under your own name at the top of a thread you started (see
+-- lib/practices.ts and components/VoiceSignature.tsx). This tier's
+-- original idea, a custom post accent color, turned out to collide with
+-- the Blue Heart String's existing commons_accent door (lib/keys.ts) --
+-- flagged in practices.ts's own inline comment when the roadmap was
+-- first written, resolved with Rob (Sep 9 2026) by swapping in this
+-- instead rather than having two systems grant the same reward.
+--
+-- Same trust posture as resource_shelf.issue_key (Guidance Tier 3): the
+-- Tier 4 gate is enforced client-side only, no service-role route,
+-- because this carries no XP, trust, or money -- the worst case of
+-- someone bypassing the gate is a signature line showing a little
+-- early, a cosmetic gap, not a security one. The length cap below is
+-- the one piece of real enforcement, since (unlike issue_key) there's
+-- no RPC in the loop to double-check it server-side.
+alter table profiles add column if not exists voice_signature text
+  check (voice_signature is null or char_length(voice_signature) <= 80);
+
+notify pgrst, 'reload schema';
+
+-- get_public_profiles needs to return voice_signature too, so every
+-- viewer (not just the author) can see the line on a thread they're
+-- reading -- same reasoning as practice_points joining this function
+-- for the Tier 3 marker (see that entry above). Drop-and-recreate,
+-- same "can't change RETURNS TABLE in place" reason as every other
+-- change to this function.
+drop function if exists public.get_public_profiles(uuid[]);
+
+create function public.get_public_profiles(p_ids uuid[] default null)
+returns table (
+  id uuid,
+  display_name text,
+  spark_id bigint,
+  path_key text,
+  ship_skin text,
+  designation text,
+  commons_accent text,
+  kindred_opt_out boolean,
+  practice_points jsonb,
+  voice_signature text
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select id, display_name, spark_id, path_key, ship_skin, designation, commons_accent, kindred_opt_out, practice_points, voice_signature
+  from profiles
+  where p_ids is null or id = any(p_ids);
+$$;
+
+revoke all on function public.get_public_profiles(uuid[]) from public;
+grant execute on function public.get_public_profiles(uuid[]) to anon, authenticated;
+
+notify pgrst, 'reload schema';

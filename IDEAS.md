@@ -2350,10 +2350,62 @@ themselves looked good, no notes. Two real fixes plus one tuning pass
 Still not seen after this exact round -- worth one more real tap-
 through before calling the whole feature settled.
 
-Also worth a note for future-self, same as the mobile-shift entry
-earlier tonight: this exact round of edits (this entry included) went
-missing from the working tree once already before this write, and the
-device terminal bridge dropped and reconnected once mid-session too.
-If this keeps recurring, it's worth checking whether a Cursor tab has
-these files open with autosave on -- a stale open buffer autosaving
-over an external change would produce exactly this pattern.
+**Forensics, resolved:** this round landed and pushed, but not the way
+expected -- `git log` showed a new commit, `6a64cfc "alignment"`, that
+Rob never typed a message for, sitting on top of the real "tap heart"
+commit. Best explanation: Cursor's own built-in AI agent (visible in
+Rob's sidebar as a separate git-graph panel, full of short auto-named
+commits like "teier 3," "comms," "alignment") has commit/push access to
+this repo and has been using it on its own, unprompted. That accounts
+for every odd thing in this whole saga -- the file going missing mid-
+edit, `git status` coming back clean with a fix that was genuinely on
+disk, and (this line itself) an earlier draft of this very note getting
+overwritten by Cursor's agent before Rob's own commit caught it. Not a
+code bug, and not chased further after this -- just worth Rob knowing
+Cursor's agent is committing on this repo independent of anything asked
+of it here.
+
+## Voice Tier 4: a signature line, not an accent color (Sep 9, 2026)
+
+Rob's ask was just "next tier" -- Voice, Kinship, and Guidance were all
+sitting at Tier 3, so which one came first (Voice) was a plain
+question, not a guess. The roadmap's own Tier 4 idea for Voice, though,
+was "custom post accent color" -- flagged in its own inline comment
+back when the roadmap was written as duplicating the Blue Heart String
+key's existing commons_accent door (lib/keys.ts), with a note to
+resolve it before building. Put that choice to Rob directly rather than
+picking one silently: give Voice Tier 4 a different reward, let either
+path unlock the same accent picker, or have Voice Tier 4 expand the
+palette on top of Blue's base one. He chose the first -- a clean swap,
+no shared door between two different progression systems.
+
+Proposed and built: a short personal "signature line" (80 chars,
+enforced both client-side and by a real check constraint since there's
+no RPC in the loop for this one) shown under your own name at the top
+of a thread you started. Set from a new small panel in the Hub, right
+above Resource Shelf -- same edit/save/cancel shape as the display-name
+editor at the top of the page. Deliberately shown only on the full
+thread page (app/commons/t/[id]/page.tsx), not the compact list rows on
+the Commons index or a community page -- a tagline is real, variable-
+length content, unlike VoiceMarker's tiny fixed glyph, and those list
+rows are already a tight one-line scan.
+
+- supabase/schema.sql: profiles.voice_signature (text, 80-char check
+  constraint), plus get_public_profiles updated to return it so every
+  viewer -- not just the author -- can actually see the line.
+- components/VoiceSignature.tsx (new): the render half, mirroring
+  VoiceMarker.tsx's shape -- reads the tier itself off whatever
+  PublicProfile the caller has, renders nothing below Tier 4 or with an
+  empty signature.
+- lib/commons.ts: voice_signature added to PublicProfile.
+- app/hub/page.tsx: the editor panel, plus voice_signature added to
+  the Profile type and the profile select().
+- lib/practices.ts: Tier 4's text swapped, marked BUILT.
+
+Same trust posture as Guidance Tier 3's shelf categories: a plain
+client update to profiles' own row (already RLS-protected), gated by
+Tier 4 client-side only, no service-role route -- this carries no XP,
+trust, or money, so the worst case of bypassing the gate is a
+signature line showing a little early. Verified by full read-through
+of the diff only, same live-render caveat as the rest of tonight's
+session (the device shell stayed wedged throughout).

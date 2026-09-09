@@ -23,6 +23,10 @@ export interface PublicProfile {
   // column; normalize with lib/practices.ts's normalizePracticePoints
   // before reading a tier out of it.
   practice_points: unknown;
+  // Voice Tier 4's personal signature line (see
+  // components/VoiceSignature.tsx) -- null until the author both
+  // reaches the tier and actually sets one.
+  voice_signature: string | null;
 }
 
 export interface Community {

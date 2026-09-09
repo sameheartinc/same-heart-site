@@ -26,8 +26,8 @@
 // log of each one). A tier is only ever marked BUILT below once it's a
 // real, live, gated feature -- never for narrating something the app
 // already did for everyone regardless of tier. As of this writing:
-// Voice, Kinship, and Guidance are through Tier 3, Stewardship through
-// Tier 4 -- check each tier's own inline comment
+// Voice is through Tier 4, Kinship and Guidance are through Tier 3,
+// Stewardship through Tier 4 -- check each tier's own inline comment
 // for exactly what shipped and where, rather than trusting this count
 // to stay current. Whatever's left up to Tier 20 is the full roadmap
 // already agreed with Rob, ready to build one at a time, in order, per
@@ -57,7 +57,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
       "Can attach one image to an original thread.", // BUILT -- composer + thread display
       "Rich text formatting unlocked in posts (bold, italic).", // BUILT -- composer toolbar + lib/richText.tsx
       "Your original threads carry a quiet Voice marker next to your name.", // BUILT (Sep 5 2026) -- components/VoiceMarker.tsx, rendered next to a thread's own author (never a reply's) in app/commons/page.tsx's ThreadList, app/commons/c/[slug]/page.tsx's thread cards, and app/commons/t/[id]/page.tsx's thread header. Needed practice_points exposed on get_public_profiles for the first time (supabase/schema.sql) since this marker has to be visible to every viewer, not just the author themselves.
-      "Custom post accent color.", // NOTE: overlaps with the Blue Heart String's existing commons_accent door (lib/keys.ts) -- resolve which one wins before building this tier.
+      "A short personal signature line under your name, on your own threads.", // BUILT (Sep 9 2026) -- profiles.voice_signature (supabase/schema.sql, 80-char cap), components/VoiceSignature.tsx, editable from the Hub's Voice panel, shown only on the full thread page (app/commons/t/[id]/page.tsx), never the compact list rows. Originally "custom post accent color" -- resolved with Rob to swap in this instead once it turned out to duplicate the Blue Heart String's existing commons_accent door (lib/keys.ts).
       "Multi-image posts (up to 3).",
       "Can save a personal draft between visits.",
       "Longer bio field unlocked, once a bio field exists.",
