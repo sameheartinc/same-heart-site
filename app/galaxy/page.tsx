@@ -43,12 +43,37 @@ function clampTilt(value: number, [min, max]: [number, number]) {
   return Math.min(max, Math.max(min, value));
 }
 
+// Rob, Sep 9 2026: "on the mobile app the icons in galaxy seem to lump
+// together... is there a way we can evenly spread out the icons." The
+// per-node angleDeg/radiusPct in lib/galaxyNodes.ts is deliberately NOT
+// even -- Hearth (120deg/r41), Wallet (150deg/r46) and the Arcade
+// (180deg/r50) all sit within one 60deg arc at nearly the same
+// distance from center, which reads fine as "visual weight" on a wide
+// desktop stage but genuinely overlaps once that same stage shrinks to
+// ~92vw on a phone. Rather than touch the hand-tuned desktop layout
+// (or the "NOT evenly spaced anymore" design decision behind it),
+// this only kicks in under the same 480px breakpoint the node-wrap
+// hitbox already shrinks at: below it, every node's angle/radius/scale
+// is overridden to a plain, genuinely even ring (360 / node count
+// apart, one shared radius, one shared scale) instead of its own
+// hand-placed values. Same MOBILE_QUERY string as the CSS media query
+// further down, so both stay in lockstep.
+const MOBILE_QUERY = "(max-width: 480px)";
+const MOBILE_RADIUS_PCT = 40;
+const MOBILE_SCALE = 0.78;
+
 export default function GalaxyPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [tilt, setTilt] = useState({ x: BASE_TILT_X, y: 0 });
   const reducedMotion = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  // Starts false (matches what a server render would assume, same
+  // reasoning as PathOnboarding's post-mount orb field) and is only
+  // ever flipped by the matchMedia listener below, so there's no
+  // server/client hydration mismatch here even though the real answer
+  // depends on viewport width.
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +90,15 @@ export default function GalaxyPage() {
     reducedMotion.current =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
   }, []);
 
   // The whole console tilts toward wherever the cursor is, clamped (see
@@ -230,9 +264,15 @@ export default function GalaxyPage() {
         }
 
         /* Smaller hit-boxes on phones so nodes have real breathing room
-           instead of crowding the center of the console. */
+           instead of crowding the center of the console. Shrunk again
+           (106px -> 82px, Sep 9 2026) alongside the even mobile ring
+           above -- at 106px, neighboring nodes' invisible tap targets
+           still overlapped even once their visible orbs no longer did,
+           which could steal a tap meant for the node next door. 82px
+           stays comfortably above typical minimum touch-target
+           guidance while actually clearing its neighbors. */
         @media (max-width: 480px) {
-          .galaxy-node-wrap { width: 106px !important; height: 106px !important; }
+          .galaxy-node-wrap { width: 82px !important; height: 82px !important; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -374,7 +414,13 @@ export default function GalaxyPage() {
           </div>
 
           {GALAXY_NODES.map((node, i) => {
-            const pos = orbitPosition(node.angleDeg, node.radiusPct);
+            // Mobile: an even ring (360 / count apart, one shared radius)
+            // instead of this node's own hand-placed angle/radius --
+            // see the MOBILE_QUERY comment above. Desktop is untouched.
+            const angleDeg = isMobile ? (360 / GALAXY_NODES.length) * i - 90 : node.angleDeg;
+            const radiusPct = isMobile ? MOBILE_RADIUS_PCT : node.radiusPct;
+            const scale = isMobile ? MOBILE_SCALE : node.scale;
+            const pos = orbitPosition(angleDeg, radiusPct);
             const opacity = node.dim ? 0.62 : 1;
             // "More modular play" (Rob, Sep 3 2026): each node's own
             // float duration/amplitude, not one shared rhythm -- see
@@ -413,9 +459,9 @@ export default function GalaxyPage() {
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    gap: `${6 * node.scale}px`,
+                    gap: `${6 * scale}px`,
                     animationDelay: `${0.4 * i}s`,
-                    transform: `scale(${node.scale})`,
+                    transform: `scale(${scale})`,
                     ["--float-duration" as string]: `${floatDuration}s`,
                     ["--float-amp" as string]: `${floatAmp}px`,
                   }}

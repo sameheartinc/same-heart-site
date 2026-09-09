@@ -26,8 +26,8 @@
 // log of each one). A tier is only ever marked BUILT below once it's a
 // real, live, gated feature -- never for narrating something the app
 // already did for everyone regardless of tier. As of this writing:
-// Voice, Kinship, and Guidance are through Tier 3, Stewardship also
-// through Tier 3 -- check each tier's own inline comment
+// Voice, Kinship, and Guidance are through Tier 3, Stewardship through
+// Tier 4 -- check each tier's own inline comment
 // for exactly what shipped and where, rather than trusting this count
 // to stay current. Whatever's left up to Tier 20 is the full roadmap
 // already agreed with Rob, ready to build one at a time, in order, per
@@ -138,7 +138,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
       "Can flag a thread or reply for review -- the first real trust step.", // BUILT -- flag button + commons_flags (commons_flags itself had never actually been migrated until the Sep 4 2026 review-queue build below -- fixed there)
       "Flag carries a bit more review weight, once a review queue exists.", // BUILT -- app/admin/flags, app/api/stewardship/{flags,decide}. "Weight" isn't a literal number yet -- what this tier really promised was a human on the other end, and now there is one.
       "You can see whether a flag you raised was acted on.", // BUILT -- lib/commons.ts's fetchMyFlagStatuses, the Flag button on app/commons/t/[id]/page.tsx reads "Flag resolved"/"Flag dismissed" once acted on
-      "Can categorize a flag (spam, distress, off-topic, etc.).",
+      "Can categorize a flag (spam, distress, off-topic, etc.).", // BUILT (Sep 9 2026) -- app/commons/t/[id]/page.tsx's reactionRow: clicking Flag at Tier 4+ opens an inline picker (spam/distress/off-topic/harassment/other, plus skip/cancel) instead of flagging immediately. No schema change -- commons_flags.category was already a free-text column the admin queue (app/admin/flags) has rendered since Tier 2, and lib/commons.ts's flagContent already took an optional category; this tier is purely the client-side ability to choose one.
       "'Quiet Trust' -- your flags get reviewed faster.",
       "Can request a second opinion before flagging something borderline.",
       "Can leave a private note for the team alongside a flag.",

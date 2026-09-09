@@ -36,6 +36,7 @@ import { activateBoost } from "@/lib/abilities";
 
 const ACCENT = "#c9576a";
 const EMPTY_SUMMARY: ReactionSummary = { heartfelt: 0, heartache: 0, mine: null };
+const FLAG_CATEGORIES = ["spam", "distress", "off-topic", "harassment", "other"] as const;
 
 export default function ThreadPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -63,6 +64,17 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [flagStatusMap, setFlagStatusMap] = useState<Record<string, FlagStatus>>({});
   const [flaggingId, setFlaggingId] = useState<string | null>(null);
   const [flagError, setFlagError] = useState<string | null>(null);
+  // Stewardship Tier 4 -- "Can categorize a flag" (see lib/practices.ts).
+  // Below Tier 4, Flag behaves exactly as it always has: an immediate,
+  // uncategorized flag. At Tier 4+, clicking Flag opens a small inline
+  // picker (flagPickerId) instead of flagging right away -- picking a
+  // category flags with it, "skip" flags the old uncategorized way,
+  // "cancel" backs out with nothing sent. commons_flags.category was
+  // already a free-text column (the admin queue at app/admin/flags has
+  // rendered it since Tier 2) and lib/commons.ts's flagContent already
+  // accepted an optional category -- this tier is purely the client-side
+  // ability to actually choose one, so no schema change is needed.
+  const [flagPickerId, setFlagPickerId] = useState<string | null>(null);
   // Guidance Tier 2 -- "Save to my Resource Shelf" on a thread's own
   // resource link (see lib/resourceShelf.ts). shelfUrls is just the set
   // of URLs already on this viewer's shelf, so the button can read
@@ -197,11 +209,12 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   // lib/practices.ts). Nothing reviews or acts on a flag yet; this just
   // starts the record and greys out the button so it reads as "done,"
   // not as a vanishing click.
-  async function handleFlag(targetType: ReactionTargetType, targetId: string) {
+  async function handleFlag(targetType: ReactionTargetType, targetId: string, category?: string) {
     if (!userId || flaggedMap[targetId]) return;
+    setFlagPickerId(null);
     setFlaggingId(targetId);
     setFlagError(null);
-    const result = await flagContent(targetType, targetId, userId);
+    const result = await flagContent(targetType, targetId, userId, category);
     if (result.ok) {
       setFlaggedMap((prev) => ({ ...prev, [targetId]: true }));
     } else {
@@ -292,31 +305,68 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
 
   function reactionRow(targetType: ReactionTargetType, targetId: string) {
     const summary = reactions[targetId] ?? EMPTY_SUMMARY;
+    const showingPicker = stewardshipTier >= 4 && flagPickerId === targetId;
     return (
-      <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
-        <button
-          type="button"
-          onClick={() => handleReact(targetType, targetId, "heartfelt")}
-          style={reactionButtonStyle(summary.mine === "heartfelt", "#c9576a")}
-        >
-          &#10084;&nbsp;Heartfelt{summary.heartfelt > 0 ? ` ${summary.heartfelt}` : ""}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleReact(targetType, targetId, "heartache")}
-          style={reactionButtonStyle(summary.mine === "heartache", "#5b5fc7")}
-        >
-          &#128148;&nbsp;Heartache{summary.heartache > 0 ? ` ${summary.heartache}` : ""}
-        </button>
-        {stewardshipTier >= 1 && (
+      <div style={{ marginTop: "10px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => handleFlag(targetType, targetId)}
-            disabled={flaggedMap[targetId] || flaggingId === targetId}
-            style={reactionButtonStyle(false, "var(--ink-faint, #5c6684)")}
+            onClick={() => handleReact(targetType, targetId, "heartfelt")}
+            style={reactionButtonStyle(summary.mine === "heartfelt", "#c9576a")}
           >
-            {flaggedMap[targetId] ? flagLabel(targetId) : flaggingId === targetId ? "..." : "Flag"}
+            &#10084;&nbsp;Heartfelt{summary.heartfelt > 0 ? ` ${summary.heartfelt}` : ""}
           </button>
+          <button
+            type="button"
+            onClick={() => handleReact(targetType, targetId, "heartache")}
+            style={reactionButtonStyle(summary.mine === "heartache", "#5b5fc7")}
+          >
+            &#128148;&nbsp;Heartache{summary.heartache > 0 ? ` ${summary.heartache}` : ""}
+          </button>
+          {stewardshipTier >= 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (stewardshipTier >= 4 && !flaggedMap[targetId] && flaggingId !== targetId) {
+                  setFlagPickerId((prev) => (prev === targetId ? null : targetId));
+                } else {
+                  handleFlag(targetType, targetId);
+                }
+              }}
+              disabled={flaggedMap[targetId] || flaggingId === targetId}
+              style={reactionButtonStyle(showingPicker, "var(--ink-faint, #5c6684)")}
+            >
+              {flaggedMap[targetId] ? flagLabel(targetId) : flaggingId === targetId ? "..." : "Flag"}
+            </button>
+          )}
+        </div>
+        {showingPicker && (
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px" }}>
+            {FLAG_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => handleFlag(targetType, targetId, cat)}
+                style={reactionButtonStyle(false, "var(--ink-faint, #5c6684)")}
+              >
+                {cat}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => handleFlag(targetType, targetId)}
+              style={reactionButtonStyle(false, "var(--ink-faint, #5c6684)")}
+            >
+              skip
+            </button>
+            <button
+              type="button"
+              onClick={() => setFlagPickerId(null)}
+              style={{ ...reactionButtonStyle(false, "var(--ink-faint, #5c6684)"), opacity: 0.7 }}
+            >
+              cancel
+            </button>
+          </div>
         )}
       </div>
     );

@@ -2132,3 +2132,76 @@ eye across both touched files.
 
 **Needs Rob to paste the schema.sql block into Supabase** before the
 Roster will actually start filtering.
+
+## Stewardship Tier 4: categorizing a flag (Sep 9, 2026)
+
+Next tier in the queue, confirmed with Rob. "Can categorize a flag
+(spam, distress, off-topic, etc.)" -- and it turned out most of the
+plumbing already existed: commons_flags.category has been a free-text
+column since the Tier 2 review-queue build, the admin queue
+(app/admin/flags) already renders it when present, and lib/commons.ts's
+flagContent already took an optional category parameter that was just
+never being passed. No schema change needed at all.
+
+What changed:
+- app/commons/t/[id]/page.tsx: reactionRow's Flag button now branches
+  on stewardshipTier. Below Tier 4, clicking Flag behaves exactly as it
+  always has -- immediate, uncategorized. At Tier 4+, it opens a small
+  inline picker instead (flagPickerId state) -- five category buttons
+  (spam/distress/off-topic/harassment/other), plus "skip" (flags
+  uncategorized, same as before this tier existed) and "cancel" (backs
+  out, nothing sent). handleFlag now takes an optional category and
+  passes it straight through to flagContent.
+- lib/practices.ts: Stewardship Tier 4 marked BUILT; refreshed the file
+  header's tier-count summary (Stewardship now through Tier 4, one
+  ahead of Voice/Kinship/Guidance at Tier 3).
+
+The category list (spam/distress/off-topic/harassment/other) is a
+plain in-code array, same posture as resource_shelf.issue_key and
+exchange_transmissions.issue_key -- no DB check constraint, so it can
+grow later without a migration.
+
+Verified by full read-through of the diff -- `npx tsc --noEmit` needs
+to run on Rob's machine this time (the device terminal bridge was
+wedged for this whole session, so I couldn't run it myself as usual).
+
+## Galaxy nodes, evenly spread on mobile (Sep 9, 2026)
+
+Rob's report: "on the mobile app the icons in galaxy seem to lump
+together... is there a way we can evenly spread out the icons." The
+Galaxy's whole layout (lib/galaxyNodes.ts) is deliberately NOT evenly
+spaced -- each destination carries its own angleDeg/radiusPct/scale so
+some read as "closer and bolder," others as "further and quieter." On
+a wide desktop stage that reads as intended; on a phone, where the
+stage shrinks to ~92vw, it doesn't hold up -- the Hearth (120deg/r41),
+the Wallet (150deg/r46) and the Arcade (180deg/r50) all sit within one
+60deg arc at nearly the same distance from center, so their orbs (and,
+worse, their much larger invisible tap targets) genuinely overlap once
+the stage gets small enough.
+
+Rather than touch the hand-tuned desktop numbers (or the design
+decision behind them), this only kicks in under the same 480px
+breakpoint the node hitbox already had its own mobile rule at:
+
+- app/galaxy/page.tsx: added an isMobile state, set only from a
+  matchMedia("(max-width: 480px)") listener in a useEffect -- starts
+  false so there's no server/client hydration mismatch (same reasoning
+  as PathOnboarding's post-mount orb field), then flips true after
+  mount on a phone-sized viewport. Below that breakpoint, every node's
+  angle/radius/scale is overridden inline to a plain, genuinely even
+  ring -- 360 / node count apart (8 nodes -> 45deg each, starting at
+  -90 so the Hub keeps its anchor position at the top), one shared
+  radius (40%), one shared scale (0.78) -- instead of each node's own
+  hand-placed values. Desktop is completely untouched.
+- Same file: the existing `.galaxy-node-wrap` mobile rule shrunk
+  106px -> 82px. 106px was still big enough that neighboring nodes'
+  invisible tap targets overlapped even once their visible orbs
+  didn't -- a tap near the boundary could land on the wrong node's
+  link. 82px clears that while staying well above typical minimum
+  touch-target size.
+
+Verified by full read-through of the diff and by hand-checking the
+chord math (node spacing vs. combined orb/hitbox size) at a few
+realistic phone widths (375px, 390px) -- not yet seen on an actual
+phone. `npx tsc --noEmit` also needs to run on Rob's machine this
+time, same reason as the Stewardship entry above.
