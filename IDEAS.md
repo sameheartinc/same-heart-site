@@ -2205,3 +2205,57 @@ chord math (node spacing vs. combined orb/hitbox size) at a few
 realistic phone widths (375px, 390px) -- not yet seen on an actual
 phone. `npx tsc --noEmit` also needs to run on Rob's machine this
 time, same reason as the Stewardship entry above.
+
+**Same-day follow-up, from a real screenshot:** the even-ring fix above
+worked -- no more overlap -- but the whole ring itself sat visibly
+right-of-center on Rob's phone, clipping The Merch Ship and part of the
+Wallet off the right edge while the left side had room to spare. The
+stage is centered by plain flexbox (`justifyContent: center` on
+`<main>`), so this is most likely mobile Safari's well-known quirk
+where `92vw` measures wider than the actually-visible viewport,
+pushing the extra width out to the right rather than an actual
+centering bug. Rather than chase that root cause, added
+`MOBILE_SHIFT_X` and applied it as a `translateX` directly on the
+stage div, mobile-only (isMobile-gated, same as everything else in
+this entry). Desktop untouched. Started at -32; Rob reported it needed
+to go further left, so it's now -56 -- still going purely off
+screenshots/reports rather than a live click-through, so it may need
+another pass.
+
+Also worth a note for future-self: this fix (and this IDEAS.md entry)
+went missing from the working tree once between writing it and Rob
+committing it -- both files silently reverted back to their
+pre-shift, first-commit state, most likely from a `git checkout`/
+`git restore` run somewhere in the confusion over which git command to
+run next, rather than anything wrong with the fix itself. Re-applied
+clean the second time. Worth double-checking `git status`/`git log`
+after any commit that follows a "wait, which command do I run"
+back-and-forth, rather than assuming a prior push definitely landed
+everything intended.
+
+**Second same-day follow-up:** Rob, looking closer at the nodes
+themselves rather than their spacing: "around the icons... there is a
+fades coloured square that stretches slightly past the circles
+surrounding the main inner symbol... tighten up the symbol... make it
+more 3 dimensional." Two separate fixes in `.galaxy-node-star` and its
+pseudo-elements (app/galaxy/page.tsx):
+
+- The square bleed: `.galaxy-node-star`'s glow pseudo-element
+  (`::before`) is meant to be clipped to a circle by `overflow: hidden`
+  + `border-radius: 50%` on its parent, but combined with
+  `mix-blend-mode: screen` that's a known Safari bug -- the rounded
+  clip can leak a faint square past the corners on exactly this kind
+  of blended, blurred content. Added `clip-path: circle(50%)` on the
+  parent, which Safari respects far more reliably for this -- kept
+  `overflow: hidden` too as a harmless fallback for other browsers.
+- More 3D: three changes all pointing at the same light source (top-
+  left) instead of fighting each other -- the orb's own inline
+  `boxShadow` gained two inset shadows (dark toward bottom-right, light
+  toward top-left) alongside its existing outer glow; the star-core's
+  radial-gradient moved off-center (`50% 50%` -> `33% 30%`) instead of
+  a flat centered pulse; and a new small `::after` specular highlight
+  (a soft white patch, top-left, not animated) was added for the
+  classic "glossy sphere" cue.
+
+Verified by full read-through of the diff only -- no live render, same
+caveat as the rest of today's Galaxy work.

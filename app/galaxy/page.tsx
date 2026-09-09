@@ -61,6 +61,17 @@ function clampTilt(value: number, [min, max]: [number, number]) {
 const MOBILE_QUERY = "(max-width: 480px)";
 const MOBILE_RADIUS_PCT = 40;
 const MOBILE_SCALE = 0.78;
+// Rob's follow-up (Sep 9 2026, from a real screenshot): the ring itself
+// sat visibly right-of-center on his phone -- The Merch Ship and part
+// of the Wallet clipped off the right edge while the left side had
+// room to spare. The stage is centered by plain flexbox
+// (justifyContent: center on <main>), so this is most likely mobile
+// Safari's 92vw-is-wider-than-the-real-visible-viewport quirk pushing
+// the extra width out to the right. Rather than chase that down,
+// nudging the whole stage left by a flat amount on mobile fixes the
+// visible symptom directly. Desktop untouched. Started at -32, Rob
+// reported still needed more -- moved to -56.
+const MOBILE_SHIFT_X = -56;
 
 export default function GalaxyPage() {
   const router = useRouter();
@@ -205,6 +216,16 @@ export default function GalaxyPage() {
           position: relative;
           overflow: hidden;
           isolation: isolate;
+          /* Rob, Sep 9 2026: "a faded coloured square that stretches
+             slightly past the circle." overflow: hidden + border-radius
+             is supposed to clip the ::before glow below to a circle, but
+             combined with mix-blend-mode it's a known Safari bug where
+             that clipping can leak a faint square past the rounded
+             corners on exactly this kind of blended, blurred content.
+             clip-path is respected far more reliably here -- this is the
+             actual fix, overflow: hidden stays only as a harmless
+             belt-and-braces for non-Safari browsers. */
+          clip-path: circle(50%);
           /* Lets the icon's rotateY/rotateX spin (see .galaxy-node-icon
              below) read as real depth rather than a flat squash. */
           perspective: 600px;
@@ -219,11 +240,33 @@ export default function GalaxyPage() {
           mix-blend-mode: screen;
           opacity: 0.5;
         }
+        /* Small specular highlight, Sep 9 2026 -- Rob asked for the
+           orbs to read as more three-dimensional. A soft bright patch
+           held near the top-left (not centered, not animated) is the
+           classic "glossy sphere" cue -- paired with the matching
+           off-center core gradient below and the inset shadows on the
+           orb's own inline boxShadow (see the JSX), all three point at
+           the same light source rather than fighting each other. */
+        .galaxy-node-star::after {
+          content: "";
+          position: absolute;
+          top: 13%;
+          left: 17%;
+          width: 34%;
+          height: 22%;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 78%);
+          pointer-events: none;
+        }
         .galaxy-node-star-core {
           position: absolute;
           inset: 20%;
           border-radius: 50%;
-          background: radial-gradient(circle at 50% 50%, #fff9ec 0%, var(--n-accent) 55%, transparent 82%);
+          /* Off-center (was 50% 50%) -- a centered glow reads as a flat
+             pulse; pulling the bright point toward the same top-left
+             corner as the specular highlight above reads as one lit
+             sphere instead. */
+          background: radial-gradient(circle at 33% 30%, #fff9ec 0%, var(--n-accent) 58%, transparent 82%);
           opacity: 0.8;
         }
         @keyframes galaxyNodeGlowPulse {
@@ -316,6 +359,7 @@ export default function GalaxyPage() {
           width: "min(680px, 92vw)",
           aspectRatio: "1 / 1",
           perspective: "1400px",
+          transform: isMobile ? `translateX(${MOBILE_SHIFT_X}px)` : undefined,
         }}
       >
         <div
@@ -479,7 +523,16 @@ export default function GalaxyPage() {
                       // warm, bright light-source color instead.
                       background: "#fef6e4",
                       border: `1px solid ${node.accent}`,
-                      boxShadow: `0 0 ${node.dim ? 10 : 18}px ${node.accent}${node.dim ? "33" : "44"}`,
+                      // Sep 9 2026, Rob: "make it more 3 dimensional" --
+                      // the two inset shadows are the fix. A dark one
+                      // pulling toward the bottom-right and a light one
+                      // toward the top-left read as one consistent light
+                      // source hitting a sphere, rather than a flat
+                      // tinted disc -- same light direction the
+                      // off-center star-core gradient and the specular
+                      // highlight (.galaxy-node-star::after) below use.
+                      // The original outer glow stays last in the list.
+                      boxShadow: `inset -3px -4px 7px rgba(20,14,6,0.28), inset 3px 4px 6px rgba(255,255,255,0.55), 0 0 ${node.dim ? 10 : 18}px ${node.accent}${node.dim ? "33" : "44"}`,
                       transition: "box-shadow 0.28s ease",
                       ["--n-accent" as string]: node.accent,
                     }}
