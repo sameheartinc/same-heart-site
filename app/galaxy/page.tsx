@@ -104,7 +104,9 @@ export default function GalaxyPage() {
   const heartIdRef = useRef(0);
   const tapCountRef = useRef(0);
   const secretFiredRef = useRef(false);
-  const [tapThreshold] = useState(() => 10 + Math.floor(Math.random() * 7));
+  // Rob, Sep 9 2026, after trying it live: "maybe like 20" -- was
+  // 10-16, now centered there instead (17-23).
+  const [tapThreshold] = useState(() => 17 + Math.floor(Math.random() * 7));
 
   useEffect(() => {
     (async () => {
@@ -181,7 +183,7 @@ export default function GalaxyPage() {
     if (!token) return;
     const result = await tapHeartWithServer(token);
     if (result?.awarded && typeof result.xp === "number") {
-      setBonusFlash(`+${result.xp}`);
+      setBonusFlash(`+${result.xp} XP`);
       setTimeout(() => setBonusFlash(null), 2200);
     }
     // result.awarded === false (already claimed today) or a failed
@@ -258,25 +260,38 @@ export default function GalaxyPage() {
             transform: translate(calc(-50% + var(--hx, 0px)), calc(-50% + var(--hy, -60px))) scale(0.55) rotate(var(--hr, 0deg));
           }
         }
+        /* Rob, Sep 9 2026, after trying the bare-text version live:
+           "maybe no flash... just a little bubble that shows the xp
+           gained." Rebuilt as an actual rounded chip (background,
+           border, padding) instead of plain glowing text floating in
+           open space -- same gold accent, same gentle rise-and-fade,
+           just contained in something instead of bare on the page. */
         .galaxy-bonus-flash {
           position: absolute;
           left: 50%;
-          top: -6px;
+          top: -14px;
           transform: translate(-50%, 0);
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(20, 15, 6, 0.82);
+          border: 1px solid rgba(201,161,90,0.55);
+          box-shadow: 0 0 14px rgba(201,161,90,0.4);
           font-family: var(--font-mono);
           font-size: 11px;
           letter-spacing: 0.04em;
           color: var(--gold);
-          text-shadow: 0 0 10px rgba(201,161,90,0.7);
           pointer-events: none;
           white-space: nowrap;
           animation: galaxyBonusFlash 2.2s ease-out forwards;
         }
         @keyframes galaxyBonusFlash {
-          0% { opacity: 0; transform: translate(-50%, 0) scale(0.85); }
-          15% { opacity: 1; transform: translate(-50%, -8px) scale(1); }
+          0% { opacity: 0; transform: translate(-50%, 6px) scale(0.85); }
+          15% { opacity: 1; transform: translate(-50%, -4px) scale(1); }
           75% { opacity: 1; }
-          100% { opacity: 0; transform: translate(-50%, -26px) scale(1); }
+          100% { opacity: 0; transform: translate(-50%, -22px) scale(1); }
         }
         .galaxy-node-wrap {
           animation: galaxyNodeIn 0.6s ease both;
@@ -556,6 +571,17 @@ export default function GalaxyPage() {
                 cursor: "inherit",
                 font: "inherit",
                 color: "inherit",
+                outline: "none",
+                // Rob, Sep 9 2026: "the screen had a square box come
+                // up" on mobile -- that's Safari/Chrome's own default
+                // tap-highlight rectangle, which every plain <button>
+                // gets for free unless told otherwise. Wasn't there
+                // before because this used to be a plain, non-
+                // interactive div. touchAction: manipulation also
+                // skips the ~300ms double-tap-to-zoom delay some
+                // mobile browsers still apply to tappable elements.
+                WebkitTapHighlightColor: "transparent",
+                touchAction: "manipulation",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}

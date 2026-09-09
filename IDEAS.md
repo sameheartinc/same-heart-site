@@ -2327,3 +2327,25 @@ all worth Rob's own eyes and thumb before calling this settled.
 **Needs Rob to paste the schema.sql block into Supabase** before the
 bonus can actually pay out (the tap/particle flourish works either
 way -- only the XP roll needs the column to exist).
+
+**Same-day follow-up, from actually trying it on his phone:** hearts
+themselves looked good, no notes. Two real fixes plus one tuning pass
+(app/galaxy/page.tsx):
+
+- The "square box" Rob saw on tap turned out to be Safari/Chrome's own
+  default tap-highlight rectangle -- every plain `<button>` gets one
+  for free unless told not to, and this element used to be a plain,
+  non-interactive div, so it never showed up before. Added
+  `WebkitTapHighlightColor: "transparent"` (plus `touchAction:
+  "manipulation"` while in there, which also skips the old mobile
+  double-tap-to-zoom delay some browsers still apply to tappable
+  elements).
+- The bonus indicator itself, on his request ("maybe no flash... just
+  a little bubble that shows the xp gained"): rebuilt `.galaxy-bonus-
+  flash` from bare glowing text into an actual rounded chip --
+  background, border, padding, same gold accent -- and the text itself
+  now reads "+N XP" instead of just "+N".
+- tapThreshold moved from 10-16 to 17-23 (Rob: "maybe like 20").
+
+Still not seen after this exact round -- worth one more real tap-
+through before calling the whole feature settled.
