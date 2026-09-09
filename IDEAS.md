@@ -2349,3 +2349,11 @@ themselves looked good, no notes. Two real fixes plus one tuning pass
 
 Still not seen after this exact round -- worth one more real tap-
 through before calling the whole feature settled.
+
+Also worth a note for future-self, same as the mobile-shift entry
+earlier tonight: this exact round of edits (this entry included) went
+missing from the working tree once already before this write, and the
+device terminal bridge dropped and reconnected once mid-session too.
+If this keeps recurring, it's worth checking whether a Cursor tab has
+these files open with autosave on -- a stale open buffer autosaving
+over an external change would produce exactly this pattern.
