@@ -1453,3 +1453,50 @@ alter table profiles add column if not exists last_double_xp_at timestamptz;
 revoke update (last_boost_at, double_xp_until, last_double_xp_at) on profiles from authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- The Roster, restricted to verified email addresses (Sep 6 2026).
+-- Rob's call: an anonymous or unverified account can still earn
+-- Heartbeats, but it shouldn't be able to occupy a spot on the public
+-- leaderboard -- that's meant to reflect real, contactable people.
+-- public_rankings (the view/table the Roster currently reads -- see
+-- lib/exchange.ts's listRoster) predates this schema file and was never
+-- captured here (see the "already exists live" note above, on
+-- exchange_transmissions), so rather than blind-guess its definition
+-- and risk silently dropping something it already does, this adds a
+-- brand new, narrow function selecting straight from profiles instead
+-- -- same SECURITY DEFINER pattern as get_public_profiles, same reason
+-- (profiles' real RLS only ever allows reading your own row). Filters
+-- on email_verified_at, the same column the Founding Rewards / verified
+-- rank feature above already set up to mark "this is a real, verified
+-- inbox." listRoster in lib/exchange.ts now calls this instead of
+-- selecting public_rankings directly -- that older view/table is left
+-- exactly as it was, untouched.
+create or replace function public.get_verified_rankings(p_limit integer default 50)
+returns table (
+  id uuid,
+  display_name text,
+  spark_id bigint,
+  designation text,
+  ship_skin text,
+  xp integer,
+  standing text,
+  current_streak integer,
+  longest_streak integer
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select id, display_name, spark_id, designation, ship_skin, xp, standing, current_streak, longest_streak
+  from profiles
+  where email_verified_at is not null
+  order by xp desc
+  limit greatest(1, least(p_limit, 200));
+$$;
+
+revoke all on function public.get_verified_rankings(integer) from public;
+grant execute on function public.get_verified_rankings(integer) to anon, authenticated;
+
+notify pgrst, 'reload schema';

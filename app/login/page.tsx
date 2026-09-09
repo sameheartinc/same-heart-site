@@ -359,6 +359,8 @@ function LoginPageInner() {
           <div className="form-fade-in" style={{ textAlign: "center" }}>
             <p
               style={{
+                position: "relative",
+                zIndex: 10,
                 fontFamily: "var(--font-display)",
                 fontSize: "11px",
                 letterSpacing: "0.2em",

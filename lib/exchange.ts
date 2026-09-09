@@ -75,12 +75,15 @@ export async function listMyTransmissions(): Promise<Transmission[]> {
   return data as Transmission[];
 }
 
+// Reads get_verified_rankings (see supabase/schema.sql, Sep 6 2026) --
+// a narrow, security-definer function that filters to profiles with a
+// verified email address, rather than the older public_rankings
+// view/table this used to read directly. An anonymous or unverified
+// account can still earn Heartbeats; it just doesn't get a seat on the
+// public leaderboard. The function already orders by xp desc and caps
+// at p_limit, so this just passes limit straight through.
 export async function listRoster(limit = 50): Promise<RankedProfile[]> {
-  const { data, error } = await supabase
-    .from("public_rankings")
-    .select("*")
-    .order("xp", { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.rpc("get_verified_rankings", { p_limit: limit });
   if (error || !data) return [];
   return data as RankedProfile[];
 }

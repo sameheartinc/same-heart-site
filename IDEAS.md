@@ -2041,3 +2041,94 @@ eye across all five touched files.
 
 **Needs Rob to paste the schema.sql block into Supabase** before the
 category picker will actually save anything.
+
+## First Signal, redone as a sensory drift (Sep 6, 2026)
+
+Rob wanted the arrival quiz (app/login/page.tsx's "quiz" stage,
+components/PathOnboarding.tsx) to stop feeling like a form and start
+feeling like a "psychoactive experience" -- specific brief: pick a
+colour from a field of floating orbs first, then a texture that comes
+with its own sound, then the existing three questions rendered as
+coloured bubbles instead of buttons, then close on an inkblot pick that
+squiggles away once chosen.
+
+What changed:
+- lib/paths.ts: added ORB_COLORS (8 -- four "pure" colours mirroring
+  each path's own accent 1:1, four "between" blends of two neighbours),
+  TEXTURES (4, one per path: Smooth/Rippled/Woven/Jagged), INKBLOTS (4
+  hand-set radii lists, one per path) and buildInkblotPath -- a small
+  pure function that mirrors a list of radii left/right around a
+  vertical axis into a closed, smooth SVG path, the same way a real
+  inkblot is a fold-and-press shape rather than independently random on
+  each side. scoreOnboarding no longer hardcodes "3 questions worth of
+  max score" -- it derives the per-axis max from however many answers
+  it's actually handed, since there are now 6 picks (colour, texture,
+  3 questions, inkblot) feeding it instead of 3.
+- lib/orbTones.ts (new): the "relates to a sound" half of the texture
+  pick. Four short Web Audio sounds generated on the fly (a held low
+  hum, a quick ascending chime, two tones answering each other, a burst
+  of noise) plus a shared, texture-independent confirmation chime for
+  every pick along the way -- no audio files, nothing to fail to load.
+  Every function is a no-op (never throws) outside the browser or if
+  audio's blocked, since sound here is a garnish, not a requirement.
+- components/PathOnboarding.tsx: rewritten. An 18-orb ambient field
+  (position: fixed, fills the actual viewport regardless of the rest of
+  the page's narrower column) is generated client-side after mount --
+  deliberately not in useMemo on first render, since Math.random() in
+  the initial render would disagree between the server's HTML and the
+  client's hydration pass. Clickable only during the colour stage;
+  after a pick every orb recolours (CSS transition, not a re-generate)
+  to the chosen colour and stays as a quiet backdrop through texture,
+  questions, and (dimmed) the inkblot stage -- this is the "bubbles
+  change to the colour they chose" part of the brief. The three
+  original questions now render as colour-tinted pill bubbles instead
+  of rectangular buttons. The inkblot stage renders the four blot SVGs
+  filled with the chosen colour; picking one plays a chime and drives a
+  squiggleOut keyframe (skew + blur + scale-down + fade) on the choice
+  before onComplete fires. Respects prefers-reduced-motion throughout
+  (ambient float, the pulse ring, and the squiggle all collapse to a
+  plain, fast opacity fade).
+- app/login/page.tsx: one-line change -- gave the "First Signal" label
+  above the quiz an explicit position:relative; zIndex:10 so it stays
+  above the new fixed-position ambient orb field rather than risking
+  the two colliding in an ambiguous stacking order.
+- No schema change, no migration -- this only changes what feeds
+  scoreOnboarding client-side; handlePathComplete in app/login/page.tsx
+  (combineScores -> pickPath -> the profiles update) is untouched.
+
+Verified with `npx tsc --noEmit` (clean) and reviewed the full diff by
+eye across all four touched files. Not yet seen running in a real
+browser -- this is a heavily visual/audio feature, so it's worth Rob
+actually clicking through `npm run dev` once before calling it done,
+rather than trusting a code review alone for something like this.
+
+## The Roster, verified-email-only (Sep 6, 2026)
+
+Rob's ask: only verified email addresses should show up on the Sparks
+leaderboard (the Roster, app/commons/roster/page.tsx).
+
+The Roster currently reads public_rankings, a view/table that
+pre-dates schema.sql and was never captured in it (already flagged as
+a gap in this file's Exchange section). Rather than guess at its exact
+definition and risk silently breaking whatever it already does, added
+a new function instead:
+
+- supabase/schema.sql: get_verified_rankings(p_limit) -- same
+  SECURITY DEFINER shape as get_public_profiles (profiles' real RLS
+  only ever allows reading your own row), returning the exact same nine
+  columns lib/exchange.ts's RankedProfile already expects, filtered to
+  `email_verified_at is not null` -- the column the Founding Rewards /
+  verified-rank feature already set up for "this is a real, checked
+  inbox," not a new signal. public_rankings itself is untouched.
+- lib/exchange.ts: listRoster now calls get_verified_rankings via rpc()
+  instead of selecting public_rankings directly.
+
+An anonymous or unverified account still earns Heartbeats same as
+before -- it just won't occupy a spot on the public leaderboard until
+that inbox is actually confirmed.
+
+Verified with `npx tsc --noEmit` (clean) and reviewed the full diff by
+eye across both touched files.
+
+**Needs Rob to paste the schema.sql block into Supabase** before the
+Roster will actually start filtering.
