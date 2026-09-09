@@ -43,7 +43,11 @@ export const MILESTONES: StreakMilestone[] = [
 
 export const BASE_CHECKIN_XP = 8;
 
-function toUTCDateString(d: Date): string {
+// Exported (was file-private) so other one-per-day server checks --
+// e.g. app/api/galaxy/heart-tap/route.ts -- can reuse the exact same
+// "what calendar date is it, in UTC" definition rather than each
+// re-deriving their own and risking the two disagreeing.
+export function toUTCDateString(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 

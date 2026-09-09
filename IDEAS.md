@@ -2259,3 +2259,71 @@ pseudo-elements (app/galaxy/page.tsx):
 
 Verified by full read-through of the diff only -- no live render, same
 caveat as the rest of today's Galaxy work.
+
+## Same Heart mark: centered on mobile, plus a secret tap bonus (Sep 9, 2026)
+
+Two more Galaxy-page asks in the same sitting.
+
+**Centering:** the center mark has carried a deliberate nudge
+up-and-left of true center since Sep 3, 2026 (Rob's own request at the
+time). Today, on mobile specifically, he reported it "way to the upper
+left." Rather than undo the Sep 3 desktop decision, the offset is now
+isMobile-gated same as everything else touched today -- mobile gets
+true center (`translate(-50%, -50%)`), desktop keeps the original
+`calc(-50% - 26px)/calc(-50% - 22px)` nudge untouched
+(app/galaxy/page.tsx).
+
+**The secret tap bonus:** Rob's own idea, close to verbatim -- "if you
+tap the same heart logo... little hearts will fly off every tap... and
+if you tap it a bunch randomly gives you xp once a day." Nothing about
+this is ever announced anywhere in the UI; it's a genuine hidden
+mechanic. Interpreted "the same heart logo on the main page" as this
+same Galaxy center mark (the whole message was about the Galaxy page),
+not the site's actual homepage -- flagged to Rob in case that's not
+what he meant, easy to point at a different logo later.
+
+- app/galaxy/page.tsx: the center mark is now a real `<button>`
+  (was a decorative, pointer-events:none div) with an aria-label but no
+  visible change to how it looks. Every click spawns 3-5 small heart
+  glyphs (heartParticles state) that float up and fade via a new
+  `galaxyHeartFloat` keyframe, each removing itself from state on its
+  own `onAnimationEnd` -- pure client-side flourish, no server
+  involved, uncapped, always fires. Separately, tapCountRef counts taps
+  for this page load only; once it crosses tapThreshold (picked fresh
+  per load, randomly, 10-16 -- "a bunch," not a fixed guessable
+  number) it fires exactly once (secretFiredRef guards it) at
+  attemptSecretBonus, which is the only place that calls the new
+  server route. A successful, awarded roll shows a small "+N" gold
+  flash (galaxyBonusFlash keyframe) near the mark for ~2s; a rejected
+  (already claimed today) or failed call does nothing visible at all --
+  the tap never explains itself either way.
+- app/api/galaxy/heart-tap/route.ts (new): the only place
+  profiles.last_heart_tap_bonus_date or the XP it gates can move.
+  Re-derives "already claimed today?" itself from the DB (UTC date-
+  string compare, via lib/streak.ts's now-exported toUTCDateString)
+  rather than trusting the client's tap count at all -- the client can
+  call this whenever it wants, the server alone decides whether it
+  pays out and how much (a random 4-14 XP). Recomputes standing via
+  lib/standing.ts's getStanding the same way
+  app/api/exchange/transmit/route.ts does, so a lucky tap can't leave
+  xp and standing disagreeing.
+- lib/heartTap.ts (new): tapHeartWithServer, the client-side call to
+  that route -- same shape as lib/streak.ts's checkInWithServer.
+- lib/streak.ts: toUTCDateString exported (was file-private) so the
+  new route can reuse the exact same day-boundary definition instead
+  of re-deriving its own.
+- supabase/schema.sql: profiles.last_heart_tap_bonus_date (plain
+  `date`, same shape as kinship_streak_last_date), column-level revoke
+  from authenticated -- same trust model as every other XP-adjacent
+  column on this site.
+
+Verified by full read-through of the diff across all six touched/new
+files; `npx tsc --noEmit` still needs to run on Rob's machine, same
+reason as everything else in today's session (the device terminal
+bridge stayed wedged the whole time). Not yet seen live either -- the
+tap-count threshold, particle feel, and the bonus flash's timing are
+all worth Rob's own eyes and thumb before calling this settled.
+
+**Needs Rob to paste the schema.sql block into Supabase** before the
+bonus can actually pay out (the tap/particle flourish works either
+way -- only the XP roll needs the column to exist).

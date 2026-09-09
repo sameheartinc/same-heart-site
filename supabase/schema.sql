@@ -1500,3 +1500,23 @@ revoke all on function public.get_verified_rankings(integer) from public;
 grant execute on function public.get_verified_rankings(integer) to anon, authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- The Same Heart mark's secret tap bonus (Sep 9 2026). Rob's ask: tap
+-- the logo on the Galaxy page enough times in one visit and it
+-- *sometimes* pays out a small, random amount of XP -- once a day,
+-- never announced anywhere. Every tap always spawns a little heart
+-- particle regardless (pure client-side flourish, no server call, no
+-- column here) -- only crossing the hidden per-visit tap threshold
+-- attempts the bonus (see app/api/galaxy/heart-tap/route.ts, lib/
+-- heartTap.ts). Same trust model as every other XP source on this
+-- site: last_heart_tap_bonus_date can only move from that one server
+-- route (service role), never directly from a client update -- same
+-- column-level-revoke pattern as last_boost_at/kinship_streak_* above.
+-- A plain `date` column (not timestamptz) since the check is "already
+-- claimed today or not," same shape as kinship_streak_last_date.
+alter table profiles add column if not exists last_heart_tap_bonus_date date;
+
+revoke update (last_heart_tap_bonus_date) on profiles from authenticated;
+
+notify pgrst, 'reload schema';

@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { ONBOARDING_WORLD } from "@/lib/worlds";
 import WorldField from "@/components/WorldField";
 import { GALAXY_NODES } from "@/lib/galaxyNodes";
+import { tapHeartWithServer } from "@/lib/heartTap";
 
 // Position on a circle from an explicit angle (degrees) and radius (% of
 // the stage). 0deg = due right, 90 = down, -90 = up, going clockwise.
@@ -86,6 +87,25 @@ export default function GalaxyPage() {
   // depends on viewport width.
   const [isMobile, setIsMobile] = useState(false);
 
+  // The Same Heart mark's secret tap bonus (Sep 9 2026, Rob's idea --
+  // see lib/heartTap.ts and app/api/galaxy/heart-tap/route.ts for the
+  // rest of it). heartParticles is purely cosmetic -- every tap adds a
+  // few, each one removes itself once its CSS animation finishes (see
+  // handleHeartTap below), capped to the last 40 so a long tapping
+  // spree can't grow this list forever. tapThreshold is picked fresh,
+  // randomly, once per page load (never re-rendered as text, so unlike
+  // the mobile-viewport state above there's no hydration concern in
+  // picking it this way) -- "a bunch" of taps, not a fixed, guessable
+  // number. secretFired guards the one server call per visit; nothing
+  // here ever reveals whether today's bonus was already claimed --
+  // that's entirely the server's call (see the route).
+  const [heartParticles, setHeartParticles] = useState<{ id: number; dx: number; dy: number; rot: number }[]>([]);
+  const [bonusFlash, setBonusFlash] = useState<string | null>(null);
+  const heartIdRef = useRef(0);
+  const tapCountRef = useRef(0);
+  const secretFiredRef = useRef(false);
+  const [tapThreshold] = useState(() => 10 + Math.floor(Math.random() * 7));
+
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -132,6 +152,43 @@ export default function GalaxyPage() {
     setTilt({ x: BASE_TILT_X, y: 0 });
   }
 
+  // Every tap: a few little hearts fly off, always, no server call --
+  // pure delight, uncapped. Only once this VISIT's tap count crosses
+  // its own (randomly picked, see tapThreshold above) threshold does
+  // this attempt the real, secret, once-a-day XP roll -- and even then
+  // only once, ever, per page load (secretFiredRef), so holding the
+  // mark down doesn't spam the server. Nothing here ever shows if that
+  // roll was rejected as already-claimed-today -- see handleSecretTap.
+  function handleHeartTap() {
+    const burst = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => ({
+      id: heartIdRef.current++,
+      dx: Math.round((Math.random() - 0.5) * 70),
+      dy: Math.round(-46 - Math.random() * 44),
+      rot: Math.round((Math.random() - 0.5) * 55),
+    }));
+    setHeartParticles((prev) => [...prev.slice(-40), ...burst]);
+
+    tapCountRef.current += 1;
+    if (!secretFiredRef.current && tapCountRef.current >= tapThreshold) {
+      secretFiredRef.current = true;
+      attemptSecretBonus();
+    }
+  }
+
+  async function attemptSecretBonus() {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    const result = await tapHeartWithServer(token);
+    if (result?.awarded && typeof result.xp === "number") {
+      setBonusFlash(`+${result.xp}`);
+      setTimeout(() => setBonusFlash(null), 2200);
+    }
+    // result.awarded === false (already claimed today) or a failed
+    // call both fall through to here doing nothing on screen -- the
+    // whole point is a tap never explains itself either way.
+  }
+
   if (checking) return null;
 
   const ticks = Array.from({ length: 16 });
@@ -176,6 +233,51 @@ export default function GalaxyPage() {
           to { transform: rotate(-360deg); }
         }
         .galaxy-core { animation: galaxyCoreGlow 4s ease-in-out infinite; }
+        /* The Same Heart mark's secret tap bonus, Sep 9 2026 -- see
+           handleHeartTap in the component. A discrete, short (900ms),
+           user-triggered reaction rather than continuous ambient
+           motion, so this is deliberately left out of the
+           prefers-reduced-motion block further down, same reasoning a
+           "like" button's burst usually is. --hx/--hy/--hr come from
+           each particle's own inline style (randomized per tap). */
+        .galaxy-heart-particle {
+          position: absolute;
+          left: 50%;
+          top: 30%;
+          pointer-events: none;
+          font-size: 13px;
+          color: #ff6f91;
+          transform: translate(-50%, -50%);
+          animation: galaxyHeartFloat 900ms ease-out forwards;
+        }
+        @keyframes galaxyHeartFloat {
+          0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.5) rotate(0deg); }
+          15% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(calc(var(--hr, 0deg) * 0.2)); }
+          100% {
+            opacity: 0;
+            transform: translate(calc(-50% + var(--hx, 0px)), calc(-50% + var(--hy, -60px))) scale(0.55) rotate(var(--hr, 0deg));
+          }
+        }
+        .galaxy-bonus-flash {
+          position: absolute;
+          left: 50%;
+          top: -6px;
+          transform: translate(-50%, 0);
+          font-family: var(--font-mono);
+          font-size: 11px;
+          letter-spacing: 0.04em;
+          color: var(--gold);
+          text-shadow: 0 0 10px rgba(201,161,90,0.7);
+          pointer-events: none;
+          white-space: nowrap;
+          animation: galaxyBonusFlash 2.2s ease-out forwards;
+        }
+        @keyframes galaxyBonusFlash {
+          0% { opacity: 0; transform: translate(-50%, 0) scale(0.85); }
+          15% { opacity: 1; transform: translate(-50%, -8px) scale(1); }
+          75% { opacity: 1; }
+          100% { opacity: 0; transform: translate(-50%, -26px) scale(1); }
+        }
         .galaxy-node-wrap {
           animation: galaxyNodeIn 0.6s ease both;
           cursor: inherit;
@@ -421,40 +523,82 @@ export default function GalaxyPage() {
             })}
           </div>
 
-          {/* Center -- decorative, not a link; the five nodes are the map.
-              Nudged up and to the left of true center per Rob's request
-              (Sep 3 2026) -- left/top stay at 50%/50% so orbitPosition's
-              own math (and every node position built on it) is untouched;
-              the offset lives only in this element's own transform. */}
+          {/* Center -- not a link (the five/eight nodes are the map),
+              but tappable (see handleHeartTap above): a small, entirely
+              unannounced easter egg. Desktop keeps its Sep 3 2026 nudge
+              up-and-left of true center per Rob's request at the time;
+              on mobile Rob asked for it centered instead (Sep 9 2026,
+              "its way to the upper left") -- left/top stay at 50%/50%
+              either way so orbitPosition's own math (and every node
+              position built on it) is untouched; the offset lives only
+              in this element's own transform. */}
           <div
             style={{
               position: "absolute",
               left: "50%",
               top: "50%",
-              transform: "translate(calc(-50% - 26px), calc(-50% - 22px)) translateZ(40px)",
+              transform: isMobile
+                ? "translate(-50%, -50%) translateZ(40px)"
+                : "translate(calc(-50% - 26px), calc(-50% - 22px)) translateZ(40px)",
               textAlign: "center",
-              pointerEvents: "none",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/mark.png"
-              alt="Same Heart"
-              className="galaxy-core"
-              style={{ width: "56px", height: "auto" }}
-            />
-            <p
+            <button
+              type="button"
+              onClick={handleHeartTap}
+              aria-label="Same Heart"
               style={{
-                marginTop: "10px",
-                fontFamily: "var(--font-display)",
-                fontSize: "9px",
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: "var(--gold)",
+                position: "relative",
+                background: "none",
+                border: "none",
+                padding: 0,
+                margin: 0,
+                cursor: "inherit",
+                font: "inherit",
+                color: "inherit",
               }}
             >
-              Same Heart
-            </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/mark.png"
+                alt=""
+                className="galaxy-core"
+                style={{ width: "56px", height: "auto" }}
+              />
+              <span
+                style={{
+                  display: "block",
+                  marginTop: "10px",
+                  fontFamily: "var(--font-display)",
+                  fontSize: "9px",
+                  letterSpacing: "0.18em",
+                  textTransform: "uppercase",
+                  color: "var(--gold)",
+                }}
+              >
+                Same Heart
+              </span>
+              {heartParticles.map((h) => (
+                <span
+                  key={h.id}
+                  aria-hidden="true"
+                  className="galaxy-heart-particle"
+                  style={{
+                    ["--hx" as string]: `${h.dx}px`,
+                    ["--hy" as string]: `${h.dy}px`,
+                    ["--hr" as string]: `${h.rot}deg`,
+                  }}
+                  onAnimationEnd={() => setHeartParticles((prev) => prev.filter((p) => p.id !== h.id))}
+                >
+                  &#10084;
+                </span>
+              ))}
+              {bonusFlash && (
+                <span aria-hidden="true" className="galaxy-bonus-flash">
+                  {bonusFlash}
+                </span>
+              )}
+            </button>
           </div>
 
           {GALAXY_NODES.map((node, i) => {
