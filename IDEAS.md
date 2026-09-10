@@ -2409,3 +2409,41 @@ trust, or money, so the worst case of bypassing the gate is a
 signature line showing a little early. Verified by full read-through
 of the diff only, same live-render caveat as the rest of tonight's
 session (the device shell stayed wedged throughout).
+
+## Kinship Tier 4: a wordless nudge (Sep 10, 2026)
+
+Same "which one's next" question as Voice Tier 4 -- Kinship and
+Guidance were both sitting at Tier 3, Rob picked Kinship. This tier's
+roadmap text was already settled and didn't need a design detour like
+Voice's did: "can send a one-time 'thinking of you' nudge to a
+thread's author."
+
+Built as its own small, deliberately different thing from Tier 2's
+encouragement note, not a second copy of it: no text box, one click,
+aimed at a whole thread rather than a single reply, capped once per
+(sender, thread) pair instead of once per reply. A "Thinking of you"
+button sits right under a thread's own reactions -- never shown on
+your own thread, same rule the Encourage button already follows on
+replies.
+
+- supabase/schema.sql: send_thread_nudge(p_thread_id) -- same
+  security-definer shape as send_encouragement_note (this lands on
+  someone else's notifications row, so it can't be a plain client
+  insert), re-checks the sender's real Kinship Tier from profiles
+  itself, blocks self-nudges and repeats. No new columns --
+  notifications.thread_id already existed. Deliberately does NOT feed
+  the Tier 3 Steady Kinship streak; that streak's own comment scopes
+  it to encouragement notes specifically, and widening an
+  already-shipped tier's behavior felt like a bigger call than this
+  tier asked for -- flagged in the function's own comment for future-
+  self, easy to revisit if Rob wants nudges to count too.
+- lib/commons.ts: sendThreadNudge, mirroring sendEncouragementNote.
+- app/commons/t/[id]/page.tsx: the button, state, and handler --
+  nudgeSent is session-only memory (same accepted trade-off
+  encouragedIds already uses one screen up: RLS can't tell this page
+  whether you nudged on a past visit, and the DB function still
+  blocks a real repeat regardless).
+- lib/practices.ts: Tier 4 marked BUILT.
+
+Verified by full read-through of the diff only -- no live render,
+device shell still wedged.

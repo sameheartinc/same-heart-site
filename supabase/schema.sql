@@ -1578,3 +1578,65 @@ revoke all on function public.get_public_profiles(uuid[]) from public;
 grant execute on function public.get_public_profiles(uuid[]) to anon, authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- Kinship Tier 4 (Sep 10 2026) -- a one-time, wordless "thinking of
+-- you" nudge to a thread's author (see lib/practices.ts). Distinct
+-- from Tier 2's encouragement note above: no text, aimed at the
+-- thread itself rather than one reply, and capped to once per
+-- (sender, thread) pair rather than once per reply. Same trust shape
+-- as send_encouragement_note -- this lands on someone ELSE's
+-- notifications row, so it can't be a plain client insert behind
+-- RLS, and re-derives the sender's real Kinship Tier from profiles
+-- itself rather than trusting anything the client claims. No new
+-- columns needed -- notifications.thread_id already exists.
+--
+-- Deliberately does NOT touch the Steady Kinship streak (Tier 3,
+-- above): that streak's own comment scopes it specifically to
+-- encouragement notes ("sent an encouragement note"), and widening
+-- what counts as "showing up" for an already-shipped tier is a
+-- bigger call than this tier asked for.
+create or replace function public.send_thread_nudge(p_thread_id uuid)
+returns void as $$
+declare
+  v_recipient uuid;
+  v_sender uuid := auth.uid();
+  v_kinship_tier integer;
+begin
+  if v_sender is null then
+    raise exception 'Sign in first.';
+  end if;
+
+  select coalesce((practice_points->>'kinship')::int, 0) into v_kinship_tier
+  from profiles where id = v_sender;
+
+  if coalesce(v_kinship_tier, 0) < 4 then
+    raise exception 'Kinship Tier 4 not unlocked yet.';
+  end if;
+
+  select profile_id into v_recipient
+  from commons_threads where id = p_thread_id;
+
+  if v_recipient is null then
+    raise exception 'That thread no longer exists.';
+  end if;
+
+  if v_recipient = v_sender then
+    raise exception 'You can''t nudge your own thread.';
+  end if;
+
+  if exists (
+    select 1 from notifications
+    where kind = 'thread_nudge' and actor_id = v_sender and thread_id = p_thread_id
+  ) then
+    raise exception 'Already sent a nudge on this thread.';
+  end if;
+
+  insert into notifications (profile_id, actor_id, kind, thread_id, body)
+  values (v_recipient, v_sender, 'thread_nudge', p_thread_id, 'is thinking of you, about your thread.');
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function public.send_thread_nudge(uuid) to authenticated;
+
+notify pgrst, 'reload schema';

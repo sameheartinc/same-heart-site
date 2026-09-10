@@ -647,3 +647,14 @@ export async function sendEncouragementNote(replyId: string, note: string): Prom
   return { ok: true };
 }
 
+// Kinship Tier 4 -- a one-time, wordless "thinking of you" nudge to a
+// thread's author (see lib/practices.ts). Same routing reason as
+// sendEncouragementNote just above -- this lands on someone else's
+// notifications row, so it goes through send_thread_nudge() (see
+// supabase/schema.sql) rather than a plain client insert.
+export async function sendThreadNudge(threadId: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.rpc("send_thread_nudge", { p_thread_id: threadId });
+  if (error) return { ok: false, error: error.message || "Couldn't send that right now." };
+  return { ok: true };
+}
+

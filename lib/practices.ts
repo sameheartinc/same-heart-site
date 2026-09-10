@@ -26,7 +26,7 @@
 // log of each one). A tier is only ever marked BUILT below once it's a
 // real, live, gated feature -- never for narrating something the app
 // already did for everyone regardless of tier. As of this writing:
-// Voice is through Tier 4, Kinship and Guidance are through Tier 3,
+// Voice and Kinship are through Tier 4, Guidance is through Tier 3,
 // Stewardship through Tier 4 -- check each tier's own inline comment
 // for exactly what shipped and where, rather than trusting this count
 // to stay current. Whatever's left up to Tier 20 is the full roadmap
@@ -84,7 +84,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
       "Your own reaction history becomes visible to you -- a quiet list only you can see.", // BUILT loosely -- lib/commons.ts's ReactionSummary.mine already surfaces your own reaction state everywhere reactions render; no dedicated gated view exists yet. Counted as satisfying Tier 1 rather than building a redundant screen, but flagged here since every other Tier 1 below points at something newly built specifically for that tier -- a real private "My Reactions" list is a fair thing to build later if Rob wants this tier to mean more.
       "Can leave a private encouragement note on someone's reply.", // BUILT -- lib/commons.ts's sendEncouragementNote, "Encourage" button on replies, delivered via the existing notifications panel
       "Private 'Steady Kinship' streak tracker (never shown publicly, never punishing).", // BUILT (Sep 5 2026) -- profiles.kinship_streak_current/longest/last_date (supabase/schema.sql), updated only inside send_encouragement_note's security-definer function (the first encouragement note of a calendar day moves it; sending more the same day does not). Hub panel gated on kinshipTier >= 3, states only the current/longest counts -- no "streak broken" language, ever.
-      "Can send a one-time 'thinking of you' nudge to a thread's author.",
+      "Can send a one-time 'thinking of you' nudge to a thread's author.", // BUILT (Sep 10 2026) -- send_thread_nudge() (supabase/schema.sql), lib/commons.ts's sendThreadNudge, a small "Thinking of you" button on the thread's own page (app/commons/t/[id]/page.tsx), never shown on your own thread. Wordless and capped to once per (sender, thread) pair -- distinct from Tier 2's encouragement note (which has text and targets a reply). Deliberately doesn't touch the Tier 3 streak; see that function's own comment for why.
       "Reaction combinations on long threads.",
       "Optional, opt-in Kinship badge on your own profile.",
       "Can highlight a specific reply as 'this helped me'.",

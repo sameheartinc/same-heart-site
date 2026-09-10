@@ -19,6 +19,7 @@ import {
   hasFlagged,
   listReplies,
   sendEncouragementNote,
+  sendThreadNudge,
   setReaction,
   touchPresence,
   type CommonsReply,
@@ -98,6 +99,15 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
   const [sendingEncourage, setSendingEncourage] = useState(false);
   const [encourageError, setEncourageError] = useState<string | null>(null);
   const [encouragedIds, setEncouragedIds] = useState<Set<string>>(new Set());
+  // Kinship Tier 4 -- the wordless, one-time "thinking of you" nudge
+  // (see lib/commons.ts's sendThreadNudge). nudgeSent is the same
+  // session-only "already sent" memory as encouragedIds above, same
+  // reason: RLS can't tell this page whether you nudged this thread on
+  // a past visit, and send_thread_nudge() still blocks a real repeat
+  // either way.
+  const [sendingNudge, setSendingNudge] = useState(false);
+  const [nudgeSent, setNudgeSent] = useState(false);
+  const [nudgeError, setNudgeError] = useState<string | null>(null);
   // Post Boost -- see lib/evolution.ts's "ability-post-boost" and
   // app/api/abilities/boost/route.ts (the only writer of
   // boosted_until). unlockedIds is the same "which Evolution rewards do
@@ -249,6 +259,22 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
     setEncouragedIds((prev) => new Set(prev).add(replyId));
     setEncouragingReplyId(null);
     setEncourageText("");
+  }
+
+  // Kinship Tier 4 -- see lib/commons.ts's sendThreadNudge. No text, no
+  // confirm step -- the whole point is it's a small, quiet, one-tap
+  // gesture, not a second version of the encouragement note above.
+  async function sendNudge() {
+    if (!thread || sendingNudge || nudgeSent) return;
+    setSendingNudge(true);
+    setNudgeError(null);
+    const result = await sendThreadNudge(thread.id);
+    setSendingNudge(false);
+    if (!result.ok) {
+      setNudgeError(result.error ?? "Couldn't send that right now.");
+      return;
+    }
+    setNudgeSent(true);
   }
 
   async function handleReply(e: React.FormEvent) {
@@ -498,6 +524,29 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
         {shelfError && <p style={{ color: "#e0703a", fontSize: "0.78rem", margin: "0 0 10px" }}>{shelfError}</p>}
         {reactionRow("thread", thread.id)}
         {flagError && <p style={{ color: "#e0703a", fontSize: "0.78rem", margin: "8px 0 0" }}>{flagError}</p>}
+
+        {/* Kinship Tier 4 -- see lib/commons.ts's sendThreadNudge.
+            Never shown on your own thread -- same "for someone else"
+            rule Tier 2's Encourage button follows on replies. */}
+        {kinshipTier >= 4 && thread.profile_id !== userId && (
+          <div style={{ marginTop: "10px" }}>
+            {nudgeSent ? (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-faint, #a29cb0)" }}>
+                Sent
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={sendNudge}
+                disabled={sendingNudge}
+                style={{ padding: "5px 11px", borderRadius: "999px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink-dim)", fontFamily: "var(--font-mono)", fontSize: "10px", letterSpacing: "0.02em", cursor: sendingNudge ? "default" : "pointer" }}
+              >
+                &#128153;&nbsp;{sendingNudge ? "Sending..." : "Thinking of you"}
+              </button>
+            )}
+            {nudgeError && <p style={{ color: "#e0703a", fontSize: "0.76rem", margin: "6px 0 0" }}>{nudgeError}</p>}
+          </div>
+        )}
 
         <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.95rem", margin: "36px 0 14px" }}>
           {replies.length === 0 ? "No replies yet" : `${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}
