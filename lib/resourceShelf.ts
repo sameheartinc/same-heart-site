@@ -11,16 +11,29 @@
 //
 // Same trust posture as Voice/Guidance Tier 1's image_url/resource_url
 // (see lib/commons.ts's createThread comment): the Tier 2 gate and the
-// 5-item cap below are both enforced here, client-side, backed only by
-// resource_shelf's RLS (own rows only) -- not a service-role route.
-// resource_shelf carries no XP, trust, or money, so the worst case of
-// someone bypassing the Tier check is a personal list existing a little
-// early, which is a cosmetic gap, not a security one -- the same
-// reasoning Tier 1 already established for this Practice.
+// cap (shelfCapacity() below -- 5 up through Tier 3, 15 from Tier 4)
+// are both enforced here, client-side, backed only by resource_shelf's
+// RLS (own rows only) -- not a service-role route. resource_shelf
+// carries no XP, trust, or money, so the worst case of someone
+// bypassing the Tier check is a personal list existing (or growing) a
+// little early, which is a cosmetic gap, not a security one -- the
+// same reasoning Tier 1 already established for this Practice.
 
 import { supabase } from "@/lib/supabaseClient";
 
 export const RESOURCE_SHELF_CAP = 5;
+// Guidance Tier 4 -- shelf capacity increases to 15 (see
+// lib/practices.ts). shelfCapacity() is the one place a Guidance Tier
+// maps to a real cap, so addToShelf below and the Hub's "X of Y saved"
+// label can't drift apart. Only Tier 4's own real cap is implemented
+// here -- the roadmap's later capacity tiers (40, then "effectively
+// unlimited") get built when Rob actually reaches them, not guessed at
+// now.
+export const RESOURCE_SHELF_CAP_TIER_4 = 15;
+
+export function shelfCapacity(guidanceTier: number): number {
+  return guidanceTier >= 4 ? RESOURCE_SHELF_CAP_TIER_4 : RESOURCE_SHELF_CAP;
+}
 
 export interface ShelfItem {
   id: string;
@@ -50,16 +63,17 @@ export async function addToShelf(
   profileId: string,
   url: string,
   title: string,
+  cap: number,
   sourceThreadId?: string | null
 ): Promise<{ ok: boolean; error?: string }> {
   const existing = await listMyShelf(profileId);
   if (existing.some((item) => item.url === url)) {
     return { ok: false, error: "Already on your shelf." };
   }
-  if (existing.length >= RESOURCE_SHELF_CAP) {
+  if (existing.length >= cap) {
     return {
       ok: false,
-      error: `Your shelf is full (${RESOURCE_SHELF_CAP} of ${RESOURCE_SHELF_CAP}) -- remove one to save another.`,
+      error: `Your shelf is full (${cap} of ${cap}) -- remove one to save another.`,
     };
   }
 

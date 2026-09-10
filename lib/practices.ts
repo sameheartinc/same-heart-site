@@ -26,8 +26,8 @@
 // log of each one). A tier is only ever marked BUILT below once it's a
 // real, live, gated feature -- never for narrating something the app
 // already did for everyone regardless of tier. As of this writing:
-// Voice and Kinship are through Tier 4, Guidance is through Tier 3,
-// Stewardship through Tier 4 -- check each tier's own inline comment
+// Voice, Kinship, Guidance, and Stewardship are all through Tier 4 --
+// check each tier's own inline comment
 // for exactly what shipped and where, rather than trusting this count
 // to stay current. Whatever's left up to Tier 20 is the full roadmap
 // already agreed with Rob, ready to build one at a time, in order, per
@@ -111,7 +111,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
       "Can attach one external resource link to an original thread.", // BUILT -- composer + thread display
       "Personal 'Resource Shelf' starts (up to 5 saved).", // BUILT -- lib/resourceShelf.ts, Hub panel, "Save" button on thread pages
       "Can tag a resource with a category.", // BUILT (Sep 5 2026) -- resource_shelf.issue_key (supabase/schema.sql), lib/resourceShelf.ts's setShelfItemCategory, components/ShelfCategoryPicker.tsx rendered per shelf item in the Hub, gated on guidanceTier >= 3. Reuses lib/worldIssues.ts's WORLD_ISSUES -- the Exchange's own issue taxonomy -- rather than inventing a second category list.
-      "Shelf capacity increases (up to 15).",
+      "Shelf capacity increases (up to 15).", // BUILT (Sep 10 2026) -- lib/resourceShelf.ts's shelfCapacity(guidanceTier), the one place a Guidance Tier maps to a real cap. addToShelf now takes the cap as a real parameter instead of the old flat RESOURCE_SHELF_CAP constant; the Hub's "X of Y saved" label reads the same function so the two can't drift apart.
       "Can pin one resource to a community's sidebar.",
       "Can annotate why a resource helped.",
       "Your shelf becomes visible to others browsing your profile.",

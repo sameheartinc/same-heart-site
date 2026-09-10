@@ -2447,3 +2447,43 @@ replies.
 
 Verified by full read-through of the diff only -- no live render,
 device shell still wedged.
+
+## Guidance Tier 4: the Shelf grows to 15 (Sep 10, 2026)
+
+The last of tonight's four "which one's next" rounds -- Guidance was
+the only Practice still at Tier 3 once Kinship caught up, so it was
+next by elimination, not a fresh pick. Roadmap text was plain and
+needed no design detour: "shelf capacity increases (up to 15)."
+
+The Resource Shelf's cap had been a flat constant (RESOURCE_SHELF_CAP
+= 5) since Guidance Tier 2 first built it, with nothing tier-aware
+about it. Rather than hardcode a second flat number for Tier 4 and
+leave two constants that could drift apart, added
+lib/resourceShelf.ts's shelfCapacity(guidanceTier) -- one function
+mapping a real Guidance Tier to its real cap (5 through Tier 3, 15 from
+Tier 4 on), which both addToShelf (now takes the cap as a real
+parameter instead of reading the old constant directly) and the Hub's
+"X of Y saved" label call, so the two can never show different numbers
+again. Only Tier 4's own cap is implemented -- the roadmap's later
+capacity tiers (40, then "effectively unlimited") get built when Rob
+actually reaches them, not guessed at now, same restraint as every
+other tier in this file.
+
+- lib/resourceShelf.ts: RESOURCE_SHELF_CAP (now the Tier 1-3 base),
+  RESOURCE_SHELF_CAP_TIER_4, shelfCapacity(). addToShelf's signature
+  changed (cap is now a required parameter) -- its one caller updated.
+- app/commons/t/[id]/page.tsx: the "Save to Shelf" button's call to
+  addToShelf now passes shelfCapacity(guidanceTier).
+- app/hub/page.tsx: the "X of Y saved" label now reads
+  shelfCapacity(practiceTier(practicePoints, "guidance")) instead of
+  the flat constant.
+- lib/practices.ts: Tier 4 marked BUILT.
+
+No schema change, no new SQL to run -- this is a pure client-side cap,
+same trust posture the Shelf has had since Tier 2 (no XP/trust/money
+at stake, so nothing here needed a service-role route). Verified by
+full read-through of the diff only, same caveat as the rest of
+tonight -- the device shell stayed wedged the whole session.
+
+With this, all four Practices -- Voice, Kinship, Guidance, and
+Stewardship -- are through Tier 4, all built in one sitting tonight.

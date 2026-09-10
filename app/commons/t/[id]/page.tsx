@@ -31,7 +31,7 @@ import {
   type ReactionTargetType,
 } from "@/lib/commons";
 import { EMPTY_PRACTICE_POINTS, normalizePracticePoints, practiceTier, type PracticePoints } from "@/lib/practices";
-import { addToShelf, listMyShelf } from "@/lib/resourceShelf";
+import { addToShelf, listMyShelf, shelfCapacity } from "@/lib/resourceShelf";
 import { renderRichText } from "@/lib/richText";
 import { listMyUnlocks } from "@/lib/evolution";
 import { activateBoost } from "@/lib/abilities";
@@ -157,7 +157,7 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
     if (!userId || !thread?.resource_url) return;
     setSavingShelf(true);
     setShelfError(null);
-    const result = await addToShelf(userId, thread.resource_url, thread.title, thread.id);
+    const result = await addToShelf(userId, thread.resource_url, thread.title, shelfCapacity(guidanceTier), thread.id);
     setSavingShelf(false);
     if (!result.ok) {
       setShelfError(result.error ?? "Couldn't save that right now.");

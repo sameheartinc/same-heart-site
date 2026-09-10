@@ -37,7 +37,7 @@ import {
   type PracticeKey,
   type PracticePoints,
 } from "@/lib/practices";
-import { listMyShelf, removeFromShelf, setShelfItemCategory, RESOURCE_SHELF_CAP, type ShelfItem } from "@/lib/resourceShelf";
+import { listMyShelf, removeFromShelf, setShelfItemCategory, shelfCapacity, type ShelfItem } from "@/lib/resourceShelf";
 import ShelfCategoryPicker from "@/components/ShelfCategoryPicker";
 import { activateDoubleXp } from "@/lib/abilities";
 import WidgetFrame from "@/components/WidgetFrame";
@@ -2483,7 +2483,7 @@ export default function HubPage() {
                   color: "var(--widget-text-faint)",
                 }}
               >
-                {shelf.length} of {RESOURCE_SHELF_CAP} saved
+                {shelf.length} of {shelfCapacity(practiceTier(practicePoints, "guidance"))} saved
               </span>
             </div>
             {shelf.length === 0 ? (
