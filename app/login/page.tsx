@@ -14,6 +14,13 @@ import WorldField from "@/components/WorldField";
 
 type Stage = "gate" | "entering" | "quiz" | "revealing" | "ship" | "arriving" | "form";
 
+// Same ship-silhouette cursor as the Galaxy room (see app/galaxy/page.tsx)
+// -- applied here too during the colour/texture/question/inkblot picker so
+// "you're flying this thing" starts the moment onboarding begins, not just
+// once you reach Galaxy.
+const SHIP_CURSOR =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 100 100'%3E%3Cpath d='M50 4 L79 63 L50 48 L21 63 Z' fill='%23f0d9a8' stroke='%23c9a15a' stroke-width='3'/%3E%3Cpath d='M50 48 L50 95 L37 77 Z M50 48 L50 95 L63 77 Z' fill='%23c9a15a' fill-opacity='0.55'/%3E%3C/svg%3E\") 15 6, auto";
+
 export default function LoginPage() {
   // useSearchParams needs a Suspense boundary in the app router -- this
   // page is fully client-rendered anyway, so it's a no-op in practice.
@@ -233,7 +240,8 @@ function LoginPageInner() {
         justifyContent: "center",
         padding: "24px",
         position: "relative",
-        overflow: "hidden",
+        overflow: stage === "quiz" ? "visible" : "hidden",
+        cursor: stage === "quiz" ? SHIP_CURSOR : "auto",
       }}
     >
       {!claimMode && <WorldField world={backgroundWorld} />}
@@ -286,7 +294,14 @@ function LoginPageInner() {
         }
       `}</style>
 
-      <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: "480px" }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          maxWidth: stage === "quiz" ? "min(1400px, 96vw)" : "480px",
+        }}
+      >
         {(stage === "gate" || stage === "entering") && (
           <div
             className={stage === "entering" ? "gate-fade-out" : undefined}

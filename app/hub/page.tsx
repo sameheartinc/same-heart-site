@@ -89,11 +89,6 @@ type LogEntry = {
 // very first visit -- see lib/primeLevels.ts.
 const TRENDING_UNLOCK_LEVEL = 3;
 
-function sparkLabel(sparkId: number | null): string | null {
-  if (sparkId == null) return null;
-  return "Spark #" + String(sparkId).padStart(5, "0");
-}
-
 export default function HubPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
@@ -734,7 +729,6 @@ export default function HubPage() {
     ? `linear-gradient(rgba(5,7,13,0.74), rgba(5,7,13,0.74)), url(${backgroundImage}) center / cover fixed no-repeat`
     : "var(--void)";
   const path = profile.path_key ? PATHS[profile.path_key as PathKey] : null;
-  const spark = sparkLabel(profile.spark_id);
   // Prime Levels -- see lib/primeLevels.ts. A pure function of XP, so no
   // fetch or server round-trip needed: it's just as trustworthy as the
   // XP number itself.
@@ -1301,7 +1295,6 @@ export default function HubPage() {
               }}
             >
               <span>{profile.designation}</span>
-              {spark && <span style={{ color: "var(--widget-text-faint)" }}>&middot; {spark}</span>}
             </div>
             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.3rem", margin: "0 0 6px" }}>
               {profile.archetype}
