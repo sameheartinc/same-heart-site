@@ -5,7 +5,21 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { SKINS, getSkin, type SkinKey } from "@/lib/skins";
-import { listMyKeys, evaluateKeys, setCommonsAccent, KEY_INFO, COMMONS_ACCENT_PALETTE, type ProfileKey } from "@/lib/keys";
+import {
+  listMyKeys,
+  evaluateKeys,
+  setCommonsAccent,
+  KEY_INFO,
+  COMMONS_ACCENT_PALETTE,
+  recordStarDayVisit,
+  fetchStarDayVisitDays,
+  fetchWelcomeNote,
+  fetchMyFounderNote,
+  saveMyFounderNote,
+  PURPLE_KEY_MIN_VISIT_DAYS,
+  type ProfileKey,
+} from "@/lib/keys";
+import { ARCHETYPES } from "@/lib/starDay";
 import { founderStatus } from "@/lib/founders";
 import { getLevel, nextPrimeThreshold } from "@/lib/primeLevels";
 import {
@@ -108,6 +122,12 @@ export default function HubPage() {
   const [leveledUpTo, setLeveledUpTo] = useState<number | null>(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [keys, setKeys] = useState<ProfileKey[]>([]);
+  const [deeperOpen, setDeeperOpen] = useState(false);
+  const [starDayVisitDays, setStarDayVisitDays] = useState(0);
+  const [welcomeNote, setWelcomeNote] = useState<string | null>(null);
+  const [founderNoteDraft, setFounderNoteDraft] = useState("");
+  const [founderNoteSaving, setFounderNoteSaving] = useState(false);
+  const [founderNoteSaved, setFounderNoteSaved] = useState(false);
   const [kindredMatches, setKindredMatches] = useState<KindredMatch[]>([]);
   const [kindredOptOutSaving, setKindredOptOutSaving] = useState(false);
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
@@ -277,6 +297,23 @@ export default function HubPage() {
            missed celebration banner isn't worth surfacing an error for. */
       }
       setKeys(myKeys);
+      fetchStarDayVisitDays().then(setStarDayVisitDays);
+      if (myKeys.some((k) => k.key_color === "white")) {
+        fetchMyFounderNote().then((note) => setFounderNoteDraft(note ?? ""));
+      }
+
+      // White's welcome-note door -- a small "someone's been here a
+      // while and left you a note" moment for genuinely new arrivals
+      // only (see supabase/schema.sql's founder_notes and lib/keys.ts's
+      // fetchWelcomeNote). 14 days is arbitrary but generous -- this is
+      // meant to catch someone still finding their footing, not to
+      // become a permanent banner.
+      const tenureDays = currentProfile.joined_at
+        ? Math.floor((Date.now() - new Date(currentProfile.joined_at).getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+      if (tenureDays <= 14) {
+        fetchWelcomeNote().then(setWelcomeNote);
+      }
       setPracticePoints(normalizePracticePoints(currentProfile.practice_points));
       setUnlockedIds(new Set(myUnlocks));
       setMonetizationStatus(myMonetizationStatus);
@@ -832,6 +869,44 @@ export default function HubPage() {
           </p>
         )}
 
+        {welcomeNote && (
+          <div
+            className="hub-quote"
+            style={{
+              background: "var(--panel)",
+              border: "1px solid var(--widget-border)",
+              borderRadius: "14px",
+              padding: "16px 20px",
+              marginBottom: "22px",
+              textAlign: "center",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--widget-text-faint)",
+              }}
+            >
+              A note from someone who's been here a while
+            </p>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontFamily: "var(--font-body)",
+                fontStyle: "italic",
+                color: "var(--widget-text-dim)",
+                fontSize: "0.9rem",
+              }}
+            >
+              &ldquo;{welcomeNote}&rdquo;
+            </p>
+          </div>
+        )}
+
         {milestone && (
           <div
             className="hub-quote"
@@ -1342,6 +1417,80 @@ export default function HubPage() {
                 Walks as {path.name}
               </p>
             )}
+            {(() => {
+              const archetypeEntry = ARCHETYPES.find((a) => a.name === profile.archetype);
+              if (!archetypeEntry) return null;
+              const hasPurple = keys.some((k) => k.key_color === "purple");
+              return (
+                <div id="star-day-deeper" style={{ marginTop: "10px" }}>
+                  <button
+                    onClick={() => {
+                      const opening = !deeperOpen;
+                      setDeeperOpen(opening);
+                      if (opening) {
+                        recordStarDayVisit().then(() => {
+                          fetchStarDayVisitDays().then(setStarDayVisitDays);
+                        });
+                      }
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "9px",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "var(--widget-accent)",
+                    }}
+                  >
+                    {deeperOpen ? "Close reading" : "Go deeper →"}
+                  </button>
+                  {deeperOpen && (
+                    <div style={{ marginTop: "8px", maxWidth: "42ch" }}>
+                      <p
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontStyle: "italic",
+                          color: "var(--widget-text-dim)",
+                          margin: "0 0 8px",
+                          fontSize: "0.88rem",
+                        }}
+                      >
+                        {archetypeEntry.desc}
+                      </p>
+                      {hasPurple ? (
+                        <p
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            color: "var(--widget-text-dim)",
+                            margin: 0,
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          {archetypeEntry.deeper}
+                        </p>
+                      ) : (
+                        <p
+                          title="The Purple Heart String reveals a second, deeper reading here -- earned by coming back to this same reading across real, separate days."
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "9px",
+                            letterSpacing: "0.04em",
+                            color: "var(--widget-text-faint)",
+                            margin: 0,
+                          }}
+                        >
+                          {Math.min(starDayVisitDays, PURPLE_KEY_MIN_VISIT_DAYS)} of {PURPLE_KEY_MIN_VISIT_DAYS} days
+                          spent looking closer -- hold the Purple Heart String to go deeper still.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
             <div style={{ textAlign: "center", padding: "12px 20px", border: "1px solid var(--widget-border)", borderRadius: "12px" }}>
@@ -1680,6 +1829,78 @@ export default function HubPage() {
           </div>
         )}
 
+        {/* White's door -- one optional welcome note, shown to newer
+            arrivals (see the banner above and lib/keys.ts). Same "quiet
+            until earned" posture as Blue's accent picker above. */}
+        {keys.some((k) => k.key_color === "white") && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+              marginBottom: "22px",
+              padding: "0 4px",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--widget-text-faint)",
+              }}
+            >
+              Your welcome note (shown to newer arrivals)
+            </span>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <input
+                value={founderNoteDraft}
+                onChange={(e) => {
+                  setFounderNoteDraft(e.target.value);
+                  setFounderNoteSaved(false);
+                }}
+                maxLength={280}
+                placeholder="One thing you'd want a new arrival to hear."
+                style={{
+                  flex: "1 1 260px",
+                  padding: "8px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--widget-border)",
+                  background: "var(--widget-background)",
+                  color: "var(--widget-text)",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.82rem",
+                }}
+              />
+              <button
+                onClick={async () => {
+                  setFounderNoteSaving(true);
+                  setFounderNoteSaved(false);
+                  const ok = await saveMyFounderNote(founderNoteDraft);
+                  setFounderNoteSaving(false);
+                  setFounderNoteSaved(ok);
+                }}
+                disabled={founderNoteSaving || !founderNoteDraft.trim()}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--widget-accent)",
+                  background: "none",
+                  color: "var(--widget-accent)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                {founderNoteSaving ? "Saving..." : founderNoteSaved ? "Saved" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Keys -- silent until you've actually earned one. Nothing to
             configure, nothing to nag about; it just appears the first
             time it's real. See lib/keys.ts and PLAN.md. */}
@@ -1750,6 +1971,30 @@ export default function HubPage() {
                     </Link>
                   );
                 }
+                // Purple's door lives inline on this same page -- the
+                // "Go deeper" reading under the archetype above -- so its
+                // dot just scrolls there rather than navigating away.
+                if (k.key_color === "purple") {
+                  return (
+                    <a key={k.key_color} href="#star-day-deeper" aria-label={`${info.name} -- go deeper`}>
+                      {dot}
+                    </a>
+                  );
+                }
+                // Magenta's door is a founder's flair on the community
+                // page itself plus a featured slot in the directory --
+                // see app/commons/communities/page.tsx.
+                if (k.key_color === "magenta") {
+                  return (
+                    <Link
+                      key={k.key_color}
+                      href="/commons/communities"
+                      aria-label={`${info.name} -- see your community's featured slot`}
+                    >
+                      {dot}
+                    </Link>
+                  );
+                }
                 return <span key={k.key_color}>{dot}</span>;
               })}
             </div>
@@ -1771,7 +2016,7 @@ export default function HubPage() {
             >
               {!unlockedIds.has("monetization-eligible") ? (
                 <p
-                  title="Holding all four Heart Strings unlocks the ability to apply to monetize your account -- reviewed and approved individually, never automatic."
+                  title="Holding the Green, Blue, Red, and Yellow Heart Strings unlocks the ability to apply to monetize your account -- reviewed and approved individually, never automatic."
                   style={{
                     margin: 0,
                     fontFamily: "var(--font-mono)",
@@ -1780,8 +2025,11 @@ export default function HubPage() {
                     color: "var(--widget-text-faint)",
                   }}
                 >
-                  {keys.length} of 4 Heart Strings -- hold all four to unlock the ability to apply to
-                  monetize your account.
+                  {/* Specifically the four founding colors, not a count of
+                      all ten -- see lib/evolution.ts's foundingKeysHeld. */}
+                  {keys.filter((k) => ["green", "blue", "red", "yellow"].includes(k.key_color)).length} of 4
+                  founding Heart Strings (Green, Blue, Red, Yellow) -- hold all four to unlock the ability
+                  to apply to monetize your account.
                 </p>
               ) : monetizationStatus === "none" ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>

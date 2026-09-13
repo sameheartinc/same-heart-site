@@ -12,6 +12,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 // so failing safe (a capped, honest error) beats an open-ended cost.
 
 const DAILY_MESSAGE_CAP = 40;
+const BASE_HISTORY_TURNS = 8;
+const INDIGO_HISTORY_TURNS = 24; // Indigo's door -- see PLAN.md
 const MODEL = "gemini-3.7-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
@@ -46,12 +48,28 @@ export async function POST(request: NextRequest) {
   }
   const profileId = userData.user.id;
 
+  // Indigo's door -- real curiosity about the site itself unlocks a
+  // longer memory window (INDIGO_HISTORY_TURNS vs. the base
+  // BASE_HISTORY_TURNS) and permission to ask about real aggregate site
+  // trends instead of only your own activity (see PLAN.md and
+  // lib/keys.ts). A cheap single-row lookup, not worth skipping even on
+  // the hot path -- this route already does several Supabase calls per
+  // message.
+  const { data: indigoKey } = await admin
+    .from("profile_keys")
+    .select("key_color")
+    .eq("profile_id", profileId)
+    .eq("key_color", "indigo")
+    .maybeSingle();
+  const hasIndigo = Boolean(indigoKey);
+
   let message: string;
   let history: GuideTurn[];
   try {
     const body = await request.json();
     message = String(body.message || "").trim();
-    history = Array.isArray(body.history) ? body.history.slice(-8) : [];
+    const historyLimit = hasIndigo ? INDIGO_HISTORY_TURNS : BASE_HISTORY_TURNS;
+    history = Array.isArray(body.history) ? body.history.slice(-historyLimit) : [];
   } catch {
     return NextResponse.json({ error: "Couldn't read that request." }, { status: 400 });
   }
@@ -97,6 +115,21 @@ export async function POST(request: NextRequest) {
   // even if someone retries a hung request repeatedly.
   await admin.from("guide_messages").insert({ profile_id: profileId });
 
+  // Indigo's door, part 2 -- real aggregate counts, computed fresh from
+  // tables this route already trusts, never anything the client claims.
+  // Kept to plain counts (no per-person detail) so this stays "real
+  // trends," not a way to fish for information about specific people.
+  let systemInstruction = SYSTEM_INSTRUCTION;
+  if (hasIndigo) {
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [{ count: communityCount }, { count: recentThreadCount }, { count: recentArticleCount }] = await Promise.all([
+      admin.from("communities").select("id", { count: "exact", head: true }),
+      admin.from("commons_threads").select("id", { count: "exact", head: true }).gte("created_at", dayAgo),
+      admin.from("news_articles").select("id", { count: "exact", head: true }).gte("fetched_at", dayAgo),
+    ]);
+    systemInstruction += `\n\nThis person has earned the Indigo Heart String, which means they can ask you about real, aggregate trends across the whole site (never about specific other people). Here's today's real snapshot: ${communityCount ?? 0} communities exist; ${recentThreadCount ?? 0} discussions/questions were started in the last 24 hours; ${recentArticleCount ?? 0} Signal articles were fetched in the last 24 hours. Use these numbers only if they're actually relevant to what's asked.`;
+  }
+
   const contents = [
     ...history.map((turn) => ({
       role: turn.role === "guide" ? "model" : "user",
@@ -110,7 +143,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+        system_instruction: { parts: [{ text: systemInstruction }] },
         contents,
         generationConfig: { maxOutputTokens: 300, temperature: 0.7 },
       }),

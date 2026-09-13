@@ -435,6 +435,9 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
 
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase", color: ACCENT, margin: "0 0 8px" }}>
           {thread.kind === "question" ? "Question" : "Discussion"} &middot; <span style={{ color: authors[thread.profile_id]?.commons_accent || undefined }}>{authorName(authors[thread.profile_id])}</span>
+          {authors[thread.profile_id]?.has_black_string && (
+            <span title="Black Heart String -- the meta-key" style={{ marginLeft: "4px" }}>✦</span>
+          )}
           <VoiceMarker practicePoints={authors[thread.profile_id]?.practice_points} />
         </p>
         <VoiceSignature

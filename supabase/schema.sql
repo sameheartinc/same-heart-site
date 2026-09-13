@@ -1765,12 +1765,21 @@ create policy "Users write their own replies" on commons_replies for insert with
 );
 
 -- Joining a community yourself stays exactly as it is today for public
--- ones; a private circle is invite-only, so self-join is blocked for
--- those specifically -- the only way in is invite_to_circle() below.
+-- ones; a private circle is invite-only for everyone except its own
+-- creator, who still needs to self-join at the moment they create it
+-- (see lib/commons.ts's createCommunity, which always inserts the
+-- creator as the first member right after the insert into communities
+-- above -- without this second clause, that call would be silently
+-- rejected for a brand-new private circle and its own founder would
+-- never actually become a member of it). Anyone else joining a private
+-- circle only ever happens through invite_to_circle() below.
 drop policy if exists "Users join communities themselves" on community_members;
 create policy "Users join communities themselves" on community_members for insert with check (
   auth.uid() = profile_id
-  and not exists (select 1 from communities c where c.id = community_id and coalesce(c.is_private, false))
+  and (
+    not exists (select 1 from communities c where c.id = community_id and coalesce(c.is_private, false))
+    or exists (select 1 from communities c where c.id = community_id and c.created_by = auth.uid())
+  )
 );
 
 -- The one way into a private circle: its creator invites someone by
@@ -1818,9 +1827,13 @@ notify pgrst, 'reload schema';
 -- reward on this list, and deliberately so"), but being seen by other
 -- people is the whole point of a cosmetic mark -- so it needs to travel
 -- through get_public_profiles the same way commons_accent already does
--- for Blue. Computed with an EXISTS subquery rather than a stored
--- column: there's nothing to keep in sync, and Black can never be
--- revoked, so this can never go stale.
+-- for Blue. Magenta's founder flair rides along here too, for the same
+-- reason: app/commons/communities/page.tsx needs to know whether a
+-- community's creator holds Magenta without being able to read anyone
+-- else's profile_keys directly (its select policy stays owner-only).
+-- Both computed with an EXISTS subquery rather than a stored column:
+-- there's nothing to keep in sync, and neither key can ever be revoked,
+-- so this can never go stale.
 create or replace function public.get_public_profiles(p_ids uuid[] default null)
 returns table (
   id uuid,
@@ -1833,7 +1846,8 @@ returns table (
   kindred_opt_out boolean,
   practice_points jsonb,
   voice_signature text,
-  has_black_string boolean
+  has_black_string boolean,
+  has_magenta_string boolean
 )
 language sql
 security definer
@@ -1843,7 +1857,8 @@ as $$
   select
     p.id, p.display_name, p.spark_id, p.path_key, p.ship_skin, p.designation,
     p.commons_accent, p.kindred_opt_out, p.practice_points, p.voice_signature,
-    exists(select 1 from profile_keys pk where pk.profile_id = p.id and pk.key_color = 'black') as has_black_string
+    exists(select 1 from profile_keys pk where pk.profile_id = p.id and pk.key_color = 'black') as has_black_string,
+    exists(select 1 from profile_keys pk where pk.profile_id = p.id and pk.key_color = 'magenta') as has_magenta_string
   from profiles p
   where p_ids is null or p.id = any(p_ids);
 $$;

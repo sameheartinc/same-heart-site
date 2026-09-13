@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import PageLoading from "@/components/PageLoading";
-import { createCommunity, listCommunities, type Community } from "@/lib/commons";
+import { createCommunity, listCommunities, fetchProfilesByIds, type Community } from "@/lib/commons";
+import { listMyKeys } from "@/lib/keys";
 
 const ACCENT = "#c9576a";
 
@@ -22,9 +23,12 @@ export default function CommunitiesPage() {
   const [checking, setChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [communities, setCommunities] = useState<Community[]>([]);
+  const [founderFlair, setFounderFlair] = useState<Set<string>>(new Set());
+  const [hasPink, setHasPink] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [newPrivate, setNewPrivate] = useState(false);
   const [newBusy, setNewBusy] = useState(false);
   const [newError, setNewError] = useState<string | null>(null);
 
@@ -36,7 +40,24 @@ export default function CommunitiesPage() {
         return;
       }
       setUserId(userData.user.id);
-      setCommunities(await listCommunities());
+      const [list, myKeys] = await Promise.all([listCommunities(), listMyKeys()]);
+      setHasPink(myKeys.some((k) => k.key_color === "pink"));
+
+      // Magenta's featured-slot door -- see PLAN.md ("a featured
+      // rotation slot in the /communities directory"). Static rather
+      // than truly rotating for now: a real rotation needs a scheduled
+      // job to pick a new one periodically, which is more machinery
+      // than this deserves until there are enough Magenta-founded
+      // communities for rotation to mean anything. Every one of them
+      // gets pinned to the top today; narrowing that to an actual
+      // rotating single slot is a small follow-up once it matters.
+      const founders = await fetchProfilesByIds(list.map((c) => c.created_by));
+      const flair = new Set(
+        list.filter((c) => founders[c.created_by]?.has_magenta_string).map((c) => c.id)
+      );
+      const sorted = [...list].sort((a, b) => Number(flair.has(b.id)) - Number(flair.has(a.id)));
+      setFounderFlair(flair);
+      setCommunities(sorted);
       setChecking(false);
     })();
   }, [router]);
@@ -52,9 +73,11 @@ export default function CommunitiesPage() {
         description: newDesc,
         accent: ACCENT,
         createdBy: userId,
+        isPrivate: hasPink && newPrivate,
       });
       setNewName("");
       setNewDesc("");
+      setNewPrivate(false);
       setNewOpen(false);
       router.push(`/commons/c/${community.slug}`);
     } catch (err: any) {
@@ -128,6 +151,24 @@ export default function CommunitiesPage() {
               rows={2}
               style={{ ...inputStyle, marginBottom: "8px", resize: "vertical" as const }}
             />
+            {hasPink && (
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  margin: "0 0 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  letterSpacing: "0.04em",
+                  color: "var(--ink-dim)",
+                  cursor: "pointer",
+                }}
+              >
+                <input type="checkbox" checked={newPrivate} onChange={(e) => setNewPrivate(e.target.checked)} />
+                Make this a private circle -- invite-only, held by your Pink Heart String.
+              </label>
+            )}
             {newError && <p style={errorStyle}>{newError}</p>}
             <button type="submit" disabled={newBusy} style={submitButtonStyle}>
               {newBusy ? "Creating..." : "Create community"}
@@ -156,7 +197,26 @@ export default function CommunitiesPage() {
                 }}
               >
                 <p style={{ margin: "0 0 6px", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.95rem" }}>
+                  {founderFlair.has(c.id) && (
+                    <span title="Founded by a Magenta Heart String holder -- featured" style={{ marginRight: "6px" }}>
+                      ★
+                    </span>
+                  )}
                   {c.name}
+                  {c.is_private && (
+                    <span
+                      style={{
+                        marginLeft: "6px",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--ink-dim)",
+                      }}
+                    >
+                      circle
+                    </span>
+                  )}
                 </p>
                 <p style={{ margin: "0 0 10px", fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.8rem", color: "var(--ink-dim)" }}>
                   {c.description || "No description yet."}

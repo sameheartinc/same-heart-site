@@ -12,6 +12,7 @@ import {
   createThread,
   fetchProfilesByIds,
   getCommunityBySlug,
+  inviteToCircle,
   isCommunityMember,
   joinCommunity,
   listThreads,
@@ -53,6 +54,13 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [resourceUrl, setResourceUrl] = useState("");
+
+  // Pink's door -- inviting someone into a private circle by Spark ID
+  // (see lib/commons.ts's inviteToCircle). Only ever rendered for the
+  // circle's own creator; the RPC itself re-checks that server-side too.
+  const [inviteSparkId, setInviteSparkId] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
 
   // Joining used to be a dead end -- Rob's own report was that after
   // clicking Join, there was nothing left to click to actually say
@@ -119,6 +127,40 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
       setJoinError("Couldn't join that one -- try again in a moment.");
     } finally {
       setJoining(false);
+    }
+  }
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!community) return;
+    const sparkId = parseInt(inviteSparkId.trim(), 10);
+    if (!sparkId) {
+      setInviteMessage("Enter a real Spark ID -- the number on their Hub.");
+      return;
+    }
+    setInviteBusy(true);
+    setInviteMessage(null);
+    try {
+      const { data: found } = await supabase
+        .from("public_profiles")
+        .select("id, display_name")
+        .eq("spark_id", sparkId)
+        .maybeSingle();
+      if (!found) {
+        setInviteMessage("No one with that Spark ID.");
+        return;
+      }
+      const result = await inviteToCircle(community.id, found.id);
+      if (result.ok) {
+        setInviteMessage(`Invited ${found.display_name || `Spark #${sparkId}`} to the circle.`);
+        setInviteSparkId("");
+      } else {
+        setInviteMessage(result.error || "Couldn't send that invite.");
+      }
+    } catch {
+      setInviteMessage("Couldn't reach the server. Try again in a moment.");
+    } finally {
+      setInviteBusy(false);
     }
   }
 
@@ -234,7 +276,27 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
               Community &middot; started by {authorName(authors[community.created_by])}
             </p>
             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.6rem", margin: "0 0 8px" }}>
+              {authors[community.created_by]?.has_magenta_string && (
+                <span title="Founded by a Magenta Heart String holder" style={{ marginRight: "8px" }}>
+                  ★
+                </span>
+              )}
               {community.name}
+              {community.is_private && (
+                <span
+                  style={{
+                    marginLeft: "8px",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-dim)",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  circle
+                </span>
+              )}
             </h1>
           </div>
           {!isMember ? (
@@ -260,9 +322,42 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
         <p style={{ fontFamily: "var(--font-body)", fontStyle: "italic", color: "var(--ink-dim)", fontSize: "0.95rem", lineHeight: 1.6, marginBottom: "10px" }}>
           {community.description || "No description yet."}
         </p>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)", marginBottom: "30px" }}>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)", marginBottom: community.is_private && userId === community.created_by ? "10px" : "30px" }}>
           {community.member_count} {community.member_count === 1 ? "member" : "members"}
         </p>
+
+        {community.is_private && userId === community.created_by && (
+          <form onSubmit={handleInvite} style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", marginBottom: "30px" }}>
+            <input
+              value={inviteSparkId}
+              onChange={(e) => setInviteSparkId(e.target.value)}
+              placeholder="Invite by Spark ID"
+              inputMode="numeric"
+              style={{
+                padding: "8px 10px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--void)",
+                color: "var(--ink)",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.82rem",
+                width: "160px",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={inviteBusy}
+              style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${accent}`, background: "none", color: accent, fontFamily: "var(--font-mono)", fontSize: "9px", textTransform: "uppercase", cursor: "pointer" }}
+            >
+              {inviteBusy ? "Inviting..." : "Invite"}
+            </button>
+            {inviteMessage && (
+              <span style={{ fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.78rem", color: "var(--ink-dim)" }}>
+                {inviteMessage}
+              </span>
+            )}
+          </form>
+        )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1rem", margin: 0 }}>Discussions</h2>
@@ -392,6 +487,9 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
                   </p>
                   <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink-faint, #5c6684)" }}>
                     <span style={{ color: authors[t.profile_id]?.commons_accent || undefined }}>{authorName(authors[t.profile_id])}</span>
+                    {authors[t.profile_id]?.has_black_string && (
+                      <span title="Black Heart String -- the meta-key" style={{ marginLeft: "4px" }}>✦</span>
+                    )}
                     <VoiceMarker practicePoints={authors[t.profile_id]?.practice_points} /> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}
                   </p>
                 </Link>

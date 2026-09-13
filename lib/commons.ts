@@ -27,6 +27,11 @@ export interface PublicProfile {
   // components/VoiceSignature.tsx) -- null until the author both
   // reaches the tier and actually sets one.
   voice_signature: string | null;
+  // Black's door (see PLAN.md and supabase/schema.sql's
+  // get_public_profiles) -- purely cosmetic, never gates anything.
+  has_black_string: boolean;
+  // Magenta's founder flair -- see app/commons/communities/page.tsx.
+  has_magenta_string: boolean;
 }
 
 export interface Community {
@@ -38,6 +43,11 @@ export interface Community {
   created_by: string;
   created_at: string;
   member_count: number;
+  // Pink's door -- see supabase/schema.sql's is_private column and RLS
+  // changes. False for every community that existed before that
+  // migration, so nothing about an existing community's visibility
+  // changes just by this field showing up.
+  is_private: boolean;
 }
 
 export interface CommonsThread {
@@ -231,6 +241,11 @@ export async function createCommunity(input: {
   description: string;
   accent: string;
   createdBy: string;
+  // Pink's door -- only actually succeeds if the caller holds the Pink
+  // key; supabase/schema.sql's insert policy on communities enforces
+  // that at the database level, so a request that lies about this from
+  // a tampered client just gets rejected, not silently downgraded.
+  isPrivate?: boolean;
 }) {
   const slug = slugify(input.name) || `community-${Date.now()}`;
   const { data, error } = await supabase
@@ -241,6 +256,7 @@ export async function createCommunity(input: {
       description: input.description.trim(),
       accent: input.accent,
       created_by: input.createdBy,
+      is_private: Boolean(input.isPrivate),
     })
     .select()
     .single();
@@ -248,6 +264,20 @@ export async function createCommunity(input: {
   // The creator is automatically the first member.
   await supabase.from("community_members").insert({ community_id: data.id, profile_id: input.createdBy });
   return data as Community;
+}
+
+// Pink's door, part 2 -- the only way into a private circle. Calls the
+// security-definer invite_to_circle() function in supabase/schema.sql,
+// which re-checks that the caller is really the circle's creator and
+// that it's really private before it does anything -- this client-side
+// wrapper carries no trust of its own.
+export async function inviteToCircle(communityId: string, inviteeId: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.rpc("invite_to_circle", {
+    p_community_id: communityId,
+    p_invitee_id: inviteeId,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function joinCommunity(communityId: string, profileId: string) {
