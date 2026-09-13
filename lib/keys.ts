@@ -9,7 +9,23 @@
 
 import { supabase } from "@/lib/supabaseClient";
 
-export type KeyColor = "green" | "blue" | "red" | "yellow"; // more colors join this union as they ship
+// All ten colors from the Keys and Doors design in PLAN.md. Green,
+// Blue, Red, and Yellow shipped first since they read from data that
+// already existed; the other six (added later) needed either a small
+// new instrumentation table (Purple) or nothing more than a new query
+// against tables that already exist (Pink, Magenta, Indigo, White,
+// Black).
+export type KeyColor =
+  | "green"
+  | "blue"
+  | "red"
+  | "yellow"
+  | "purple"
+  | "pink"
+  | "magenta"
+  | "indigo"
+  | "white"
+  | "black";
 
 export interface ProfileKey {
   key_color: KeyColor;
@@ -37,7 +53,44 @@ export const KEY_INFO: Record<KeyColor, { name: string; accent: string; blurb: s
     accent: "#d9b23f",
     blurb: "Earned by actually reading the Signal -- noticing real news, not just scrolling past it.",
   },
+  purple: {
+    name: "Purple Heart String",
+    accent: "#9b6fe0",
+    blurb: "Earned by coming back to your own Star Day reading, again and again, on real separate days.",
+  },
+  pink: {
+    name: "Pink Heart String",
+    accent: "#e0567b",
+    blurb: "Earned through reciprocity -- replies that actually start a real back-and-forth, not just one-way posts.",
+  },
+  magenta: {
+    name: "Magenta Heart String",
+    accent: "#c9309b",
+    blurb: "Earned by founding a community that other people actually keep using.",
+  },
+  indigo: {
+    name: "Indigo Heart String",
+    accent: "#4a4ae0",
+    blurb: "Earned through sustained curiosity -- real, repeated use of the Commons Guide.",
+  },
+  white: {
+    name: "White Heart String",
+    accent: "#f3f0e8",
+    blurb: "Earned through real tenure and sustained good standing.",
+  },
+  black: {
+    name: "Black Heart String",
+    accent: "#2a2a2e",
+    blurb: "The meta-key -- only earned by already holding several of the others at once.",
+  },
 };
+
+// How many distinct real days someone needs to open their own Star Day
+// "Go deeper" reading (see star_day_visits in supabase/schema.sql) to
+// earn the Purple key. Lives here rather than only inside
+// app/api/keys/evaluate/route.ts so app/hub/page.tsx can show real
+// progress toward it without duplicating the number.
+export const PURPLE_KEY_MIN_VISIT_DAYS = 7;
 
 // How many distinct Signal articles someone needs to read (see
 // signal_engagement in supabase/schema.sql) to earn the Yellow key.
@@ -190,4 +243,68 @@ export async function suggestSignalSource(
   } catch {
     return { ok: false, error: "Couldn't reach the server. Try again in a moment." };
   }
+}
+
+// Purple's door -- see app/hub/page.tsx's "Go deeper" toggle under the
+// archetype reading. Client-inserted (like signal_engagement above)
+// rather than server-only: the unique (profile_id, visit_date)
+// constraint in supabase/schema.sql is what actually keeps this honest
+// -- re-opening it ten times in one sitting still only ever counts as
+// one real day, so there's nothing meaningful to game by calling this
+// directly. Safe to call more than once per day; the second call just
+// hits the unique constraint and no-ops.
+export async function recordStarDayVisit(): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const profileId = sessionData.session?.user.id;
+  if (!profileId) return;
+  await supabase.from("star_day_visits").insert({ profile_id: profileId }).select().maybeSingle();
+}
+
+// Real progress toward Purple -- how many distinct days someone's
+// actually opened their own reading, out of PURPLE_KEY_MIN_VISIT_DAYS.
+export async function fetchStarDayVisitDays(): Promise<number> {
+  const { data, error } = await supabase.from("star_day_visits").select("visit_date");
+  if (error || !data) return 0;
+  return new Set(data.map((r) => r.visit_date)).size;
+}
+
+// White's door -- one optional welcome note, editable, shown to newer
+// arrivals on the Hub (see app/hub/page.tsx). Both read and write go
+// straight to founder_notes under RLS (see supabase/schema.sql): the
+// insert/update policies already check for the White key themselves,
+// so there's nothing left for a server route to re-verify.
+export async function fetchMyFounderNote(): Promise<string | null> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const profileId = sessionData.session?.user.id;
+  if (!profileId) return null;
+  const { data, error } = await supabase
+    .from("founder_notes")
+    .select("note")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.note;
+}
+
+export async function saveMyFounderNote(note: string): Promise<boolean> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const profileId = sessionData.session?.user.id;
+  if (!profileId) return false;
+  const trimmed = note.trim().slice(0, 280);
+  if (!trimmed) return false;
+  const { error } = await supabase
+    .from("founder_notes")
+    .upsert({ profile_id: profileId, note: trimmed }, { onConflict: "profile_id" });
+  return !error;
+}
+
+// A random welcome note for a newer arrival to see on the Hub -- see
+// app/hub/page.tsx. Reads across everyone's notes (founder_notes'
+// select policy is open to any signed-in person), so this is a genuine
+// "someone who's been here a while, welcoming you" moment rather than
+// only ever showing your own.
+export async function fetchWelcomeNote(): Promise<string | null> {
+  const { data, error } = await supabase.from("founder_notes").select("note");
+  if (error || !data || data.length === 0) return null;
+  return data[Math.floor(Math.random() * data.length)].note;
 }

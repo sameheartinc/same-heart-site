@@ -56,9 +56,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Couldn't check your unlocks right now." }, { status: 503 });
   }
 
-  const { count: keysCount, error: keysError } = await admin
+  const { data: keyRows, error: keysError } = await admin
     .from("profile_keys")
-    .select("key_color", { count: "exact", head: true })
+    .select("key_color")
     .eq("profile_id", profileId);
 
   if (keysError) {
@@ -69,12 +69,16 @@ export async function POST(request: NextRequest) {
   const joinedAt = profileRow.joined_at ? new Date(profileRow.joined_at as string) : new Date();
   const tenureDays = Math.floor((Date.now() - joinedAt.getTime()) / (1000 * 60 * 60 * 24));
 
+  const FOUNDING_KEY_COLORS = new Set(["green", "blue", "red", "yellow"]);
+  const foundingKeysHeld = (keyRows ?? []).filter((k) => FOUNDING_KEY_COLORS.has(k.key_color)).length;
+
   const signals: UnlockableSignals = {
     tenureDays,
     totalXP: profileRow.xp ?? 0,
     longestStreak: profileRow.longest_streak ?? 0,
     currentStreak: profileRow.current_streak ?? 0,
-    keysHeld: keysCount ?? 0,
+    keysHeld: (keyRows ?? []).length,
+    foundingKeysHeld,
   };
 
   const newlyEarned: string[] = [];

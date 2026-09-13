@@ -1640,3 +1640,252 @@ $$ language plpgsql security definer set search_path = public;
 grant execute on function public.send_thread_nudge(uuid) to authenticated;
 
 notify pgrst, 'reload schema';
+
+-- Keys, part 5 -- the remaining six colors from the Keys and Doors
+-- design in PLAN.md (Purple, Pink, Magenta, Indigo, White, Black),
+-- completing the original ten. Same trust model as Green/Blue/Red/
+-- Yellow above throughout: every new eligibility check re-derives
+-- itself from data this file already trusts, and profile_keys keeps
+-- being the only place any of it lands, written only by
+-- app/api/keys/evaluate/route.ts.
+
+-- Purple: self-knowledge -- coming back to your own Star Day reading
+-- over real, separate time rather than reading it once. lib/starDay.ts's
+-- ARCHETYPES have always carried a one-line reading that nothing in the
+-- app ever actually showed anyone (compute_signal above only ever
+-- ported the frequency/designation math to SQL, not the prose) -- the
+-- Hub's new "Go deeper" toggle finally surfaces it, and recording a
+-- visit here is what that toggle does when clicked. One row per
+-- profile per calendar day (the unique constraint), so opening it ten
+-- times in one sitting only ever counts once -- this can only be
+-- earned by actually coming back across real, separate days, the same
+-- honest shape as Red's return-streak idea, just pointed at this one
+-- reflective act instead of the whole site.
+create table if not exists star_day_visits (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  visit_date date not null default current_date,
+  created_at timestamptz default now(),
+  unique (profile_id, visit_date)
+);
+
+alter table star_day_visits enable row level security;
+
+drop policy if exists "Users record their own Star Day visits" on star_day_visits;
+create policy "Users record their own Star Day visits" on star_day_visits for insert with check (auth.uid() = profile_id);
+
+drop policy if exists "Users see their own Star Day visits" on star_day_visits;
+create policy "Users see their own Star Day visits" on star_day_visits for select using (auth.uid() = profile_id);
+
+notify pgrst, 'reload schema';
+
+-- Pink's door -- Circles: a small, persistent, invite-only space, the
+-- first real private-group feature on the platform (PLAN.md: "the first
+-- real relationship feature on the platform, earned rather than given
+-- by default"). Deliberately not a new table-plus-page system: a circle
+-- is just a community with is_private set, reusing every piece of
+-- Commons infrastructure that already exists (threads, replies, the
+-- /commons/c/[slug] page) instead of building a second, parallel one.
+-- Defaults to false, so this changes nothing about any community that
+-- already exists.
+alter table communities add column if not exists is_private boolean default false;
+
+-- Creating a private community is gated to Pink holders at the database
+-- level, not just in application code -- even a request straight to the
+-- anon client with a valid session can't create one without actually
+-- holding the key.
+drop policy if exists "Signed-in users create communities" on communities;
+create policy "Signed-in users create communities" on communities for insert with check (
+  auth.uid() = created_by
+  and (
+    not coalesce(is_private, false)
+    or exists (select 1 from profile_keys pk where pk.profile_id = auth.uid() and pk.key_color = 'pink')
+  )
+);
+
+-- Every public community (is_private = false, which is every community
+-- that existed before this migration) keeps being visible to any
+-- signed-in person exactly as before. A private one now requires real
+-- membership to even see it exists, let alone read or post in it.
+drop policy if exists "Signed-in users see communities" on communities;
+create policy "Signed-in users see communities" on communities for select using (
+  auth.uid() is not null
+  and (
+    not coalesce(is_private, false)
+    or exists (select 1 from community_members cm where cm.community_id = communities.id and cm.profile_id = auth.uid())
+  )
+);
+
+drop policy if exists "Signed-in users see threads" on commons_threads;
+create policy "Signed-in users see threads" on commons_threads for select using (
+  auth.uid() is not null
+  and (
+    community_id is null
+    or not exists (select 1 from communities c where c.id = commons_threads.community_id and coalesce(c.is_private, false))
+    or exists (select 1 from community_members cm where cm.community_id = commons_threads.community_id and cm.profile_id = auth.uid())
+  )
+);
+
+drop policy if exists "Users start their own threads" on commons_threads;
+create policy "Users start their own threads" on commons_threads for insert with check (
+  auth.uid() = profile_id
+  and (
+    community_id is null
+    or not exists (select 1 from communities c where c.id = commons_threads.community_id and coalesce(c.is_private, false))
+    or exists (select 1 from community_members cm where cm.community_id = commons_threads.community_id and cm.profile_id = auth.uid())
+  )
+);
+
+drop policy if exists "Signed-in users see replies" on commons_replies;
+create policy "Signed-in users see replies" on commons_replies for select using (
+  auth.uid() is not null
+  and exists (
+    select 1 from commons_threads t
+    where t.id = commons_replies.thread_id
+    and (
+      t.community_id is null
+      or not exists (select 1 from communities c where c.id = t.community_id and coalesce(c.is_private, false))
+      or exists (select 1 from community_members cm where cm.community_id = t.community_id and cm.profile_id = auth.uid())
+    )
+  )
+);
+
+drop policy if exists "Users write their own replies" on commons_replies;
+create policy "Users write their own replies" on commons_replies for insert with check (
+  auth.uid() = profile_id
+  and exists (
+    select 1 from commons_threads t
+    where t.id = commons_replies.thread_id
+    and (
+      t.community_id is null
+      or not exists (select 1 from communities c where c.id = t.community_id and coalesce(c.is_private, false))
+      or exists (select 1 from community_members cm where cm.community_id = t.community_id and cm.profile_id = auth.uid())
+    )
+  )
+);
+
+-- Joining a community yourself stays exactly as it is today for public
+-- ones; a private circle is invite-only, so self-join is blocked for
+-- those specifically -- the only way in is invite_to_circle() below.
+drop policy if exists "Users join communities themselves" on community_members;
+create policy "Users join communities themselves" on community_members for insert with check (
+  auth.uid() = profile_id
+  and not exists (select 1 from communities c where c.id = community_id and coalesce(c.is_private, false))
+);
+
+-- The one way into a private circle: its creator invites someone by
+-- profile id. security definer so it can insert into community_members
+-- despite the self-join-only policy above -- still narrowly scoped:
+-- only the circle's own creator can call it, and only for a community
+-- that's actually private. Notifies the invitee so they know they've
+-- been added, same shape as notify_thread_reply above.
+create or replace function public.invite_to_circle(p_community_id uuid, p_invitee_id uuid)
+returns void as $$
+declare
+  v_creator uuid;
+  v_name text;
+  v_is_private boolean;
+begin
+  select created_by, name, coalesce(is_private, false) into v_creator, v_name, v_is_private
+  from communities where id = p_community_id;
+
+  if v_creator is null or v_creator != auth.uid() then
+    raise exception 'Only a circle''s creator can invite someone to it.';
+  end if;
+
+  if not v_is_private then
+    raise exception 'Only private circles work this way -- anyone can join a public community directly.';
+  end if;
+
+  if p_invitee_id = auth.uid() then
+    raise exception 'You''re already in your own circle.';
+  end if;
+
+  insert into community_members (community_id, profile_id)
+  values (p_community_id, p_invitee_id)
+  on conflict do nothing;
+
+  insert into notifications (profile_id, actor_id, kind, body)
+  values (p_invitee_id, auth.uid(), 'circle_invite', 'added you to their circle, "' || left(v_name, 60) || '."');
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function public.invite_to_circle(uuid, uuid) to authenticated;
+
+notify pgrst, 'reload schema';
+
+-- Black's door is purely cosmetic (PLAN.md: "the one purely cosmetic
+-- reward on this list, and deliberately so"), but being seen by other
+-- people is the whole point of a cosmetic mark -- so it needs to travel
+-- through get_public_profiles the same way commons_accent already does
+-- for Blue. Computed with an EXISTS subquery rather than a stored
+-- column: there's nothing to keep in sync, and Black can never be
+-- revoked, so this can never go stale.
+create or replace function public.get_public_profiles(p_ids uuid[] default null)
+returns table (
+  id uuid,
+  display_name text,
+  spark_id integer,
+  path_key text,
+  ship_skin text,
+  designation text,
+  commons_accent text,
+  kindred_opt_out boolean,
+  practice_points jsonb,
+  voice_signature text,
+  has_black_string boolean
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    p.id, p.display_name, p.spark_id, p.path_key, p.ship_skin, p.designation,
+    p.commons_accent, p.kindred_opt_out, p.practice_points, p.voice_signature,
+    exists(select 1 from profile_keys pk where pk.profile_id = p.id and pk.key_color = 'black') as has_black_string
+  from profiles p
+  where p_ids is null or p.id = any(p_ids);
+$$;
+
+revoke all on function public.get_public_profiles(uuid[]) from public;
+grant execute on function public.get_public_profiles(uuid[]) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+-- White's door -- a permanent "early signal" mark tied to real join
+-- date (profiles.joined_at already exists and is untouched by anything
+-- else) plus the option to write one welcome note. Shown as a small
+-- banner on the Hub to people still new to the site (see
+-- app/hub/page.tsx), rather than inside the sign-up flow itself --
+-- app/login/page.tsx's onboarding sequence is complex, load-bearing,
+-- and already carries a direct instruction not to add anything that
+-- risks losing someone before they reach the Hub (see app/star-day/
+-- page.tsx's comment on the old birthday gate), so this reaches new
+-- arrivals right after that instead of inside it. One note per person,
+-- editable, never required.
+create table if not exists founder_notes (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade unique,
+  note text not null,
+  created_at timestamptz default now()
+);
+
+alter table founder_notes enable row level security;
+
+drop policy if exists "Anyone signed in reads founder notes" on founder_notes;
+create policy "Anyone signed in reads founder notes" on founder_notes for select using (auth.uid() is not null);
+
+drop policy if exists "White holders write their own note" on founder_notes;
+create policy "White holders write their own note" on founder_notes for insert with check (
+  auth.uid() = profile_id
+  and exists (select 1 from profile_keys pk where pk.profile_id = auth.uid() and pk.key_color = 'white')
+);
+
+drop policy if exists "White holders update their own note" on founder_notes;
+create policy "White holders update their own note" on founder_notes for update using (auth.uid() = profile_id) with check (
+  auth.uid() = profile_id
+  and exists (select 1 from profile_keys pk where pk.profile_id = auth.uid() and pk.key_color = 'white')
+);
+
+notify pgrst, 'reload schema';

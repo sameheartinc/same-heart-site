@@ -3,11 +3,11 @@
 // This is the generic version of the pattern Keys already proved out
 // (see lib/keys.ts): a permanent, additive reward, earned from real
 // activity the server already trusts, checked idempotently, never spent
-// or revoked. Keys stayed hand-written per color because there were only
-// four and each needed a genuinely different query. This file exists for
-// everything *after* that -- rewards that can be described declaratively
-// as "these signals crossed this threshold," so that adding the next one
-// is data, not a new code path.
+// or revoked. Keys stayed hand-written per color -- all ten of them now
+// -- because each needed a genuinely different query. This file exists
+// for everything *after* that -- rewards that can be described
+// declaratively as "these signals crossed this threshold," so that
+// adding the next one is data, not a new code path.
 //
 // The loop that grants these lives in app/api/evolution/evaluate/route.ts
 // and is the only writer of profile_unlocks (see the column-level lockdown
@@ -46,7 +46,14 @@ export interface UnlockableSignals {
   totalXP: number; // profiles.xp
   longestStreak: number; // profiles.longest_streak -- the permanent record, not the live one
   currentStreak: number; // profiles.current_streak -- for anything that wants "still going," not just "once did"
-  keysHeld: number; // count of profile_keys rows
+  keysHeld: number; // count of profile_keys rows, any color
+  // Specifically Green+Blue+Red+Yellow, the four original colors --
+  // separate from keysHeld because monetization-eligible below means
+  // those four specifically (see its description), not "any four of
+  // the now-ten." Without this, someone could reach four total keys
+  // through, say, Purple+Pink+Magenta+Indigo and never have touched the
+  // Exchange or the Signal at all, which isn't what this gate is for.
+  foundingKeysHeld: number;
 }
 
 export interface Unlockable {
@@ -82,7 +89,7 @@ export const UNLOCKABLES: Unlockable[] = [
     kind: "milestone",
     name: "Monetization Eligible",
     description: "Hold all four Heart Strings -- Green, Blue, Red, and Yellow.",
-    isEligible: (s) => s.keysHeld >= 4,
+    isEligible: (s) => s.foundingKeysHeld >= 4,
   },
   // Ability unlocks -- from the "Big Sep 1 batch" in IDEAS.md ("boosting
   // posts, double xp, content cards"), scoped down to the two pieces
