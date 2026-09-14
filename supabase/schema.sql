@@ -1834,7 +1834,14 @@ notify pgrst, 'reload schema';
 -- Both computed with an EXISTS subquery rather than a stored column:
 -- there's nothing to keep in sync, and neither key can ever be revoked,
 -- so this can never go stale.
-create or replace function public.get_public_profiles(p_ids uuid[] default null)
+--
+-- Postgres won't let CREATE OR REPLACE change a function's return
+-- columns (see the two earlier get_public_profiles redefinitions above,
+-- which already got this right) -- an explicit DROP first is required
+-- whenever a column is added, same as here.
+drop function if exists public.get_public_profiles(uuid[]);
+
+create function public.get_public_profiles(p_ids uuid[] default null)
 returns table (
   id uuid,
   display_name text,
@@ -1902,5 +1909,121 @@ create policy "White holders update their own note" on founder_notes for update 
   auth.uid() = profile_id
   and exists (select 1 from profile_keys pk where pk.profile_id = auth.uid() and pk.key_color = 'white')
 );
+
+notify pgrst, 'reload schema';
+
+-- interaction_events -- the substrate for the future curation engine
+-- (see PLAN.md's "Connecting hearts" section: "An interaction_events
+-- table (profile, event type, what it was about, when) is the
+-- substrate"). Nothing reads this yet -- there's no curation logic to
+-- feed -- but PLAN.md is explicit that logging should start as early as
+-- possible so real history has had time to accumulate by the time that
+-- logic exists: "interaction_events should start logging as soon as
+-- Communities and the feed both exist, even before curation logic reads
+-- it, since curation quality depends directly on how much real history
+-- has piled up by the time it's built." Both already exist today, so
+-- this is that first step, nothing more.
+--
+-- target_kind is free text on purpose, matching PLAN.md's own call to
+-- give recommendable things "a kind field from the start... article,
+-- community_post, experience... so that it costs nothing extra to
+-- design it this way now." event_type is likewise free text rather than
+-- a Postgres enum, so a new interaction type is a code change in
+-- lib/interactionEvents.ts, not a migration. No select policy, same
+-- posture as guide_messages -- nobody needs to read their own history
+-- back through the normal API; a future curation job reads this with
+-- the service-role client.
+create table if not exists interaction_events (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  event_type text not null,
+  target_kind text not null,
+  target_id text not null,
+  created_at timestamptz default now()
+);
+
+alter table interaction_events enable row level security;
+
+drop policy if exists "Users log their own interaction events" on interaction_events;
+create policy "Users log their own interaction events" on interaction_events for insert with check (auth.uid() = profile_id);
+
+create index if not exists interaction_events_profile_idx on interaction_events (profile_id, created_at desc);
+
+notify pgrst, 'reload schema';
+
+-- Bug fix: lib/commons.ts's fetchCommonsStats() has always computed
+-- "humans present" with a direct client-side count against profiles
+-- filtered by last_seen -- but profiles' select policy is "auth.uid() =
+-- id" only (own row), so that query could only ever return 0 or 1 for
+-- any real signed-in visitor, never the genuine sitewide number its own
+-- comment promises ("Real, honest activity numbers -- no
+-- simulated/fake counts"). This RPC computes the real aggregate count
+-- server-side and returns only that single integer -- never individual
+-- rows -- so it's safe to expose broadly without reopening profiles'
+-- own lockdown. Same shape extends to per-community presence below,
+-- the "Presence (live active counts)" piece from PLAN.md's Communities
+-- build order.
+create or replace function public.count_people_present(minutes_ago integer default 5)
+returns integer
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select count(*)::integer from profiles where last_seen >= now() - (minutes_ago || ' minutes')::interval;
+$$;
+
+revoke all on function public.count_people_present(integer) from public;
+grant execute on function public.count_people_present(integer) to anon, authenticated;
+
+-- Same idea, scoped to one community's own membership -- see
+-- app/commons/c/[slug]/page.tsx's "active now" count. Only ever returns
+-- an aggregate integer for a community that's visible to the caller in
+-- the first place (private circles already restrict who can even fetch
+-- the community row that names this id); it doesn't itself leak
+-- anything about a private circle's existence.
+create or replace function public.count_community_members_present(p_community_id uuid, minutes_ago integer default 5)
+returns integer
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select count(*)::integer
+  from community_members cm
+  join profiles p on p.id = cm.profile_id
+  where cm.community_id = p_community_id
+  and p.last_seen >= now() - (minutes_ago || ' minutes')::interval;
+$$;
+
+revoke all on function public.count_community_members_present(uuid, integer) from public;
+grant execute on function public.count_community_members_present(uuid, integer) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+-- Per-community theming -- the last piece of PLAN.md's Communities
+-- build order ("Presence ... and per-community theming layer onto
+-- Communities once its core is solid," deliberately last since it's
+-- "the least load-bearing part"). Reuses lib/skins.ts wholesale rather
+-- than inventing a second theming system: theme_key is free text
+-- matching a SkinKey, the same shape profiles.ship_skin already uses.
+-- Null means "no override, show the visitor's own personal skin" --
+-- the behavior every community already had before this column existed.
+--
+-- communities has never had a general update policy (matching
+-- commons_threads' own "deliberately no general update policy on
+-- purpose" posture), so this adds a narrow one scoped to the
+-- community's own creator, then uses the same column-level lockdown
+-- already proven for commons_accent/xp/standing elsewhere in this file
+-- to make theme_key the only column that policy can actually touch --
+-- name, slug, accent, is_private, and created_by all stay immutable
+-- through this or any other client update.
+alter table communities add column if not exists theme_key text;
+
+drop policy if exists "Creators theme their own community" on communities;
+create policy "Creators theme their own community" on communities for update using (auth.uid() = created_by) with check (auth.uid() = created_by);
+
+revoke update on communities from authenticated;
+grant update (theme_key) on communities to authenticated;
 
 notify pgrst, 'reload schema';

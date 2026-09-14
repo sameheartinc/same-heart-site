@@ -55,7 +55,7 @@ export default function PrivacyPage() {
             margin: "0 0 32px",
           }}
         >
-          Effective August 29, 2026
+          Effective September 14, 2026
         </p>
 
         <div
@@ -94,6 +94,16 @@ export default function PrivacyPage() {
             privacy-respecting analytics (such as Vercel Web Analytics) to understand which pages
             get visited and roughly how much traffic the Site gets. This does not include your
             name or email, and we do not sell this data to anyone.
+          </p>
+          <p>
+            <strong style={{ color: "var(--ink)" }}>Account activity.</strong> Separately from the
+            anonymous analytics above, if you&rsquo;re signed in we keep a record tied to your
+            account of certain actions you take &mdash; for example, joining a community, starting
+            or replying to a discussion, reacting to a post, or reading a Signal article. This is
+            more detailed than the anonymous traffic analytics described above, and we use it to
+            understand real activity on the Site and, over time, to make features like
+            recommendations more relevant to you. We do not sell this data, and it&rsquo;s covered
+            by the same rights described under &ldquo;Your Rights&rdquo; below.
           </p>
 
           <h2 style={sectionStyle}>How We Use Information</h2>

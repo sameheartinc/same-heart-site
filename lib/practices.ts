@@ -225,13 +225,6 @@ export function leadingPractice(points: PracticePoints): PracticeKey | null {
   return best;
 }
 
-// -- Client-facing helpers, same shape as lib/keys.ts / lib/evolution.ts. --
-
-export async function fetchMyPracticePoints(profileId: string): Promise<PracticePoints> {
-  const { data, error } = await supabase.from("profiles").select("practice_points").eq("id", profileId).single();
-  if (error || !data) return { ...EMPTY_PRACTICE_POINTS };
-  return normalizePracticePoints(data.practice_points);
-}
 
 // Spends one unspent Ripple Point into a Practice. Server-validated --
 // see app/api/practices/invest/route.ts, which recomputes eligibility

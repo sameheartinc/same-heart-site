@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { logInteraction } from "@/lib/interactionEvents";
 
 // The Commons -- v1. This is the real, functional core of the much
 // bigger vision (see README): communities, discussions/questions, and
@@ -48,6 +49,11 @@ export interface Community {
   // migration, so nothing about an existing community's visibility
   // changes just by this field showing up.
   is_private: boolean;
+  // Per-community theming (see PLAN.md and supabase/schema.sql) -- a
+  // SkinKey from lib/skins.ts, or null to show the visitor's own
+  // personal skin unchanged (every community's state before and after
+  // this column exists, until its creator picks one).
+  theme_key: string | null;
 }
 
 export interface CommonsThread {
@@ -148,13 +154,16 @@ export async function touchPresence(userId: string) {
 
 // Real, honest activity numbers -- no simulated/fake counts. Each of
 // these is a genuine count against the live database at the moment the
-// page loads.
+// page loads. humansPresent goes through count_people_present() (see
+// supabase/schema.sql) rather than a direct client count against
+// profiles -- profiles' select policy is "your own row only," so a
+// direct count here could only ever return 0 or 1 for any real
+// visitor, not the actual sitewide number.
 export async function fetchCommonsStats() {
-  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const [humans, communities, activeThreads] = await Promise.all([
-    supabase.from("profiles").select("id", { count: "exact", head: true }).gte("last_seen", fiveMinAgo),
+    supabase.rpc("count_people_present", { minutes_ago: 5 }),
     supabase.from("communities").select("id", { count: "exact", head: true }),
     supabase
       .from("commons_threads")
@@ -163,10 +172,22 @@ export async function fetchCommonsStats() {
   ]);
 
   return {
-    humansPresent: humans.count ?? 0,
+    humansPresent: humans.data ?? 0,
     communitiesActive: communities.count ?? 0,
     activeConversations: activeThreads.count ?? 0,
   };
+}
+
+// Presence, per community (PLAN.md's Communities build order: "Presence
+// (live active counts) ... layer onto Communities once its core is
+// solid"). Same shape as fetchCommonsStats' sitewide count, scoped down
+// to one community's own membership via count_community_members_present.
+export async function fetchCommunityActiveCount(communityId: string): Promise<number> {
+  const { data } = await supabase.rpc("count_community_members_present", {
+    p_community_id: communityId,
+    minutes_ago: 5,
+  });
+  return data ?? 0;
 }
 
 export interface NewsArticle {
@@ -203,6 +224,7 @@ export async function recordSignalEngagement(profileId: string, articleId: strin
   } catch {
     // Best-effort -- never worth surfacing an error over a click.
   }
+  logInteraction("read_signal_article", "article", articleId);
 }
 
 export async function listCommunities(): Promise<Community[]> {
@@ -280,11 +302,20 @@ export async function inviteToCircle(communityId: string, inviteeId: string): Pr
   return { ok: true };
 }
 
+// Per-community theming -- see supabase/schema.sql's column-level grant,
+// which is the only thing actually enforcing "only theme_key, only the
+// creator" here; this is a plain client update relying entirely on that.
+export async function updateCommunityTheme(communityId: string, themeKey: string | null): Promise<boolean> {
+  const { error } = await supabase.from("communities").update({ theme_key: themeKey }).eq("id", communityId);
+  return !error;
+}
+
 export async function joinCommunity(communityId: string, profileId: string) {
   const { error } = await supabase
     .from("community_members")
     .insert({ community_id: communityId, profile_id: profileId });
   if (error && error.code !== "23505") throw error; // 23505 = already a member, fine
+  if (!error) logInteraction("joined_community", "community", communityId);
 }
 
 export async function isCommunityMember(communityId: string, profileId: string) {
@@ -400,6 +431,26 @@ export async function createThread(input: {
     .select()
     .single();
   if (error) throw error;
+  logInteraction("started_thread", "community_post", data.id);
+
+  // A small Heartbeats reward for starting a real discussion or
+  // question -- see app/api/commons/award-thread/route.ts, the only
+  // place that ever writes xp/standing for this. Best-effort: never let
+  // this block the thread itself from posting, same posture as
+  // createReply's own award call below.
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (token) {
+      await fetch("/api/commons/award-thread", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+  } catch (err) {
+    console.error("thread Heartbeats award failed:", err);
+  }
+
   return data as CommonsThread;
 }
 
@@ -420,6 +471,7 @@ export async function createReply(input: { threadId: string; profileId: string; 
     .select()
     .single();
   if (error) throw error;
+  logInteraction("posted_reply", "community_post", input.threadId);
   // Bumping the thread's own last_activity_at is what makes "active
   // conversations" and sort-by-activity actually mean something. Goes
   // through a narrow RPC (see schema.sql) rather than a direct table
@@ -523,6 +575,7 @@ export async function setReaction(
       { profile_id: profileId, target_type: targetType, target_id: targetId, kind },
       { onConflict: "profile_id,target_type,target_id" }
     );
+  logInteraction("set_reaction", targetType, targetId);
   return kind;
 }
 

@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { getSkin } from "@/lib/skins";
+import { getSkin, SKINS } from "@/lib/skins";
 import PageLoading from "@/components/PageLoading";
 import VoiceMarker from "@/components/VoiceMarker";
 import {
   authorName,
   createThread,
+  fetchCommunityActiveCount,
   fetchProfilesByIds,
   getCommunityBySlug,
   inviteToCircle,
@@ -17,6 +18,7 @@ import {
   joinCommunity,
   listThreads,
   touchPresence,
+  updateCommunityTheme,
   type Community,
   type CommonsThread,
   type PublicProfile,
@@ -34,6 +36,8 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [threads, setThreads] = useState<CommonsThread[]>([]);
+  const [activeCount, setActiveCount] = useState(0);
+  const [themeSaving, setThemeSaving] = useState(false);
   const [authors, setAuthors] = useState<Record<string, PublicProfile>>({});
 
   const [formOpen, setFormOpen] = useState(false);
@@ -103,6 +107,7 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
       }
       setCommunity(c);
       setIsMember(await isCommunityMember(c.id, data.user.id));
+      fetchCommunityActiveCount(c.id).then(setActiveCount);
 
       const t = await listThreads({ communityId: c.id });
       setThreads(t);
@@ -252,17 +257,23 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   }
 
   const accent = community.accent || "#c9576a";
+  // Per-community theming (see PLAN.md and supabase/schema.sql) -- a
+  // community's own chosen theme wins over the visitor's personal Skin
+  // while looking at that community's own page, same as walking into a
+  // room someone else decorated. No theme set yet just shows the
+  // visitor's own Skin unchanged, the same as before this existed.
+  const effectiveSkin = community.theme_key ? getSkin(community.theme_key) : mySkin;
 
   return (
     <main
       style={{
         minHeight: "100vh",
-        background: mySkin.image
-          ? `linear-gradient(rgba(5,7,13,0.82), rgba(5,7,13,0.82)), url(${mySkin.image}) center / cover fixed no-repeat`
+        background: effectiveSkin.image
+          ? `linear-gradient(rgba(5,7,13,0.82), rgba(5,7,13,0.82)), url(${effectiveSkin.image}) center / cover fixed no-repeat`
           : "var(--void)",
         color: "var(--ink)",
         padding: "40px 20px 90px",
-        ...(mySkin.vars as React.CSSProperties),
+        ...(effectiveSkin.vars as React.CSSProperties),
       }}
     >
       <div style={{ maxWidth: "760px", margin: "0 auto" }}>
@@ -324,6 +335,12 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
         </p>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)", marginBottom: community.is_private && userId === community.created_by ? "10px" : "30px" }}>
           {community.member_count} {community.member_count === 1 ? "member" : "members"}
+          {activeCount > 0 && (
+            <span style={{ color: accent }}>
+              {" "}
+              &middot; {activeCount} active now
+            </span>
+          )}
         </p>
 
         {community.is_private && userId === community.created_by && (
@@ -357,6 +374,57 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
               </span>
             )}
           </form>
+        )}
+
+        {userId === community.created_by && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "30px" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)" }}>
+              Theme
+            </span>
+            <button
+              type="button"
+              title="Show your own personal Skin instead of a fixed theme"
+              onClick={async () => {
+                setThemeSaving(true);
+                const ok = await updateCommunityTheme(community.id, null);
+                if (ok) setCommunity({ ...community, theme_key: null });
+                setThemeSaving(false);
+              }}
+              style={{
+                width: "20px",
+                height: "20px",
+                borderRadius: "50%",
+                cursor: "pointer",
+                padding: 0,
+                background: "repeating-conic-gradient(#ccc 0% 25%, #eee 0% 50%) 50% / 8px 8px",
+                border: !community.theme_key ? "2px solid var(--gold)" : "2px solid transparent",
+              }}
+            />
+            {SKINS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                title={s.name}
+                aria-label={s.name}
+                disabled={themeSaving}
+                onClick={async () => {
+                  setThemeSaving(true);
+                  const ok = await updateCommunityTheme(community.id, s.key);
+                  if (ok) setCommunity({ ...community, theme_key: s.key });
+                  setThemeSaving(false);
+                }}
+                style={{
+                  width: "20px",
+                  height: "20px",
+                  borderRadius: "50%",
+                  cursor: "pointer",
+                  padding: 0,
+                  background: s.vars["--panel"],
+                  border: community.theme_key === s.key ? "2px solid var(--gold)" : `2px solid ${s.vars["--border"]}`,
+                }}
+              />
+            ))}
+          </div>
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
