@@ -37,7 +37,6 @@ import { PATHS, type PathKey } from "@/lib/paths";
 import { streakVisualTier, checkInWithServer, type StreakMilestone } from "@/lib/streak";
 import { listMyUnlocks, evaluateEvolution } from "@/lib/evolution";
 import { getMyMonetizationStatus, applyForMonetization, type MonetizationStatus } from "@/lib/monetization";
-import { findKindredSparks, setKindredOptOut, type KindredMatch } from "@/lib/kindredSparks";
 import { FALLBACK_SKINS, loadWidgetSkins, type WidgetSkin, type WidgetSkinKey } from "@/lib/widgetSkins";
 import {
   PRACTICE_ORDER,
@@ -129,8 +128,6 @@ export default function HubPage() {
   const [founderNoteDraft, setFounderNoteDraft] = useState("");
   const [founderNoteSaving, setFounderNoteSaving] = useState(false);
   const [founderNoteSaved, setFounderNoteSaved] = useState(false);
-  const [kindredMatches, setKindredMatches] = useState<KindredMatch[]>([]);
-  const [kindredOptOutSaving, setKindredOptOutSaving] = useState(false);
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
   const [notifOpen, setNotifOpen] = useState(false);
@@ -362,13 +359,6 @@ export default function HubPage() {
       // skins baked into the bundle.
       loadWidgetSkins().then(setSkinCatalog);
 
-      // Kindred Sparks -- see lib/kindredSparks.ts. Computed fresh from
-      // already-public signals every time the Hub loads; if this person
-      // opted out, findKindredSparks itself returns nothing.
-      if (!currentProfile.kindred_opt_out) {
-        findKindredSparks(userData.user.id).then(setKindredMatches);
-      }
-
       // "Floating ideas getting more attention" -- see lib/commons.ts's
       // getTrendingThread. Level-gated (TRENDING_UNLOCK_LEVEL above) so
       // it only starts appearing once someone's engaged enough to have
@@ -449,23 +439,6 @@ export default function HubPage() {
     }
     setJournal((prev) => prev.filter((entry) => entry.id !== entryId));
     if (expandedJournalId === entryId) setExpandedJournalId(null);
-  }
-
-  // Kindred Sparks opt-out -- flips profiles.kindred_opt_out and clears
-  // (or reloads) the widget's matches to match the new state immediately,
-  // rather than waiting for the next visit.
-  async function toggleKindredOptOut() {
-    if (!profile || !userId) return;
-    const next = !profile.kindred_opt_out;
-    setKindredOptOutSaving(true);
-    await setKindredOptOut(next);
-    setProfile({ ...profile, kindred_opt_out: next });
-    if (next) {
-      setKindredMatches([]);
-    } else {
-      findKindredSparks(userId).then(setKindredMatches);
-    }
-    setKindredOptOutSaving(false);
   }
 
   async function signOut() {
@@ -2186,99 +2159,6 @@ export default function HubPage() {
           </div>
         )}
 
-        {/* Kindred Sparks -- people you might have something in common
-            with, matched only on signals already public elsewhere on the
-            site (Path, World Issues raised in the Exchange). See
-            lib/kindredSparks.ts and IDEAS.md's "Kindred Sparks -- defined"
-            entry. Every match always shows its plain-language reason;
-            nothing here is ever a bare score. Sits right below Heart
-            Strings, shown whenever there's at least one real match or the
-            person has opted out (so the opt-out control is always
-            reachable, not just when matches happen to exist). */}
-        {(kindredMatches.length > 0 || profile?.kindred_opt_out) && (
-          <div
-            style={{
-              marginBottom: "14px",
-              padding: "11px 14px",
-              borderRadius: "9px",
-              border: "1px solid var(--widget-border)",
-              background: "var(--widget-panel, transparent)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: "8px",
-                marginBottom: kindredMatches.length > 0 ? "10px" : 0,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "9px",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "var(--widget-text-faint)",
-                }}
-              >
-                Kindred Sparks
-              </span>
-              <button
-                onClick={toggleKindredOptOut}
-                disabled={kindredOptOutSaving}
-                style={{
-                  padding: "3px 9px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--widget-border)",
-                  background: "none",
-                  color: "var(--widget-text-faint)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "8px",
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-              >
-                {kindredOptOutSaving
-                  ? "..."
-                  : profile?.kindred_opt_out
-                  ? "Opted out -- turn back on"
-                  : "Don't include me"}
-              </button>
-            </div>
-            {/* Rob, Sep 15 2026: "that will help people..." -- no wait,
-                that's the robot idea. This bit: "it seems very busy...
-                nice and compact." Condensed from a bordered two-line
-                card per match into one plain line -- name in the
-                page's own text color, reason in the same faint mono
-                the rest of this panel already uses, no per-row
-                background box reading as a spreadsheet. */}
-            {kindredMatches.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {kindredMatches.map((m) => (
-                  <p
-                    key={m.profile.id}
-                    style={{
-                      margin: 0,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "10px",
-                      letterSpacing: "0.01em",
-                      color: "var(--widget-text-faint)",
-                    }}
-                  >
-                    <span style={{ color: "var(--widget-text)", fontWeight: 600 }}>{authorName(m.profile)}</span>
-                    {" -- "}
-                    {m.reasons.join(" ")}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Founding Member -- Rob's Sep 3 2026 request: the first 100
             people to verify their email get a prize, the first 1000 get
             a store discount. Ranked by verified_rank (set the moment
@@ -2425,7 +2305,7 @@ export default function HubPage() {
             IDEAS.md's build-start entry). Every 5 Levels earns a Ripple
             Point to invest into whichever Practice this person wants to
             grow -- deliberately never automatic, so leveling up is also
-            a small, real choice. Sits right below Kindred Sparks, same
+            a small, real choice. Sits right below Double XP Hour, same
             bordered-panel styling. Only Tier 1 of each is a real,
             shipped feature so far (see lib/practices.ts's BUILT
             markers) -- further tiers show as roadmap text either way,
