@@ -309,6 +309,30 @@ export default function GalaxyPage() {
         }
         .galaxy-ring-outer { animation: galaxyRingSpin 140s linear infinite; }
         .galaxy-ring-ticks { animation: galaxyRingSpinReverse 200s linear infinite; }
+        /* Rob, Sep 15 2026: "can we somehow make galaxy page so that all
+           the icons are slowly circulating the centre." The eight nodes
+           aren't children of a single rotating ring the way the tick
+           marks are -- each one is its own absolutely-positioned Link at
+           its own hand-tuned angle/radius (see orbitPosition above and
+           the per-node values in lib/galaxyNodes.ts). Rather than
+           animate each node's own left/top (which would need per-node
+           keyframes, since every node starts at a different angle),
+           .galaxy-node-orbit wraps the whole map of nodes in one more
+           inset:0 layer -- same trick .galaxy-ring-ticks already uses --
+           and slowly rotates THAT, carrying every node around the
+           center together in one sweep. .galaxy-node-counter-orbit then
+           wraps each individual node's inner content and spins the
+           exact same keyframe in "reverse", canceling the parent's
+           rotation out so the orb, icon and label stay upright and
+           readable the whole trip around instead of tumbling with the
+           orbit. Reusing galaxyRingSpin (rather than a new keyframe) for
+           both means they're mathematically guaranteed to cancel --
+           same duration, same curve, opposite playback, no chance of
+           drifting out of sync over a long session. 260s/revolution --
+           slower than either existing ring (140s/200s) so it reads as
+           the calmest, outermost layer of drift, not a competing spin. */
+        .galaxy-node-orbit { animation: galaxyRingSpin 260s linear infinite; }
+        .galaxy-node-counter-orbit { animation: galaxyRingSpin 260s linear infinite reverse; }
         .galaxy-node-inner {
           transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
         }
@@ -441,6 +465,8 @@ export default function GalaxyPage() {
           .galaxy-node-float,
           .galaxy-ring-outer,
           .galaxy-ring-ticks,
+          .galaxy-node-orbit,
+          .galaxy-node-counter-orbit,
           .galaxy-node-icon,
           .galaxy-node-star::before { animation: none; }
         }
@@ -627,6 +653,7 @@ export default function GalaxyPage() {
             </button>
           </div>
 
+          <div aria-hidden={false} className="galaxy-node-orbit" style={{ position: "absolute", inset: 0 }}>
           {GALAXY_NODES.map((node, i) => {
             // Mobile: an even ring (360 / count apart, one shared radius)
             // instead of this node's own hand-placed angle/radius --
@@ -667,6 +694,7 @@ export default function GalaxyPage() {
                   opacity,
                 }}
               >
+                <div className="galaxy-node-counter-orbit">
                 <div
                   className="galaxy-node-inner galaxy-node-float"
                   style={{
@@ -809,9 +837,11 @@ export default function GalaxyPage() {
                     {node.tagline}
                   </span>
                 </div>
+                </div>
               </Link>
             );
           })}
+          </div>
         </div>
       </div>
     </main>

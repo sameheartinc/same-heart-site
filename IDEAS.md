@@ -2487,3 +2487,42 @@ tonight -- the device shell stayed wedged the whole session.
 
 With this, all four Practices -- Voice, Kinship, Guidance, and
 Stewardship -- are through Tier 4, all built in one sitting tonight.
+
+## Galaxy: the icons slowly circle the centre (Sep 15, 2026)
+
+Rob: "can we somehow make galaxy page so that all the icons are slowly
+circulating the centre."
+
+The eight destination nodes on /galaxy were never children of one
+rotating ring -- each is its own absolutely-positioned Link, planted
+at its own hand-tuned angleDeg/radiusPct (orbitPosition() in
+app/galaxy/page.tsx, values in lib/galaxyNodes.ts). Animating each
+node's own left/top directly would've meant a separate keyframe per
+node, since every one starts at a different angle. Instead, the whole
+map of nodes now sits inside one more inset:0 wrapper
+(.galaxy-node-orbit) -- the exact same trick the tick-mark ring
+already used -- and that wrapper is what slowly rotates, carrying
+every node around the true center together, in the same one sweep.
+
+Left alone, that would also spin each node's own orb/icon/label
+upside-down as it went around. So each node's inner content picked up
+a second wrapper, .galaxy-node-counter-orbit, playing the identical
+animation in reverse -- same keyframe (galaxyRingSpin, already used by
+the outer decorative ring), same 260s duration, just backwards. The
+parent's rotation and the child's counter-rotation are mathematically
+guaranteed to cancel out since they're the same timeline played
+opposite directions, so every node stays upright and readable the
+whole trip around instead of tumbling.
+
+260s/revolution -- slower than either existing ring (outer ring 140s,
+tick ring 200s reverse) -- so it reads as the calmest, outermost layer
+of ambient drift, not a competing spin against what was already there.
+Both new animation classes were added to the page's existing
+prefers-reduced-motion block alongside the outer ring and tick ring,
+so anyone with that preference set still gets a static Galaxy, same as
+before.
+
+No new state, no JS-driven animation loop, no schema change -- purely
+two new CSS rules and two new wrapping divs around markup that already
+existed. Verified by full read-through of the diff only, same caveat
+as always -- the device shell stayed wedged the whole session.
