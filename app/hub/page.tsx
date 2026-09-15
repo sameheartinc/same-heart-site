@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { SKINS, getSkin, type SkinKey } from "@/lib/skins";
+import { getSkin } from "@/lib/skins";
 import {
   listMyKeys,
   evaluateKeys,
@@ -109,7 +109,6 @@ export default function HubPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [skinSaving, setSkinSaving] = useState(false);
   const [backgroundUploading, setBackgroundUploading] = useState(false);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const [accentSaving, setAccentSaving] = useState(false);
@@ -522,21 +521,6 @@ export default function HubPage() {
     await markNotificationsRead([id]);
   }
 
-  async function chooseSkin(key: SkinKey) {
-    if (!userId || !profile || profile.ship_skin === key) return;
-    const previous = profile.ship_skin;
-    // Optimistic update -- the picker should feel instant, not like it's
-    // waiting on a network request.
-    setProfile({ ...profile, ship_skin: key });
-    setSkinSaving(true);
-    const { error } = await supabase.from("profiles").update({ ship_skin: key }).eq("id", userId);
-    setSkinSaving(false);
-    if (error) {
-      // Quietly revert -- this is cosmetic, not worth a scary error banner.
-      setProfile((p) => (p ? { ...p, ship_skin: previous } : p));
-    }
-  }
-
   // Hub background upload -- the first user-uploaded image on the site
   // (see the schema.sql migration's comment for the tradeoff this
   // accepts). Client-side checks here (type, size) are a courtesy, not
@@ -656,7 +640,7 @@ export default function HubPage() {
     }
     const previous = profile.display_name;
     setNameError(null);
-    // Optimistic update, same pattern as chooseSkin/chooseAccent above.
+    // Optimistic update, same pattern as chooseAccent above.
     setProfile({ ...profile, display_name: nextValue });
     setNameSaving(true);
     const { error } = await supabase.from("profiles").update({ display_name: nextValue }).eq("id", userId);
@@ -1646,76 +1630,13 @@ export default function HubPage() {
           </div>
         </div>
 
-        {/* Skins -- deliberately compact: this is one control among several
-            in the capsule now, not its own destination. */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            flexWrap: "wrap",
-            marginBottom: "14px",
-            padding: "0 4px",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "9px",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "var(--widget-text-faint)",
-            }}
-          >
-            Skin
-          </span>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {SKINS.map((s) => {
-              const isActive = activeSkin.key === s.key;
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  title={s.credit ? `${s.name} -- ${s.credit}` : s.name}
-                  aria-label={s.name}
-                  aria-pressed={isActive}
-                  onClick={() => chooseSkin(s.key)}
-                  style={{
-                    width: "20px",
-                    height: "20px",
-                    borderRadius: "50%",
-                    cursor: isActive ? "default" : "pointer",
-                    padding: 0,
-                    background: s.image
-                      ? `url(${s.image}) center / cover`
-                      : `linear-gradient(135deg, ${s.vars["--void"]} 50%, ${s.vars["--gold"]} 50%)`,
-                    border: isActive ? `2px solid ${s.vars["--gold"]}` : "2px solid transparent",
-                    boxShadow: isActive ? `0 0 0 2px var(--widget-background), 0 0 0 3px ${s.vars["--gold"]}66` : "none",
-                    transition: "box-shadow 0.2s ease, transform 0.15s ease",
-                  }}
-                  onTouchStart={() => {}}
-                />
-              );
-            })}
-          </div>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "9px",
-              color: "var(--widget-text-faint)",
-              opacity: skinSaving ? 1 : 0,
-              transition: "opacity 0.3s ease",
-            }}
-          >
-            saving&hellip;
-          </span>
-        </div>
-
         {/* Background upload -- a personal photo behind the whole page,
-            layered in ahead of the curated skins above (see
-            heroBackground). Deliberately its own row, not folded into the
-            Skin picker, since it's a different kind of choice: something
-            you brought, not something offered. */}
+            layered in ahead of your chosen skin (see heroBackground).
+            Deliberately its own row, not folded into the Skins picker
+            (WidgetFrame's own top-right control, the one place to
+            change skins now -- see Rob's Sep 15, 2026 call to
+            consolidate), since it's a different kind of choice:
+            something you brought, not something offered. */}
         <div
           style={{
             display: "flex",

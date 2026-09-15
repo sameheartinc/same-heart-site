@@ -147,20 +147,27 @@ export default function WidgetFrame({ storageKey, children, lockedSkinKeys = [] 
         <button
           type="button"
           onClick={() => setPickerOpen((open) => !open)}
-          aria-label={`Change widget skin (currently ${skin.name})`}
+          aria-label={`Change skin (currently ${skin.name})`}
           aria-expanded={pickerOpen}
-          title={`Change widget skin (currently ${skin.name})`}
+          title={`Change skin (currently ${skin.name})`}
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
             background: "none",
             border: "none",
             color: "inherit",
             cursor: "pointer",
-            fontSize: "11px",
+            fontFamily: "inherit",
+            fontSize: "9px",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
             padding: "2px 4px",
             lineHeight: 1,
+            whiteSpace: "nowrap",
           }}
         >
-          &#9673;
+          Skins <span aria-hidden="true" style={{ fontSize: "11px" }}>&#9673;</span>
         </button>
       </div>
       <div style={{ borderRadius: "0 0 var(--widget-radius) var(--widget-radius)", overflow: "hidden" }}>

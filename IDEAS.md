@@ -2873,3 +2873,43 @@ GlobalPlayer's 400 in case that ever lands here too.
 
 Verified with `npx tsc --noEmit` (clean) and reviewed the diff by eye --
 two small, contained changes, nothing else touched.
+
+## One place to change skins (Sep 15, 2026)
+
+Rob: "remove the skins function for the hub....and rather put the word
+'skins' up at the top right of the hub bubble where you can change the
+color scheme. this is essentially where users would unlock different
+skins later exclusive ones that we can integrate in a half year or
+so...but better to just have one area that you can change the 'skins'
+and the little icon at the top right already has the changing of the
+skins so best to be there instead"
+
+There were genuinely two separate skin systems living on the Hub: the
+page-wide background skin (lib/skins.ts, profiles.ship_skin -- its own
+compact row of circle swatches inside the Capsule) and the Capsule
+widget's own chrome skin (lib/widgetSkins.ts, WidgetFrame's built-in
+top-right picker -- already unlock-aware via lockedSkinKeys/
+lib/evolution.ts, which is exactly the "exclusive ones later" mechanism
+Rob's describing). Only one of the two ever had an unlock story built
+in, so consolidating onto WidgetFrame's own picker -- the "little icon
+at the top right" -- is the version that's actually ready to carry paid
+or earned exclusive skins in six months, not the one that would need
+that built from scratch.
+
+Removed the standalone "Skin" row (and chooseSkin, skinSaving, the
+SKINS/SkinKey import -- getSkin stays, still needed for the page's own
+background). WidgetFrame's header button -- shared by every widget that
+uses the frame, just the Capsule and GlobalPlayer today -- now reads
+"Skins" instead of a bare, unlabeled circle glyph, so the one remaining
+control is actually discoverable instead of a mystery icon. Left
+Background upload alone; it was already explicitly its own thing,
+never part of either skin system.
+
+profiles.ship_skin and lib/skins.ts themselves are untouched -- existing
+values keep rendering exactly as before, there's just no longer a
+second control in the Hub for changing it. If ship_skin should be
+retired for real later, that's a separate, bigger call -- this was
+about removing the duplicate control, not the underlying system.
+
+Verified with `npx tsc --noEmit` (clean) and confirmed no leftover
+references to the removed symbols.
