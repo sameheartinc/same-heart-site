@@ -2066,3 +2066,42 @@ create policy "Users delete their own journal" on journal_entries for delete usi
 create index if not exists journal_entries_profile_idx on journal_entries (profile_id, created_at desc);
 
 notify pgrst, 'reload schema';
+
+-- White-label Communities API (Sep 15, 2026) -- "package what exists"
+-- stage 1 of the Ignition go-to-market memo: lets a business run its
+-- own community's roster and discussions from their own app/site,
+-- server to server, without anyone signing into sameheart.ca. A key is
+-- scoped to exactly one community and stands in for that community's
+-- own creator for API purposes -- it can read/write what the creator's
+-- session already could for that community, nothing more, and nothing
+-- across communities.
+create table if not exists community_api_keys (
+  id uuid default gen_random_uuid() primary key,
+  community_id uuid references communities(id) on delete cascade not null,
+  created_by uuid references profiles(id) on delete set null,
+  label text default '',
+  -- Only a salted hash is ever stored -- same reasoning as a password
+  -- table. The plaintext is handed back exactly once, at creation, in
+  -- app/api/v1/keys's own response, and never again.
+  key_hash text not null,
+  -- Just enough of the plaintext (the fixed "sh_live_" marker plus a
+  -- few random chars) to recognize a key in a list -- not usable on its
+  -- own.
+  key_prefix text not null,
+  created_at timestamptz default now(),
+  last_used_at timestamptz,
+  revoked_at timestamptz
+);
+
+create index if not exists community_api_keys_community_idx on community_api_keys(community_id);
+create index if not exists community_api_keys_hash_idx on community_api_keys(key_hash);
+
+-- RLS enabled with deliberately zero policies: every app/api/v1/* route
+-- (including key management itself, app/api/v1/keys/*) only ever
+-- touches this table through the service-role client in
+-- lib/supabaseAdmin.ts, which bypasses RLS entirely -- so nobody, not
+-- even a community's own signed-in creator, can read or write this
+-- table straight from the anon client. Same posture as news_articles'
+-- cron-only-write table (see lib/supabaseAdmin.ts's header comment).
+alter table community_api_keys enable row level security;
+revoke all on community_api_keys from anon, authenticated;

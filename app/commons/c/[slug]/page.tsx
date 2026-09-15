@@ -33,6 +33,19 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   const [community, setCommunity] = useState<Community | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isMember, setIsMember] = useState(false);
+
+  // Developer API panel (white-label Communities API, Sep 15, 2026) --
+  // creator-only, collapsed by default. See app/api/v1/keys and
+  // lib/communityApi.ts.
+  const [apiPanelOpen, setApiPanelOpen] = useState(false);
+  const [apiKeys, setApiKeys] = useState<
+    { id: string; label: string; key_prefix: string; created_at: string; last_used_at: string | null; revoked_at: string | null }[]
+  >([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [newKeyLabel, setNewKeyLabel] = useState("");
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [threads, setThreads] = useState<CommonsThread[]>([]);
@@ -264,6 +277,60 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   // visitor's own Skin unchanged, the same as before this existed.
   const effectiveSkin = community.theme_key ? getSkin(community.theme_key) : mySkin;
 
+  // Developer API panel handlers -- session-authenticated calls to
+  // app/api/v1/keys (see that route's own header comment for why this
+  // is session auth, not the API key itself).
+  async function loadApiKeys() {
+    if (!community) return;
+    setApiKeysLoading(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setApiKeysLoading(false);
+      return;
+    }
+    const res = await fetch(`/api/v1/keys?communityId=${community.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    setApiKeys(res.ok ? json.keys ?? [] : []);
+    setApiKeysLoading(false);
+  }
+
+  async function createApiKey() {
+    if (!community || creatingKey) return;
+    setCreatingKey(true);
+    setApiKeyError(null);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setCreatingKey(false);
+      return;
+    }
+    const res = await fetch("/api/v1/keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ communityId: community.id, label: newKeyLabel }),
+    });
+    const json = await res.json();
+    setCreatingKey(false);
+    if (!res.ok) {
+      setApiKeyError(json.error ?? "Couldn't create that key right now.");
+      return;
+    }
+    setRevealedKey(json.key);
+    setNewKeyLabel("");
+    loadApiKeys();
+  }
+
+  async function revokeApiKey(keyId: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return;
+    await fetch(`/api/v1/keys/${keyId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    loadApiKeys();
+  }
+
   return (
     <main
       style={{
@@ -424,6 +491,169 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
                 }}
               />
             ))}
+          </div>
+        )}
+
+        {userId === community.created_by && (
+          <div style={{ marginBottom: "22px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !apiPanelOpen;
+                setApiPanelOpen(next);
+                if (next && apiKeys.length === 0) loadApiKeys();
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--ink-faint, #5c6684)",
+              }}
+            >
+              {apiPanelOpen ? "\u25be" : "\u25b8"} Developer API
+            </button>
+
+            {apiPanelOpen && (
+              <div
+                style={{
+                  marginTop: "10px",
+                  padding: "14px 16px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border)",
+                  background: "var(--panel, transparent)",
+                }}
+              >
+                <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: "0.82rem", color: "var(--ink-dim)" }}>
+                  A private key lets your own site or app read this community's roster and discussions, and post into it, without anyone signing in here.
+                </p>
+
+                {revealedKey && (
+                  <div
+                    style={{
+                      marginBottom: "14px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--gold)",
+                      background: "rgba(212,175,55,0.08)",
+                    }}
+                  >
+                    <p style={{ margin: "0 0 6px", fontFamily: "var(--font-mono)", fontSize: "9px", textTransform: "uppercase", color: "var(--gold)" }}>
+                      Copy this now -- it won't be shown again
+                    </p>
+                    <code style={{ display: "block", fontSize: "0.78rem", wordBreak: "break-all", color: "var(--ink)" }}>{revealedKey}</code>
+                  </div>
+                )}
+
+                {apiKeyError && (
+                  <p style={{ color: "var(--rose, #c9576a)", fontSize: "0.8rem", marginBottom: "10px" }}>{apiKeyError}</p>
+                )}
+
+                <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+                  <input
+                    value={newKeyLabel}
+                    onChange={(e) => setNewKeyLabel(e.target.value)}
+                    placeholder="What's this key for? (optional)"
+                    style={{
+                      flex: 1,
+                      background: "var(--void, transparent)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "8px",
+                      padding: "8px 10px",
+                      color: "var(--ink)",
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={createApiKey}
+                    disabled={creatingKey}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "999px",
+                      border: "none",
+                      background: "var(--gold)",
+                      color: "#1a1410",
+                      fontFamily: "var(--font-display)",
+                      fontWeight: 600,
+                      fontSize: "0.8rem",
+                      cursor: creatingKey ? "default" : "pointer",
+                      opacity: creatingKey ? 0.6 : 1,
+                    }}
+                  >
+                    {creatingKey ? "\u2026" : "+ New key"}
+                  </button>
+                </div>
+
+                {apiKeysLoading ? (
+                  <p style={{ color: "var(--ink-dim)", fontSize: "0.82rem" }}>Loading\u2026</p>
+                ) : apiKeys.length === 0 ? (
+                  <p style={{ color: "var(--ink-dim)", fontStyle: "italic", fontSize: "0.82rem" }}>No keys yet.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {apiKeys.map((k) => (
+                      <div
+                        key={k.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                          opacity: k.revoked_at ? 0.5 : 1,
+                        }}
+                      >
+                        <div>
+                          <code style={{ fontSize: "0.8rem", color: "var(--ink)" }}>{k.key_prefix}\u2026</code>
+                          <span style={{ marginLeft: "8px", fontSize: "0.78rem", color: "var(--ink-dim)" }}>
+                            {k.label || "Untitled"}
+                          </span>
+                          {k.revoked_at && (
+                            <span
+                              style={{
+                                marginLeft: "8px",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "8px",
+                                textTransform: "uppercase",
+                                color: "var(--ink-faint)",
+                              }}
+                            >
+                              Revoked
+                            </span>
+                          )}
+                        </div>
+                        {!k.revoked_at && (
+                          <button
+                            type="button"
+                            onClick={() => revokeApiKey(k.id)}
+                            style={{
+                              padding: "3px 9px",
+                              borderRadius: "8px",
+                              border: "1px solid var(--border)",
+                              background: "none",
+                              color: "var(--ink-faint)",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: "8px",
+                              textTransform: "uppercase",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

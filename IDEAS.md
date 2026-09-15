@@ -2709,3 +2709,97 @@ verified before writing: 7 padding hits, 18 marginBottom hits, 12
 borderRadius hits) rather than touching each panel by hand -- same
 "consistent everywhere, no chance of missing one" reasoning as the
 Spark ID sweep just above. Verified with npx tsc --noEmit only.
+
+## Kindred Sparks widget removed from the Hub (Sep 15, 2026)
+
+Rob's call: the Kindred Sparks panel on the Hub read as sloppy in
+practice, not just in theory -- matches weren't clickable (a name with
+nowhere to go), and because `authorName` falls back to "A Same Heart
+member" whenever a match has no display_name/designation set, several
+matches in a row could render as identical lines ("A Same Heart member
+-- You're both The Weavers." three times over). Rather than patch the
+symptom, removed the whole widget.
+
+What was removed from app/hub/page.tsx: the `findKindredSparks` /
+`setKindredOptOut` import, the `kindredMatches` / `kindredOptOutSaving`
+state, the effect that computed matches on load, the
+`toggleKindredOptOut` handler, and the panel's JSX block. Fixed one
+now-stale comment on the Practices panel below it ("Sits right below
+Kindred Sparks" -> "Sits right below Double XP Hour", its actual
+neighbor now).
+
+Deliberately left alone: lib/kindredSparks.ts itself (the module, now
+unused -- device_bash can't delete files, and there was no reason to
+force that here), the `kindred_opt_out` column on profiles, and its
+continued exposure through get_public_profiles -- none of that does
+any harm sitting dormant, and touching it would have widened this well
+past "remove the bubble." If Kindred Sparks is ever reintroduced, the
+real fixes would be: make each match link somewhere real, and fall
+back to something less repetitive than "A Same Heart member" when
+several matches in a row lack a display name.
+
+Verified with `npx tsc --noEmit` (clean) and reviewed the full diff by
+eye. No schema change, no migration -- purely a Hub UI removal.
+
+## The white-label Communities API (Sep 15, 2026)
+
+Rob: "alright start building the API" -- following straight from the
+Ignition memo (see the artifact), whose build sequence opens with
+"package what exists" as an API. Confirmed with Rob which piece to
+build first: the Communities/white-label API, over the AI-assisted
+setup API (which would sit on top of this anyway) or something
+unrelated.
+
+What "package what exists" means concretely: an early-stage business
+running its own Same Heart community should be able to read and write
+that one community -- roster, engagement, discussions -- from their own
+site or app, server to server, without a human ever signing into
+sameheart.ca. That's the whole v1: nothing about this invents new
+product surface, it exposes what Communities/Commons/Practices/Standing
+already do, behind a key instead of a session.
+
+Shipped:
+
+- `community_api_keys` (supabase/schema.sql) -- one row per key, scoped
+  to exactly one community. Only a sha256 hash is ever stored; the
+  plaintext is shown once, at creation. RLS is enabled with zero
+  policies on purpose -- every route touches this table only through
+  the service-role client, so nobody, not even the community's own
+  creator, can query it from the anon client directly.
+- `lib/communityApi.ts` -- key generation/hashing and
+  `getApiKeyContext()`, the one place an `Authorization: Bearer
+  sh_live_...` header gets resolved to a community.
+- Key management, session-authenticated (a normal signed-in person's own
+  token, not a key): `POST/GET /api/v1/keys`, `DELETE
+  /api/v1/keys/[keyId]`. Only a community's own creator can create,
+  list, or revoke its keys -- re-checked server-side against
+  `communities.created_by` every time, never trusted from the client.
+- The actual white-label surface, API-key-authenticated:
+  `GET /api/v1/community` (the community itself),
+  `GET/POST /api/v1/community/members` (roster read with Standing tier +
+  leading Practice per member; add-an-existing-member write, public
+  communities only), `GET/POST /api/v1/community/threads` and
+  `GET/POST .../threads/[threadId]/replies` (read/post discussions).
+  API-created threads/replies are authored as the community's own
+  creator and deliberately earn no Heartbeats XP -- that reward is for a
+  real person showing up, and a scripted key could otherwise farm its
+  own creator's XP on a timer.
+- A "Developer API" panel on the community page
+  (app/commons/c/[slug]/page.tsx), creator-only, collapsed behind a
+  disclosure toggle by default -- given Rob's "it looks sloppy/busy"
+  feedback from the Hub visual pass earlier today, this stays out of
+  sight for the near-total majority of community creators who'll never
+  touch it, and out from under the Theme picker for the ones who do.
+
+Deliberately NOT built yet, and why: there's no invite-by-email or any
+"connect your Same Heart account" handshake. `profiles` carries no email
+column, and there's no OAuth-style flow yet for an outside site to learn
+a visitor's Same Heart profile id in the first place -- so
+`POST /api/v1/community/members` only works if the caller already knows
+a profile id. That handshake ("Sign in with Same Heart" for an outside
+site) is the real next stage of this API, not a gap in this one -- flagging
+it here rather than pretending member sync is fully self-serve today.
+
+Verified with `npx tsc --noEmit` (clean). Rob still needs to run the
+`community_api_keys` migration in the Supabase SQL editor himself before
+any of this works end to end.
