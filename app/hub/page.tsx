@@ -2273,6 +2273,26 @@ export default function HubPage() {
                 {unspentRipplePoints(getLevel(profile.xp), practicePoints) === 1 ? "" : "s"}
               </span>
             </div>
+            {/* Practice Paths (Sep 15, 2026) -- Rob's own question, "why
+                would I spend on Guidance rather than Kinship or Voice":
+                this compact panel only ever shows the tier you're
+                already on, never what's ahead or what a point buys in a
+                *different* Practice. app/practices/page.tsx is the real
+                answer -- all four ladders, every tier, side by side. */}
+            <Link
+              href="/practices"
+              style={{
+                display: "block",
+                marginBottom: "10px",
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.04em",
+                color: "var(--widget-accent)",
+                textDecoration: "none",
+              }}
+            >
+              See the full path -- all four, every tier &rarr;
+            </Link>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {PRACTICE_ORDER.map((key) => {
                 const def = PRACTICES[key];

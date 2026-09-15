@@ -46,6 +46,12 @@ export interface PracticeDef {
   name: string;
   theme: string;
   tiers: string[]; // index 0 = Tier 1
+  // Tiers 1..builtThrough are real, live features (the "// BUILT"
+  // tiers below); everything past it is designed and worth investing
+  // in for the moment it does ship, but isn't a functional unlock yet.
+  // See app/practices/page.tsx, the first place this is shown to
+  // anyone rather than just tracked in a source comment.
+  builtThrough: number;
 }
 
 export const PRACTICES: Record<PracticeKey, PracticeDef> = {
@@ -53,6 +59,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     key: "voice",
     name: "Voice",
     theme: "self-expression and original posting",
+    builtThrough: 4,
     tiers: [
       "Can attach one image to an original thread.", // BUILT -- composer + thread display
       "Rich text formatting unlocked in posts (bold, italic).", // BUILT -- composer toolbar + lib/richText.tsx
@@ -80,6 +87,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     key: "kinship",
     name: "Kinship",
     theme: "showing up for other people",
+    builtThrough: 4,
     tiers: [
       "Your own reaction history becomes visible to you -- a quiet list only you can see.", // BUILT loosely -- lib/commons.ts's ReactionSummary.mine already surfaces your own reaction state everywhere reactions render; no dedicated gated view exists yet. Counted as satisfying Tier 1 rather than building a redundant screen, but flagged here since every other Tier 1 below points at something newly built specifically for that tier -- a real private "My Reactions" list is a fair thing to build later if Rob wants this tier to mean more.
       "Can leave a private encouragement note on someone's reply.", // BUILT -- lib/commons.ts's sendEncouragementNote, "Encourage" button on replies, delivered via the existing notifications panel
@@ -107,6 +115,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     key: "guidance",
     name: "Guidance",
     theme: "curating resources and links for others",
+    builtThrough: 4,
     tiers: [
       "Can attach one external resource link to an original thread.", // BUILT -- composer + thread display
       "Personal 'Resource Shelf' starts (up to 5 saved).", // BUILT -- lib/resourceShelf.ts, Hub panel, "Save" button on thread pages
@@ -134,6 +143,7 @@ export const PRACTICES: Record<PracticeKey, PracticeDef> = {
     key: "stewardship",
     name: "Stewardship",
     theme: "trust and light, human moderation",
+    builtThrough: 4,
     tiers: [
       "Can flag a thread or reply for review -- the first real trust step.", // BUILT -- flag button + commons_flags (commons_flags itself had never actually been migrated until the Sep 4 2026 review-queue build below -- fixed there)
       "Flag carries a bit more review weight, once a review queue exists.", // BUILT -- app/admin/flags, app/api/stewardship/{flags,decide}. "Weight" isn't a literal number yet -- what this tier really promised was a human on the other end, and now there is one.

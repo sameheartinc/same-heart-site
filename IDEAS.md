@@ -2949,3 +2949,42 @@ see it, same trust model as everywhere else creator-only lives on that
 page.
 
 Verified with `npx tsc --noEmit` (clean).
+
+## Practice Paths -- seeing where a Ripple Point could go (Sep 15, 2026)
+
+Rob's question was really three questions at once: how often do people
+actually get a point to spend, how many tiers exist, and how does
+anyone know what Tier 3 gives before they've already spent the point to
+find out -- "theres gotta be a way where you can see the branches and
+why you would want to spend the point on guidance rather than kinship
+or voice."
+
+The honest numbers, for the record: one Ripple Point every 5 Levels
+(lib/practices.ts), and Level is the count of primes at or below your
+XP (lib/primeLevels.ts) -- so the 1st point lands at 11 XP, the 2nd at
+29, the 3rd at 47, the 4th at 71. Those first four points exactly cover
+every Practice's actually-BUILT tiers (1 through 4, contiguous, same
+across all four -- verified by reading the file, not assumed). XP comes
+from a daily check-in (8 base) plus starting threads (5 each, capped at
+15/day) and replying (3 each, capped at 15/day), so an engaged daily
+user reaches that 4th point inside roughly a week or two. Past Tier 4,
+every Practice has 16 more hand-authored tiers (20 total), then
+generic procedural filler beyond that -- real, thought-through content,
+just not live features yet.
+
+That builtThrough number only ever lived in a "// BUILT" source
+comment before today -- invisible to any actual UI. Added it as a real
+field on PracticeDef (lib/practices.ts) so a page could show it
+honestly instead of everything reading as equally real.
+
+Built app/practices/page.tsx -- all four Practices side by side, every
+tier from 1 to 20 visible in each, your current tier highlighted, every
+future tier's real description shown (not hidden behind a click),
+"N points away" on anything ahead of you, and a plain "Coming later"
+tag on any tier past what's actually shipped. Investing a point works
+right there too, so seeing the whole board and spending don't require
+two different screens. Linked from the Hub's existing (deliberately
+still compact) Practices panel: "See the full path -- all four, every
+tier."
+
+Verified with `npx tsc --noEmit` (clean).
