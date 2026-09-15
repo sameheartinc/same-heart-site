@@ -927,7 +927,7 @@ export default function HubPage() {
               border: "1px solid var(--widget-border)",
               borderRadius: "14px",
               padding: "16px 20px",
-              marginBottom: "22px",
+              marginBottom: "14px",
               textAlign: "center",
             }}
           >
@@ -965,7 +965,7 @@ export default function HubPage() {
               border: "1px solid var(--gold)",
               borderRadius: "14px",
               padding: "16px 20px",
-              marginBottom: "22px",
+              marginBottom: "14px",
               textAlign: "center",
               boxShadow: "0 0 24px rgba(201,161,90,0.25)",
             }}
@@ -1003,7 +1003,7 @@ export default function HubPage() {
               border: "1px solid var(--gold)",
               borderRadius: "14px",
               padding: "16px 20px",
-              marginBottom: "22px",
+              marginBottom: "14px",
               textAlign: "center",
               boxShadow: "0 0 24px rgba(201,161,90,0.25)",
             }}
@@ -1041,7 +1041,7 @@ export default function HubPage() {
               border: "1px solid var(--gold)",
               borderRadius: "14px",
               padding: "16px 20px",
-              marginBottom: "22px",
+              marginBottom: "14px",
               textAlign: "center",
               boxShadow: "0 0 24px rgba(201,161,90,0.25)",
             }}
@@ -1067,8 +1067,8 @@ export default function HubPage() {
               }}
             >
               You&rsquo;ve shown up enough to be real here -- right now you show up to others
-              as {profile.spark_id ? `Spark #${String(profile.spark_id).padStart(5, "0")}` : "a number"}.
-              Give your ship a name, or skip this and do it anytime from the top of this page.
+              with no name of your own yet. Give your ship a name, or skip this and do it
+              anytime from the top of this page.
             </p>
             <form
               onSubmit={submitNamePrompt}
@@ -1150,7 +1150,7 @@ export default function HubPage() {
               border: "1px solid var(--gold)",
               borderRadius: "14px",
               padding: "14px 18px",
-              marginBottom: "22px",
+              marginBottom: "14px",
             }}
           >
             <p
@@ -1543,7 +1543,7 @@ export default function HubPage() {
             })()}
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
-            <div style={{ textAlign: "center", padding: "12px 20px", border: "1px solid var(--widget-border)", borderRadius: "12px" }}>
+            <div style={{ textAlign: "center", padding: "12px 20px", border: "1px solid var(--widget-border)", borderRadius: "9px" }}>
               <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.6rem", color: "var(--widget-accent)" }}>
                 {dayNumber}
               </div>
@@ -1556,7 +1556,7 @@ export default function HubPage() {
                 textAlign: "center",
                 padding: "12px 20px",
                 border: `1px solid ${streakTier.glow > 0 ? "var(--widget-accent)" : "var(--widget-border)"}`,
-                borderRadius: "12px",
+                borderRadius: "9px",
                 boxShadow:
                   streakTier.glow > 0
                     ? `0 0 ${6 * streakTier.glow}px rgba(201,161,90,${0.12 * streakTier.glow})`
@@ -1591,7 +1591,7 @@ export default function HubPage() {
                   textAlign: "center",
                   padding: "12px 20px",
                   border: `1px solid ${unreadNotifications.length > 0 ? "var(--widget-accent)" : "var(--widget-border)"}`,
-                  borderRadius: "12px",
+                  borderRadius: "9px",
                   background: "none",
                   cursor: "pointer",
                   fontFamily: "inherit",
@@ -1637,7 +1637,7 @@ export default function HubPage() {
                     overflowY: "auto",
                     background: "var(--widget-panel)",
                     border: "1px solid var(--widget-border)",
-                    borderRadius: "12px",
+                    borderRadius: "9px",
                     boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
                     padding: "10px",
                   }}
@@ -1681,7 +1681,7 @@ export default function HubPage() {
             alignItems: "center",
             gap: "10px",
             flexWrap: "wrap",
-            marginBottom: "22px",
+            marginBottom: "14px",
             padding: "0 4px",
           }}
         >
@@ -1749,7 +1749,7 @@ export default function HubPage() {
             alignItems: "center",
             gap: "10px",
             flexWrap: "wrap",
-            marginBottom: "22px",
+            marginBottom: "14px",
             padding: "0 4px",
           }}
         >
@@ -1824,7 +1824,7 @@ export default function HubPage() {
               alignItems: "center",
               gap: "10px",
               flexWrap: "wrap",
-              marginBottom: "22px",
+              marginBottom: "14px",
               padding: "0 4px",
             }}
           >
@@ -1888,7 +1888,7 @@ export default function HubPage() {
               display: "flex",
               flexDirection: "column",
               gap: "6px",
-              marginBottom: "22px",
+              marginBottom: "14px",
               padding: "0 4px",
             }}
           >
@@ -1961,7 +1961,7 @@ export default function HubPage() {
               alignItems: "center",
               gap: "10px",
               flexWrap: "wrap",
-              marginBottom: "22px",
+              marginBottom: "14px",
               padding: "0 4px",
             }}
           >
@@ -2198,9 +2198,9 @@ export default function HubPage() {
         {(kindredMatches.length > 0 || profile?.kindred_opt_out) && (
           <div
             style={{
-              marginBottom: "22px",
-              padding: "14px 16px",
-              borderRadius: "12px",
+              marginBottom: "14px",
+              padding: "11px 14px",
+              borderRadius: "9px",
               border: "1px solid var(--widget-border)",
               background: "var(--widget-panel, transparent)",
             }}
@@ -2249,40 +2249,30 @@ export default function HubPage() {
                   : "Don't include me"}
               </button>
             </div>
+            {/* Rob, Sep 15 2026: "that will help people..." -- no wait,
+                that's the robot idea. This bit: "it seems very busy...
+                nice and compact." Condensed from a bordered two-line
+                card per match into one plain line -- name in the
+                page's own text color, reason in the same faint mono
+                the rest of this panel already uses, no per-row
+                background box reading as a spreadsheet. */}
             {kindredMatches.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {kindredMatches.map((m) => (
-                  <div
+                  <p
                     key={m.profile.id}
                     style={{
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      background: "var(--widget-panel-soft, rgba(255,255,255,0.03))",
+                      margin: 0,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "10px",
+                      letterSpacing: "0.01em",
+                      color: "var(--widget-text-faint)",
                     }}
                   >
-                    <p
-                      style={{
-                        margin: "0 0 3px",
-                        fontFamily: "var(--font-display)",
-                        fontWeight: 700,
-                        fontSize: "0.85rem",
-                        color: "var(--widget-text)",
-                      }}
-                    >
-                      {authorName(m.profile)}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "9px",
-                        letterSpacing: "0.02em",
-                        color: "var(--widget-text-faint)",
-                      }}
-                    >
-                      {m.reasons.join(" ")}
-                    </p>
-                  </div>
+                    <span style={{ color: "var(--widget-text)", fontWeight: 600 }}>{authorName(m.profile)}</span>
+                    {" -- "}
+                    {m.reasons.join(" ")}
+                  </p>
                 ))}
               </div>
             )}
@@ -2303,9 +2293,9 @@ export default function HubPage() {
         {profile && founderStatus(profile.verified_rank) && (
           <div
             style={{
-              marginBottom: "22px",
-              padding: "14px 16px",
-              borderRadius: "12px",
+              marginBottom: "14px",
+              padding: "11px 14px",
+              borderRadius: "9px",
               border: "1px solid var(--widget-border)",
               background: "var(--widget-panel, transparent)",
             }}
@@ -2363,9 +2353,9 @@ export default function HubPage() {
         {profile && unlockedIds.has("ability-double-xp") && (
           <div
             style={{
-              marginBottom: "22px",
-              padding: "14px 16px",
-              borderRadius: "12px",
+              marginBottom: "14px",
+              padding: "11px 14px",
+              borderRadius: "9px",
               border: "1px solid var(--widget-border)",
               background: "var(--widget-panel, transparent)",
             }}
@@ -2443,9 +2433,9 @@ export default function HubPage() {
         {profile && (
           <div
             style={{
-              marginBottom: "22px",
-              padding: "14px 16px",
-              borderRadius: "12px",
+              marginBottom: "14px",
+              padding: "11px 14px",
+              borderRadius: "9px",
               border: "1px solid var(--widget-border)",
               background: "var(--widget-panel, transparent)",
             }}
@@ -2576,9 +2566,9 @@ export default function HubPage() {
         {practiceTier(practicePoints, "voice") >= 4 && (
           <div
             style={{
-              marginBottom: "22px",
-              padding: "14px 16px",
-              borderRadius: "12px",
+              marginBottom: "14px",
+              padding: "11px 14px",
+              borderRadius: "9px",
               border: "1px solid var(--widget-border)",
               background: "var(--widget-panel, transparent)",
             }}
@@ -2739,9 +2729,9 @@ export default function HubPage() {
         {practiceTier(practicePoints, "guidance") >= 2 && (
           <div
             style={{
-              marginBottom: "22px",
-              padding: "14px 16px",
-              borderRadius: "12px",
+              marginBottom: "14px",
+              padding: "11px 14px",
+              borderRadius: "9px",
               border: "1px solid var(--widget-border)",
               background: "var(--widget-panel, transparent)",
             }}
@@ -2879,9 +2869,9 @@ export default function HubPage() {
         {practiceTier(practicePoints, "kinship") >= 3 && (
           <div
             style={{
-              marginBottom: "22px",
-              padding: "14px 16px",
-              borderRadius: "12px",
+              marginBottom: "14px",
+              padding: "11px 14px",
+              borderRadius: "9px",
               border: "1px solid var(--widget-border)",
               background: "var(--widget-panel, transparent)",
             }}
@@ -3067,9 +3057,9 @@ export default function HubPage() {
         <div
           style={{
             marginTop: "30px",
-            marginBottom: "22px",
+            marginBottom: "14px",
             padding: "18px 20px",
-            borderRadius: "12px",
+            borderRadius: "9px",
             border: "1px solid var(--widget-border)",
             background: "var(--widget-panel, transparent)",
           }}

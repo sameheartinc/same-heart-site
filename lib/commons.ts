@@ -138,10 +138,17 @@ export async function fetchProfilesByIds(ids: string[]): Promise<Record<string, 
   return map;
 }
 
-export function authorName(profile: PublicProfile | undefined, fallback = "Someone") {
+// Rob, Sep 15 2026: "remove any spark name or id badge or anything
+// related to that -- it just looks sloppy." Spark ID (profiles.spark_id)
+// is still a real, permanent member number under the hood -- still used
+// for private-circle invites (app/commons/c/[slug]/page.tsx) and admin
+// tooling, where a concrete lookup key is the actual point -- it just
+// no longer surfaces as anyone's displayed name anywhere a person just
+// reads a list. A plain fallback reads as an honest "hasn't set a name
+// yet," not a gamified badge.
+export function authorName(profile: PublicProfile | undefined, fallback = "A Same Heart member") {
   if (!profile) return fallback;
   if (profile.display_name && profile.display_name.trim()) return profile.display_name;
-  if (profile.spark_id) return `Spark #${String(profile.spark_id).padStart(5, "0")}`;
   return fallback;
 }
 

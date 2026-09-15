@@ -2610,3 +2610,102 @@ Edited directly on-device with python read-modify-write this time
 commit round trip -- faster, and sidesteps the mtime-guard dance
 entirely. Verified with npx tsc --noEmit only; no manual click-through
 yet since the table doesn't exist until Rob runs the migration.
+
+## Spark #NNNNN retired as a displayed identity (Sep 15, 2026)
+
+Rob, looking at Kindred Sparks on the Hub: "you see how it says spark
+and theres that table..it seems very busy... i already said remove any
+spark name or id badge or anythign related to that..it just looks
+sloppy."
+
+He had -- this is exactly what the Level 5 "name your ship" nudge
+(app/hub/page.tsx, its own comment starts "Rob noticed people show up
+elsewhere on the site... as 'Spark #00034'") was already built to
+soften, back when the fix was "nudge people toward setting a name" ,
+not "stop showing the number." That nudge only ever helped the small
+number of people who saw it and acted on it -- everyone else, on any
+list anywhere, still fell back to a numbered ID that reads like a
+ticket stub, not a person.
+
+Went after the actual root instead: lib/commons.ts's authorName() --
+the shared helper behind Commons thread/reply bylines, "started by,"
+Hub notifications, and Kindred Sparks -- no longer falls back to
+Spark #NNNNN at all. A person with no display name now just reads "A
+Same Heart member" everywhere authorName() is used. Two more spots had
+their own separate inline copy of the same fallback (not routed
+through authorName()) and got the identical fix: app/commons/roster/page.tsx
+and app/commons/here/page.tsx's "who's around" lists. The Hub's own
+Level 5 explainer paragraph (which used to literally print your own
+Spark # at you) was reworded to not name the number at all.
+
+Left alone, on purpose: spark_id itself is untouched as a real column
+-- it's still the actual lookup key behind private-circle invites
+(app/commons/c/[slug]/page.tsx's "invite by Spark ID" field, which
+echoes back the exact ID the inviter just typed -- that's confirming
+their own input, not surfacing a badge to a stranger) and it's what
+Founding Member rank and admin tooling (monetization queue,
+Stewardship flags) key off of. Those stay as-is: an admin or the
+person doing the inviting benefits from a concrete number; a stranger
+reading a list of names does not. app/guide/page.tsx's "Spark ID"
+explainer section also stays -- the concept (a permanent member
+number) is still real, it just doesn't get printed at people in lists
+anymore.
+
+Also condensed the Kindred Sparks match list itself while in there --
+each match used to be its own bordered, two-paragraph card
+(name on one line, reason on its own line below, its own background
+box); now it's one compact mono-font line per match, same visual
+weight as the rest of that panel. Direct response to "nice and
+compact... like a digital logbook."
+
+Verified with npx tsc --noEmit only, no manual click-through yet.
+
+---
+
+Also on the table tonight, not yet acted on -- worth a real
+conversation, not a silent rewrite:
+
+1. **"Things are getting busy"** -- the Hub has accumulated a lot of
+   panels over many sessions (streak, notifications, Skins, background,
+   accent picker, White Key note, Keys, Monetization gate, Kindred
+   Sparks, Founding Member, Double XP Hour, Practices, Voice signature,
+   Resource Shelf, Steady Kinship, Lift Off, Your log, and now Your
+   Journal). Rob's "digital logbook, nice and compact" framing is real
+   feedback about the whole page, not just Kindred Sparks -- but which
+   panels to trim, collapse, or hide (versus which are load-bearing and
+   stay) is a real decision, not something to guess at.
+2. **Audience pivot** -- "we want high level corporate people to use
+   this site to help build their communities and they can use the ai to
+   help create their own pages and paths options, variations, inputs
+   and utilizing the websites drop based learning attitude." A
+   meaningfully different target user (B2B community builders) and a
+   new AI-assisted page/path-generation capability that doesn't exist
+   yet. Needs its own scoping pass before any code -- this is a
+   positioning and roadmap conversation, not a tonight's-build item.
+3. **The robot** -- "eventually we want a same heart robot... that will
+   help people spread messages, bring food, etc" and a donation
+   campaign to fund it. See the reply in-conversation for the actual
+   strategy discussion; nothing built yet.
+
+## Hub visual pass: tighter, calmer, same features (Sep 15, 2026)
+
+Rob picked "tighten the visual style everywhere" over collapsing or
+cutting any panel -- every feature on the Hub stays exactly as it was,
+just visually quieter. Three values, changed everywhere they appear
+in app/hub/page.tsx (not just Kindred Sparks): panel padding
+14px/16px -> 11px/14px, the gap between one panel and the next
+(marginBottom) 22px -> 14px, and borderRadius 12px -> 9px. The gap
+change is the one doing the real work -- it's what was making the page
+read as a stack of separate boxed widgets instead of one continuous
+page; shrinking just that one number pulls every panel noticeably
+closer together without touching any panel's own internal layout,
+copy, or logic. Left border color/weight and panel backgrounds alone
+-- those come from each Skin's own CSS variables (--widget-border,
+--widget-panel), and changing them blind, without seeing how all four
+Skins render it, risked doing more harm than good.
+
+Mechanical, file-wide value substitution (python, exact-string counts
+verified before writing: 7 padding hits, 18 marginBottom hits, 12
+borderRadius hits) rather than touching each panel by hand -- same
+"consistent everywhere, no chance of missing one" reasoning as the
+Spark ID sweep just above. Verified with npx tsc --noEmit only.

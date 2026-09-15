@@ -104,7 +104,12 @@ export default function RosterPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {roster.map((p, i) => {
               const isSelf = p.id === userId;
-              const label = p.designation || p.display_name || `Spark #${p.spark_id ?? "?"}`;
+              // Rob, Sep 15 2026: "remove any spark name or id badge... looks
+              // sloppy" -- same fallback authorName() in lib/commons.ts now
+              // uses, kept inline here since this list's own row shape
+              // (designation first, unlike authorName's plain
+              // name-or-fallback) doesn't map onto that helper directly.
+              const label = p.designation || p.display_name || "A Same Heart member";
               return (
                 <div
                   key={p.id}
