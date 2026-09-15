@@ -2913,3 +2913,39 @@ about removing the duplicate control, not the underlying system.
 
 Verified with `npx tsc --noEmit` (clean) and confirmed no leftover
 references to the removed symbols.
+
+## "Who's stepping up" -- the initiative surface (Sep 15, 2026)
+
+Next off the Ignition memo's build sequence, Rob's own pick: stage 03,
+"the initiative surface." The pitch it was written to deliver on:
+"Same Heart doesn't just host your community. It finds your next
+moderator before you'd have noticed them yourself."
+
+Built as one shared function, two doors in -- `lib/initiative.ts`'s
+`computeInitiativeSignals()`, called by both
+`app/api/commons/initiative` (session-authenticated, feeds the Same
+Heart community page itself) and `app/api/v1/community/initiative`
+(API-key-authenticated, so a business running its own community
+through the white-label API gets the exact same signal in its own
+dashboard, not just inside sameheart.ca). One implementation, matching
+"package what exists" rather than building this twice.
+
+Deliberately honest about what it can and can't actually measure:
+thread starts and replies are real, timestamped, and scoped to this one
+community (straight from commons_threads/commons_replies), so that
+part's solid. Kinship streak is real too, though it's global to a
+profile rather than scoped to one community, since reaching out isn't
+tied to a single community the way a thread is. What's NOT in here:
+"recently earned Practice points" -- practice_points is a cumulative
+total with no award-by-award history table behind it, so there was
+nothing honest to build there. Leading Practice and its tier show up as
+*context* on someone already surfaced by real recent activity, never as
+the reason they made the list.
+
+UI: a second creator-only, collapsed-by-default disclosure on the
+community page, right above the Developer API panel, styled the same
+way. Never a public leaderboard -- only the community's own creator can
+see it, same trust model as everywhere else creator-only lives on that
+page.
+
+Verified with `npx tsc --noEmit` (clean).

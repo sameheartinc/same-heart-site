@@ -37,6 +37,16 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   // Developer API panel (white-label Communities API, Sep 15, 2026) --
   // creator-only, collapsed by default. See app/api/v1/keys and
   // lib/communityApi.ts.
+  // "Who's stepping up" (the Ignition memo's "Realizing initiative"
+  // section) -- creator-only, collapsed by default, never a public
+  // leaderboard. See lib/initiative.ts for what it actually measures.
+  const [initiativeOpen, setInitiativeOpen] = useState(false);
+  const [initiativeSignals, setInitiativeSignals] = useState<
+    { profile_id: string; display_name: string | null; standing: string; reason: string }[]
+  >([]);
+  const [initiativeLoading, setInitiativeLoading] = useState(false);
+  const [initiativeError, setInitiativeError] = useState<string | null>(null);
+
   const [apiPanelOpen, setApiPanelOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState<
     {
@@ -288,6 +298,28 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   // visitor's own Skin unchanged, the same as before this existed.
   const effectiveSkin = community.theme_key ? getSkin(community.theme_key) : mySkin;
 
+  async function loadInitiativeSignals() {
+    if (!community) return;
+    setInitiativeLoading(true);
+    setInitiativeError(null);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setInitiativeLoading(false);
+      return;
+    }
+    const res = await fetch(`/api/commons/initiative?communityId=${community.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    setInitiativeLoading(false);
+    if (!res.ok) {
+      setInitiativeError(json.error ?? "Couldn't load that right now.");
+      return;
+    }
+    setInitiativeSignals(json.signals ?? []);
+  }
+
   // Developer API panel handlers -- session-authenticated calls to
   // app/api/v1/keys (see that route's own header comment for why this
   // is session auth, not the API key itself).
@@ -526,6 +558,77 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
                 }}
               />
             ))}
+          </div>
+        )}
+
+        {userId === community.created_by && (
+          <div style={{ marginBottom: "22px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !initiativeOpen;
+                setInitiativeOpen(next);
+                if (next && initiativeSignals.length === 0) loadInitiativeSignals();
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--ink-faint, #5c6684)",
+              }}
+            >
+              {initiativeOpen ? "\u25be" : "\u25b8"} Who's stepping up
+            </button>
+
+            {initiativeOpen && (
+              <div
+                style={{
+                  marginTop: "10px",
+                  padding: "14px 16px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border)",
+                  background: "var(--panel, transparent)",
+                }}
+              >
+                <p style={{ margin: "0 0 12px", fontFamily: "var(--font-body)", fontSize: "0.82rem", color: "var(--ink-dim)" }}>
+                  Only you can see this. Real activity from the last two weeks, nothing invented, nothing ranked publicly.
+                </p>
+                {initiativeError && (
+                  <p style={{ color: "var(--rose, #c9576a)", fontSize: "0.8rem", marginBottom: "10px" }}>{initiativeError}</p>
+                )}
+                {initiativeLoading ? (
+                  <p style={{ color: "var(--ink-dim)", fontSize: "0.82rem" }}>Loading&hellip;</p>
+                ) : initiativeSignals.length === 0 ? (
+                  <p style={{ color: "var(--ink-dim)", fontStyle: "italic", fontSize: "0.82rem" }}>
+                    Nobody's shown up with a new thread or reply here in the last two weeks yet.
+                  </p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {initiativeSignals.map((s) => (
+                      <div key={s.profile_id} style={{ padding: "10px 12px", borderRadius: "8px", background: "var(--paper-raised, rgba(0,0,0,0.03))" }}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px", marginBottom: "2px" }}>
+                          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.9rem", color: "var(--ink)" }}>
+                            {s.display_name || "Someone without a display name yet"}
+                          </span>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", textTransform: "uppercase", color: "var(--ink-faint)" }}>
+                            {s.standing}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--ink-dim)" }}>{s.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
