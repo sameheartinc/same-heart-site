@@ -808,7 +808,7 @@ export default function HubPage() {
       style={{
         minHeight: "100vh",
         background: heroBackground,
-        padding: "40px 22px",
+        padding: "40px 22px 118px",
         color: "var(--ink)",
         transition: "background 0.5s ease, color 0.5s ease",
         ...(activeSkin.vars as React.CSSProperties),
@@ -2822,12 +2822,24 @@ export default function HubPage() {
           </div>
         )}
 
-        {/* Lift Off -- the way out of the capsule and into the Galaxy. */}
+        {/* Lift Off -- the way out of the capsule and into the Galaxy.
+            Fixed to the bottom of the viewport (not the document flow)
+            so it stays put through the whole Hub no matter how far you
+            scroll -- the one constant reminder that the actual point of
+            all this is lifting off and making the change, out in the
+            Galaxy. main's own bottom padding above (118px) exists so
+            nothing else on the page ever sits underneath it. */}
         <button
           onClick={() => router.push("/galaxy")}
           className="liftoff-btn"
           style={{
-            width: "100%",
+            position: "fixed",
+            left: "50%",
+            bottom: "calc(18px + env(safe-area-inset-bottom, 0px))",
+            transform: "translateX(-50%)",
+            width: "calc(100% - 44px)",
+            maxWidth: "596px",
+            zIndex: 60,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2843,7 +2855,7 @@ export default function HubPage() {
             letterSpacing: "0.14em",
             textTransform: "uppercase",
             cursor: "pointer",
-            marginBottom: "30px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
           }}
         >
           <svg width="16" height="16" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">

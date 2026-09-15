@@ -2853,3 +2853,23 @@ Verified with `npx tsc --noEmit` (clean). Rob needs to run the two new
 schema pieces (community_api_keys.redirect_uris column,
 community_connect_codes table) in the Supabase SQL editor -- see the
 tail of supabase/schema.sql.
+
+## Lift Off, pinned (Sep 15, 2026)
+
+Rob: "can we make it so that when you are on your hub...the LIFT OFF
+button stays at the bottom of your screen wherever you scroll on the
+page. so that people know thats the objective is to lift off and make
+the change using the galaxy"
+
+Straightforward: the button moved from a normal spot in the page's flow
+to `position: fixed`, centered and pinned to the bottom of the
+viewport, same pill shape and pulse animation as before. Gave `<main>`
+118px of extra bottom padding so nothing on the page ever ends up
+sitting underneath it, and accounted for the iOS home-indicator strip
+with `env(safe-area-inset-bottom)` so it doesn't sit flush against the
+very bottom edge on notched phones. z-index 60 -- comfortably above
+everything else the Hub itself uses (nothing past 50), well under
+GlobalPlayer's 400 in case that ever lands here too.
+
+Verified with `npx tsc --noEmit` (clean) and reviewed the diff by eye --
+two small, contained changes, nothing else touched.
