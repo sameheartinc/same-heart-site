@@ -2988,3 +2988,53 @@ still compact) Practices panel: "See the full path -- all four, every
 tier."
 
 Verified with `npx tsc --noEmit` (clean).
+
+## Transmit animation + video/post previews in the Exchange (Sep 15, 2026)
+
+Rob: "i want people to be able to drop a link from X or youtube..and
+for the video or feed to come up and make it look smooth in the way it
+looks as if the signal gets shots into the galaxy or cloud to be
+anazlyed." Then, when asked where: "its gottta be in the comms...like
+the exchange...maybe when you transmit, thats when the signal transmit
+animations happens."
+
+Important thing to flag: the Exchange itself (lib/exchange.ts,
+app/api/exchange/transmit/route.ts) already existed and already does
+something real -- fetches the target page's own metadata, scores it
+against Same Heart's actual World Issues list with Claude, and awards
+real Heartbeats server-side. Nothing about scoring or the reward changed
+today. This was purely the two things Rob actually asked for on top of
+that: something to look at, and something to watch happen.
+
+**The preview** (ExchangeLinkPreview, app/commons/page.tsx): the moment
+a YouTube or X link is typed or pasted into the transmit box, it
+renders inline, before Transmit is ever pressed. YouTube is instant --
+just parses the video ID out of the URL client-side (watch/shorts/
+live/youtu.be all handled, lib/linkEmbed.ts) and drops it into a
+youtube-nocookie iframe, no network call. X needs a real request, since
+a browser can't reliably call Twitter's oEmbed endpoint cross-origin --
+added a small read-only proxy, app/api/exchange/oembed/route.ts, that's
+deliberately separate from the transmit route and does nothing but
+fetch and return Twitter's own embed HTML (debounced 550ms so it's not
+firing on every keystroke). Any other link -- which is most of them --
+transmits exactly as it always has, no preview, nothing required.
+
+**The animation** (ExchangeLaunchOverlay, same file): when Transmit is
+pressed, a HUD-style overlay takes over the whole Comms Deck panel for
+however long the real request actually takes -- a small gold signal
+firing upward on a loop through a scattered starfield, fading out past
+the edge of the panel, with "Signal in transit -- analyzing against
+real-world impact" pulsing underneath. It's real time, not a fixed
+animation length: `handleTransmit` now floors the wait at 1.7s (so a
+fast response doesn't just flash the animation and vanish) but never
+cuts it short if scoring takes longer. Purely visual -- the actual
+award still only ever gets decided in app/api/exchange/transmit, same
+as before.
+
+Didn't touch the rotating SignalBubble up top (the "featured" display
+for anything that scores 70+) -- that's a different moment from what
+Rob described ("when you transmit"), so left it as a thumbnail-and-link
+the way it's always worked rather than trying to make it a playable
+embed too.
+
+Verified with `npx tsc --noEmit` (clean).

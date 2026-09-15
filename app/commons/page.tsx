@@ -27,6 +27,7 @@ import {
 } from "@/lib/commons";
 import { listRecentTransmissions, transmitLink, type Transmission } from "@/lib/exchange";
 import { getWorldIssue } from "@/lib/worldIssues";
+import { youtubeVideoId, isXStatusUrl } from "@/lib/linkEmbed";
 
 const SEEN_KEY = "commons-entrance-seen";
 const ACCENT = "#c9576a";
@@ -94,6 +95,8 @@ export default function CommonsPage() {
   const [transmitImageUrl, setTransmitImageUrl] = useState<string | null>(null);
   const [transmitImageUploading, setTransmitImageUploading] = useState(false);
   const [transmitBusy, setTransmitBusy] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const launchStars = useMemo(() => generateStars(16), []);
   const [transmitError, setTransmitError] = useState<string | null>(null);
   const [transmitSuccess, setTransmitSuccess] = useState<{
     heartbeats: number;
@@ -277,17 +280,34 @@ export default function CommonsPage() {
     setTransmitBusy(true);
     setTransmitError(null);
     setTransmitSuccess(null);
+    setLaunching(true);
+    // The real work (metadata fetch + Claude scoring, see
+    // app/api/exchange/transmit/route.ts) usually takes a couple
+    // seconds but can resolve fast -- this floor just makes sure the
+    // launch animation always gets to play out instead of flashing by,
+    // so it reads as a signal actually traveling somewhere rather than
+    // a spinner. Rob, Sep 15 2026: "make it look smooth ... as if the
+    // signal gets shot into the galaxy or cloud to be analyzed."
+    const MIN_LAUNCH_MS = 1700;
+    const startedAt = Date.now();
+    async function holdForAnimation() {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_LAUNCH_MS) await new Promise((r) => setTimeout(r, MIN_LAUNCH_MS - elapsed));
+    }
     try {
       const result = await transmitLink(url, transmitTagline, transmitImageUrl || undefined);
+      await holdForAnimation();
       setTransmissions((prev) => [result.transmission, ...prev].slice(0, 12));
       setTransmitSuccess({ heartbeats: result.heartbeatsAwarded, dailyCapReached: result.dailyCapReached });
       setTransmitUrl("");
       setTransmitTagline("");
       setTransmitImageUrl(null);
     } catch (err) {
+      await holdForAnimation();
       setTransmitError(err instanceof Error ? err.message : "That transmission didn't go through.");
     } finally {
       setTransmitBusy(false);
+      setLaunching(false);
     }
   }
 
@@ -674,6 +694,8 @@ export default function CommonsPage() {
             />
           ))}
 
+          {launching && <ExchangeLaunchOverlay stars={launchStars} />}
+
           <style>{`
             @keyframes commsLiveDotPulse {
               0%, 100% { opacity: 0.5; transform: scale(1); }
@@ -855,6 +877,8 @@ export default function CommonsPage() {
               {transmitBusy ? "Scanning..." : "Transmit"}
             </button>
           </form>
+
+          <ExchangeLinkPreview url={transmitUrl} />
 
           {transmitImageUrl && (
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
@@ -1249,6 +1273,256 @@ export default function CommonsPage() {
 
       <CommonsGuide />
     </main>
+  );
+}
+
+type Star = { id: number; left: number; top: number; size: number; delay: number };
+
+function generateStars(count: number): Star[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    top: Math.random() * 70, // keep clear of the caption near the bottom
+    size: 1 + Math.random() * 2,
+    delay: Math.random() * 2.4,
+  }));
+}
+
+// The moment a transmission actually goes out -- Rob, Sep 15 2026:
+// "make it look smooth in the way it looks as if the signal gets shot
+// into the galaxy or cloud to be analyzed." Covers the whole Comms Deck
+// panel for however long the real request takes (metadata fetch + the
+// Claude scoring call in app/api/exchange/transmit) -- purely visual,
+// nothing here decides the reward, and it loops for as long as
+// `launching` stays true rather than running once, since the real wait
+// is variable.
+function ExchangeLaunchOverlay({ stars }: { stars: Star[] }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: "1px",
+        zIndex: 6,
+        borderRadius: "3px",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        background: "radial-gradient(circle at 50% 82%, rgba(184,134,63,0.22), rgba(6,8,14,0.93) 72%)",
+        backdropFilter: "blur(3px)",
+      }}
+    >
+      <style>{`
+        @keyframes exchangeLaunchOrb {
+          0%   { transform: translateY(0) scale(1); opacity: 0; }
+          10%  { opacity: 1; }
+          82%  { opacity: 0.8; }
+          100% { transform: translateY(-190px) scale(0.2); opacity: 0; }
+        }
+        @keyframes exchangeLaunchTrail {
+          0%   { height: 0px; opacity: 0; }
+          12%  { opacity: 0.75; }
+          100% { height: 190px; opacity: 0; }
+        }
+        @keyframes exchangeLaunchStar {
+          0%, 100% { opacity: 0.2; }
+          50%      { opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .exchange-launch-orb, .exchange-launch-trail, .exchange-launch-star { animation: none !important; opacity: 0.5; }
+        }
+      `}</style>
+
+      {stars.map((s) => (
+        <span
+          key={s.id}
+          className="exchange-launch-star"
+          style={{
+            position: "absolute",
+            left: `${s.left}%`,
+            top: `${s.top}%`,
+            width: `${s.size}px`,
+            height: `${s.size}px`,
+            borderRadius: "50%",
+            background: "#fff",
+            animation: "exchangeLaunchStar 2.2s ease-in-out infinite",
+            animationDelay: `${s.delay}s`,
+          }}
+        />
+      ))}
+
+      <div
+        className="exchange-launch-trail"
+        style={{
+          position: "absolute",
+          bottom: "64px",
+          left: "50%",
+          width: "2px",
+          marginLeft: "-1px",
+          background: "linear-gradient(to top, rgba(184,134,63,0.9), rgba(201,87,106,0))",
+          animation: "exchangeLaunchTrail 2s cubic-bezier(0.3,0,0.2,1) infinite",
+        }}
+      />
+      <div
+        className="exchange-launch-orb"
+        style={{
+          position: "absolute",
+          bottom: "60px",
+          left: "50%",
+          width: "10px",
+          height: "10px",
+          marginLeft: "-5px",
+          borderRadius: "50%",
+          background: "var(--gold)",
+          boxShadow: "0 0 16px 6px rgba(184,134,63,0.7)",
+          animation: "exchangeLaunchOrb 2s cubic-bezier(0.3,0,0.2,1) infinite",
+        }}
+      />
+
+      <p
+        style={{
+          position: "relative",
+          margin: "0 0 22px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          fontFamily: "var(--font-mono)",
+          fontSize: "10px",
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--gold)",
+        }}
+      >
+        <span
+          className="comms-live-dot"
+          style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--gold)", display: "inline-block", flexShrink: 0 }}
+        />
+        Signal in transit -- analyzing against real-world impact
+      </p>
+    </div>
+  );
+}
+
+// A live preview of what's about to be transmitted -- Rob, Sep 15 2026:
+// "I want people to be able to drop a link from X or youtube ... and
+// for the video or feed to come up." YouTube renders instantly (just a
+// video ID parsed out of the URL client-side, no network call needed);
+// X needs a server round-trip through /api/exchange/oembed since
+// Twitter's oEmbed endpoint won't reliably answer a browser fetch
+// cross-origin. Anything else still transmits exactly as it always has
+// -- this is a bonus preview, never a requirement to transmit.
+function ExchangeLinkPreview({ url }: { url: string }) {
+  const trimmed = url.trim();
+  const ytId = useMemo(() => youtubeVideoId(trimmed), [trimmed]);
+  const isX = useMemo(() => isXStatusUrl(trimmed), [trimmed]);
+  const [xEmbed, setXEmbed] = useState<{ html: string; forUrl: string } | null>(null);
+  const [xLoading, setXLoading] = useState(false);
+  const [xFailed, setXFailed] = useState(false);
+
+  useEffect(() => {
+    if (!isX) return;
+    if (xEmbed?.forUrl === trimmed) return;
+    setXFailed(false);
+    const timer = setTimeout(async () => {
+      setXLoading(true);
+      try {
+        const res = await fetch(`/api/exchange/oembed?url=${encodeURIComponent(trimmed)}`);
+        const json = await res.json();
+        if (res.ok && typeof json.html === "string") {
+          setXEmbed({ html: json.html, forUrl: trimmed });
+        } else {
+          setXFailed(true);
+        }
+      } catch {
+        setXFailed(true);
+      } finally {
+        setXLoading(false);
+      }
+    }, 550);
+    return () => clearTimeout(timer);
+  }, [trimmed, isX, xEmbed]);
+
+  // Twitter's embed HTML only renders once widgets.js has run over it --
+  // load it once, lazily, only the first time there's actually a tweet
+  // to show (never on page load; this panel is public and most visitors
+  // never touch the Exchange).
+  useEffect(() => {
+    if (!xEmbed) return;
+    const w = window as any;
+    if (w.twttr?.widgets) {
+      w.twttr.widgets.load();
+      return;
+    }
+    if (document.getElementById("twitter-widgets-js")) return;
+    const script = document.createElement("script");
+    script.id = "twitter-widgets-js";
+    script.src = "https://platform.twitter.com/widgets.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, [xEmbed]);
+
+  if (!ytId && !isX) return null;
+
+  return (
+    <div style={{ marginBottom: "14px" }}>
+      <p
+        style={{
+          margin: "0 0 8px",
+          fontFamily: "var(--font-mono)",
+          fontSize: "9px",
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--gold)",
+        }}
+      >
+        {ytId
+          ? "Video detected \u2014 ready to transmit"
+          : xLoading
+          ? "Pulling in the post..."
+          : xEmbed
+          ? "Post detected \u2014 ready to transmit"
+          : xFailed
+          ? "Couldn't preview that post -- it'll still transmit fine."
+          : "Checking..."}
+      </p>
+      {ytId && (
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: "420px",
+            paddingTop: "56.25%",
+            borderRadius: "8px",
+            overflow: "hidden",
+            border: "1px solid rgba(184,134,63,0.4)",
+          }}
+        >
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${ytId}`}
+            title="YouTube preview"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+          />
+        </div>
+      )}
+      {isX && xEmbed && (
+        <div
+          style={{
+            maxWidth: "420px",
+            maxHeight: "420px",
+            overflowY: "auto",
+            borderRadius: "8px",
+            border: "1px solid rgba(184,134,63,0.4)",
+            background: "#fff",
+            padding: "6px",
+          }}
+          dangerouslySetInnerHTML={{ __html: xEmbed.html }}
+        />
+      )}
+    </div>
   );
 }
 
