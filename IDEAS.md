@@ -3094,3 +3094,75 @@ feature from "a visible feed with reactions" and wasn't assumed here.
 Verified with `npx tsc --noEmit` (clean). Needs the schema.sql
 migration run in Supabase before it'll work -- new table, new column,
 two new functions, all additive and safe to run once.
+
+## Shareability: public transmission pages, share buttons, and the Orange Heart String (Sep 15, 2026)
+
+Rob's question that started this: "how do we get to the point where our
+site is like able to shared too..like reddit, or linkin or pininterest
+Facebook, or X." The audit that followed found the real problem:
+robots.txt already explicitly blocked Google from every content-bearing
+room ("gated rooms just redirect a bot to /login anyway"), there was no
+dynamic Open Graph metadata anywhere, no share buttons anywhere, and
+Exchange transmissions didn't even have their own URL. Rob's follow-up
+green-lit three things at once: the public-preview piece, share
+buttons on "threads and links/posts," and a referral bonus with "special
+flashy cards and unlockables." Two decisions he made directly: the
+referral bonus fires on verified email + first real check-in (not a
+longer streak), and the reward is a new Heart String, not a skin or a
+generated card.
+
+**Public transmission pages.** app/commons/exchange/[id]/page.tsx is
+new -- a single transmission, readable by anyone, no account needed.
+Split into a server wrapper (generateMetadata, fetching just enough
+through a plain REST call so a shared link renders a real title,
+description, and image instead of the generic site-wide card) and a
+client component for the interactive parts. Resonating still requires
+signing in -- clicking it while signed out sends you to /login?next=...
+and back -- the same "browse freely, sign in the moment you want to do
+something" shape Reddit and Pinterest actually use, not a new
+invention. New get_transmission() function in schema.sql, granted to
+anon specifically because this page has to work for a stranger.
+robots.txt and sitemap.ts were both updated to open just this one path
+back up (sitemap.ts now pulls the 500 most recent transmission ids at
+build time) -- the rest of /commons stays disallowed.
+
+**Scope I deliberately didn't take on today:** making Commons threads
+and community pages themselves public-read the same way. That's a real,
+larger piece -- app/commons/t/[id]/page.tsx is 657 lines and
+app/commons/c/[slug]/page.tsx is 1030, and commons_threads/
+commons_replies' RLS currently requires `auth.uid() is not null` to
+read at all, so opening them up means a deliberate RLS change, not just
+new pages. Rushing that blind felt like the wrong call even with a
+green light -- it's queued as its own next pass. In the meantime, the
+thread page did get a Share button (see below), it just currently
+shares a link that still asks for login.
+
+**ShareButton** (components/ShareButton.tsx) -- one reusable component:
+native share sheet where the device has one, otherwise a small menu
+with the platforms Rob actually named (X, Facebook, LinkedIn) plus
+copy-link. Wired into the new transmission detail page, the Exchange
+feed's cards, and the Commons thread page.
+
+**The Orange Heart String.** Referrals reuse spark_id (already a real,
+permanent lookup key used elsewhere for private-circle invites) as the
+referral identifier -- a link is just /login?ref=<spark_id>, no second
+invite-code system. Attribution happens once, at signup, inside
+handle_new_user() resolving whatever spark_id rode along in the
+signup's own metadata. The reward only fires from
+app/api/streak/check-in/route.ts, the one place that can honestly know
+someone's first real check-in just happened -- checked against a real
+idempotency guard (referral_reward_claimed_at, conditionally updated)
+so a retried request can't double-award. +25 Heartbeats to the
+referrer plus one real, permanent count toward Orange -- 3 real
+referrals earns it, evaluated the same way every other Heart String is
+(app/api/keys/evaluate/route.ts), so nothing new had to be built there
+beyond one more block matching the existing nine. An Invite panel on
+the Hub shows the link, a share button for it, and real progress ("N
+of 3"). PLAN.md's own "ten colors" line got a note added rather than
+left silently wrong -- Orange isn't a relabeling of an existing color,
+none of the original ten was actually about bringing someone new in.
+
+Verified with `npx tsc --noEmit` (clean) after every file. Needs the
+schema.sql migration run in Supabase before any of it works -- new
+function, three new profiles columns, and handle_new_user() replaced
+with the referral-aware version. All additive and safe to run once.

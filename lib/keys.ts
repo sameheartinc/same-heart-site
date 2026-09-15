@@ -9,12 +9,14 @@
 
 import { supabase } from "@/lib/supabaseClient";
 
-// All ten colors from the Keys and Doors design in PLAN.md. Green,
-// Blue, Red, and Yellow shipped first since they read from data that
-// already existed; the other six (added later) needed either a small
-// new instrumentation table (Purple) or nothing more than a new query
-// against tables that already exist (Pink, Magenta, Indigo, White,
-// Black).
+// The ten colors from the Keys and Doors design in PLAN.md, plus an
+// eleventh added Sep 15, 2026: Orange, for real referrals (Rob: "a new
+// Heart String for real referrals"). None of PLAN.md's original ten was
+// actually about bringing someone new to the site -- Green is impact,
+// Blue is breadth, Magenta is founding a community -- so this is a
+// genuine addition to the design, not a relabeling of an existing
+// color. PLAN.md's own "ten colors" framing is now out of date by one;
+// worth a small note there rather than pretending it still says eleven.
 export type KeyColor =
   | "green"
   | "blue"
@@ -25,7 +27,8 @@ export type KeyColor =
   | "magenta"
   | "indigo"
   | "white"
-  | "black";
+  | "black"
+  | "orange";
 
 export interface ProfileKey {
   key_color: KeyColor;
@@ -83,7 +86,19 @@ export const KEY_INFO: Record<KeyColor, { name: string; accent: string; blurb: s
     accent: "#2a2a2e",
     blurb: "The meta-key -- only earned by already holding several of the others at once.",
   },
+  orange: {
+    name: "Orange Heart String",
+    accent: "#e0793f",
+    blurb: "Earned by bringing real people to Same Heart -- friends who actually joined and stayed.",
+  },
 };
+
+// How many real referrals -- a friend who verified their email and did
+// their own first genuine check-in, see app/api/streak/check-in/route.ts
+// -- it takes to earn Orange. Lives here, not only inside
+// app/api/keys/evaluate/route.ts, so app/hub/page.tsx's Invite panel can
+// show real progress ("2 of 3") without duplicating the number.
+export const ORANGE_KEY_MIN_REFERRALS = 3;
 
 // How many distinct real days someone needs to open their own Star Day
 // "Go deeper" reading (see star_day_visits in supabase/schema.sql) to

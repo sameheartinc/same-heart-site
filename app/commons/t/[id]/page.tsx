@@ -35,6 +35,7 @@ import { addToShelf, listMyShelf, shelfCapacity } from "@/lib/resourceShelf";
 import { renderRichText } from "@/lib/richText";
 import { listMyUnlocks } from "@/lib/evolution";
 import { activateBoost } from "@/lib/abilities";
+import { ShareButton } from "@/components/ShareButton";
 
 const ACCENT = "#c9576a";
 const EMPTY_SUMMARY: ReactionSummary = { heartfelt: 0, heartache: 0, mine: null };
@@ -444,9 +445,24 @@ export default function ThreadPage({ params }: { params: { id: string } }) {
           practicePoints={authors[thread.profile_id]?.practice_points}
           signature={authors[thread.profile_id]?.voice_signature}
         />
-        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "8px 0 16px", lineHeight: 1.3 }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.5rem", margin: "8px 0 10px", lineHeight: 1.3 }}>
           {thread.title}
         </h1>
+
+        {/* Rob, Sep 15 2026: "build the share buttons into the threads
+            and links/posts." This thread's own page still requires
+            signing in to view (unlike the Exchange, which opened up to
+            anyone -- see app/commons/exchange/[id]/page.tsx) -- so
+            today this is useful member-to-member, and it's already
+            wired for the moment threads open to logged-out readers
+            too, without needing a second pass here. */}
+        <div style={{ marginBottom: "16px" }}>
+          <ShareButton
+            url={`https://sameheart.ca/commons/t/${params.id}`}
+            title={thread.title}
+            text={`${thread.kind === "question" ? "A question" : "A discussion"} on Same Heart`}
+          />
+        </div>
 
         {/* Post Boost -- see lib/evolution.ts's "ability-post-boost" and
             app/api/abilities/boost/route.ts. Only ever shown to the

@@ -47,6 +47,15 @@ function LoginPageInner() {
   const landingPath =
     nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/hub";
 
+  // A referral link -- /login?ref=<spark_id> (Rob, Sep 15 2026: "giving
+  // people heartbeats bonus for users who join and stay"). Only ever
+  // read here and handed to signUp's own metadata below; the actual
+  // attribution happens server-side, inside handle_new_user() (see
+  // supabase/schema.sql), which resolves this back to a real profile id
+  // -- this page never trusts or stores who referred whom itself.
+  const refSparkId = searchParams.get("ref");
+  const refIsValid = Boolean(refSparkId && /^\d+$/.test(refSparkId));
+
   const [stage, setStage] = useState<Stage>(claimMode ? "form" : "gate");
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
@@ -205,9 +214,17 @@ function LoginPageInner() {
     // token when CAPTCHA protection isn't turned on yet, so this is safe
     // to ship ahead of flipping that setting on.
     const captchaToken = await getTurnstileToken();
+    const signUpOptions: { captchaToken?: string; data?: { ref_spark_id: string } } = {};
+    if (captchaToken) signUpOptions.captchaToken = captchaToken;
+    if (refIsValid) signUpOptions.data = { ref_spark_id: refSparkId as string };
+
     const result =
       mode === "signup"
-        ? await supabase.auth.signUp({ email, password, options: captchaToken ? { captchaToken } : undefined })
+        ? await supabase.auth.signUp({
+            email,
+            password,
+            options: Object.keys(signUpOptions).length > 0 ? signUpOptions : undefined,
+          })
         : await supabase.auth.signInWithPassword({
             email,
             password,

@@ -17,8 +17,10 @@ import {
   fetchMyFounderNote,
   saveMyFounderNote,
   PURPLE_KEY_MIN_VISIT_DAYS,
+  ORANGE_KEY_MIN_REFERRALS,
   type ProfileKey,
 } from "@/lib/keys";
+import { ShareButton } from "@/components/ShareButton";
 import { ARCHETYPES } from "@/lib/starDay";
 import { founderStatus } from "@/lib/founders";
 import { getLevel, nextPrimeThreshold } from "@/lib/primeLevels";
@@ -78,6 +80,7 @@ type Profile = {
   kinship_streak_longest: number;
   commons_accent: string | null;
   hub_background_url: string | null;
+  referrals_completed: number;
   kindred_opt_out: boolean;
   practice_points: unknown;
   verified_rank: number | null;
@@ -201,7 +204,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at, kinship_streak_current, kinship_streak_longest, voice_signature"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at, kinship_streak_current, kinship_streak_longest, voice_signature, referrals_completed"
         )
         .eq("id", userData.user.id)
         .single();
@@ -2076,6 +2079,72 @@ export default function HubPage() {
                   {monetizationError}
                 </p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Invite -- Rob, Sep 15 2026: "how do we get to the point where
+            our site is shareable" -> "giving people heartbeats bonus for
+            users who join and stay." Reuses spark_id (already a real,
+            permanent lookup key) as the referral identifier rather than
+            a second invite-code system -- see supabase/schema.sql's
+            handle_new_user() and app/api/streak/check-in/route.ts for
+            where attribution and the reward actually happen. Unconditional
+            on holding any key -- unlike the Keys row above, a brand new
+            member is exactly who should see this first. */}
+        {profile && profile.spark_id != null && (
+          <div
+            style={{
+              padding: "14px 16px",
+              marginBottom: "22px",
+              borderRadius: "12px",
+              border: "1px solid var(--widget-border)",
+              background: "var(--widget-panel)",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 6px",
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--widget-text-faint)",
+              }}
+            >
+              Invite
+            </p>
+            <p
+              style={{
+                margin: "0 0 12px",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.85rem",
+                color: "var(--widget-text-dim, var(--widget-text))",
+              }}
+            >
+              Bring someone real. When they verify their email and check in for the first time, you
+              earn Heartbeats and real progress toward the Orange Heart String --{" "}
+              {profile.referrals_completed ?? 0} of {ORANGE_KEY_MIN_REFERRALS} so far.
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <code
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--widget-border)",
+                  background: "var(--widget-accent-soft, rgba(0,0,0,0.04))",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  color: "var(--widget-text)",
+                }}
+              >
+                sameheart.ca/login?ref={profile.spark_id}
+              </code>
+              <ShareButton
+                url={`https://sameheart.ca/login?ref=${profile.spark_id}`}
+                title="Join me on Same Heart"
+                text="A place actually built for real growth and real community."
+              />
             </div>
           </div>
         )}

@@ -2271,3 +2271,90 @@ revoke all on function public.list_exchange_transmissions(integer) from public;
 grant execute on function public.list_exchange_transmissions(integer) to anon, authenticated;
 
 notify pgrst, 'reload schema';
+
+notify pgrst, 'reload schema';
+
+-- Single-transmission read, for the new public detail page
+-- (app/commons/exchange/[id]/page.tsx) -- same shape and same reasoning
+-- as list_exchange_transmissions (needs to tell the caller whether
+-- *they* resonated with this one), just narrowed to one row by id.
+-- Granted to anon on purpose: this page has to render for someone who
+-- isn't signed in at all, since the whole point is that a transmitted
+-- link is now something a stranger can actually open (Rob, Sep 15
+-- 2026: "how do we get to the point where our site is shareable").
+create or replace function public.get_transmission(p_id uuid)
+returns table (
+  id uuid, profile_id uuid, url text, title text, domain text, issue_key text,
+  impact_score integer, reasoning text, heartbeats_awarded integer, tagline text,
+  image_url text, created_at timestamptz, resonance_count integer, my_resonated boolean
+)
+language sql security definer set search_path = public stable
+as $$
+  select
+    t.id, t.profile_id, t.url, t.title, t.domain, t.issue_key, t.impact_score,
+    t.reasoning, t.heartbeats_awarded, t.tagline, t.image_url, t.created_at,
+    t.resonance_count,
+    exists (select 1 from exchange_resonances r where r.transmission_id = t.id and r.profile_id = auth.uid())
+  from exchange_transmissions t
+  where t.id = p_id;
+$$;
+
+revoke all on function public.get_transmission(uuid) from public;
+grant execute on function public.get_transmission(uuid) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+-- Referrals (Sep 15, 2026) -- Rob: "put the idea about giving people
+-- heartbeats bonus for users who join and stay." Reuses spark_id
+-- (already a real, permanent lookup key used for private-circle
+-- invites elsewhere) as the referral identifier rather than adding a
+-- second invite-code system -- a referral link is just
+-- /login?ref=<spark_id>.
+--
+-- referred_by is set exactly once, at signup, by handle_new_user()
+-- below, resolving whatever spark_id rode along in auth.users'
+-- raw_user_meta_data (set client-side by app/login/page.tsx's signUp
+-- call). referrals_completed is the referrER's real, permanent count
+-- of friends who actually joined AND stayed -- incremented from
+-- app/api/streak/check-in/route.ts, the one place that can honestly
+-- know someone's first real check-in just happened. referral_
+-- reward_claimed_at lives on the referrED profile as the idempotency
+-- guard, so a retried or duplicate check-in call can never award the
+-- referrer twice for the same friend.
+alter table profiles add column if not exists referred_by uuid references profiles(id) on delete set null;
+alter table profiles add column if not exists referrals_completed integer not null default 0;
+alter table profiles add column if not exists referral_reward_claimed_at timestamptz;
+
+create index if not exists profiles_referred_by_idx on profiles(referred_by);
+
+create or replace function public.handle_new_user()
+returns trigger as $$
+declare
+  signal record;
+  v_ref_spark_id bigint;
+  v_referrer uuid;
+begin
+  select * into signal from public.compute_signal(new.created_at::date);
+
+  -- Referral attribution -- best-effort: a missing, malformed, or
+  -- nonexistent spark_id in the signup metadata just means no referrer
+  -- gets set, never a failed signup. Someone can't refer themselves
+  -- (excluded explicitly, though in practice a brand-new auth.users row
+  -- has no matching spark_id yet regardless).
+  begin
+    v_ref_spark_id := (new.raw_user_meta_data->>'ref_spark_id')::bigint;
+  exception when others then
+    v_ref_spark_id := null;
+  end;
+
+  if v_ref_spark_id is not null then
+    select id into v_referrer from public.profiles where spark_id = v_ref_spark_id;
+  end if;
+
+  insert into public.profiles (id, display_name, birth_date, frequency, designation, archetype, referred_by)
+  values (new.id, new.email, new.created_at::date, signal.frequency, signal.designation, signal.archetype_name, v_referrer);
+  return new;
+end;
+$$ language plpgsql security definer;
+
+notify pgrst, 'reload schema';

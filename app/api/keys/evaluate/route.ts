@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { YELLOW_KEY_MIN_ARTICLES, PURPLE_KEY_MIN_VISIT_DAYS } from "@/lib/keys";
+import { YELLOW_KEY_MIN_ARTICLES, PURPLE_KEY_MIN_VISIT_DAYS, ORANGE_KEY_MIN_REFERRALS } from "@/lib/keys";
 
 // Keys, part 1 -- see the Keys and Doors design in PLAN.md. This route is
 // the only place a key is ever granted: it re-derives eligibility itself
@@ -23,7 +23,9 @@ const MAGENTA_KEY_MIN_NON_FOUNDER_THREADS = 3;
 const INDIGO_KEY_MIN_GUIDE_DAYS = 10;
 const WHITE_KEY_MIN_TENURE_DAYS = 180;
 const WHITE_KEY_MIN_XP = 250; // matches Beacon in lib/standing.ts -- "sustained good standing," not just time served
-const BLACK_KEY_MIN_OTHER_KEYS = 5; // out of the 9 other colors
+const BLACK_KEY_MIN_OTHER_KEYS = 5; // out of the 10 other colors (was 9 before Orange, Sep 15 2026)
+// ORANGE_KEY_MIN_REFERRALS lives in lib/keys.ts, same reasoning as
+// YELLOW/PURPLE's constants above -- shared with the Hub's Invite panel.
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -531,8 +533,48 @@ export async function POST(request: NextRequest) {
   }
 
 
+  // Orange: real referrals -- a friend who actually joined and stayed,
+  // not just clicked a link. referrals_completed is only ever
+  // incremented from app/api/streak/check-in/route.ts, the one place
+  // that can honestly know someone's first real check-in just
+  // happened, so this read is trustworthy the same way Red's
+  // longest_streak read is.
+  if (!alreadyHeld.has("orange")) {
+    const { data: referralProfile, error: referralError } = await admin
+      .from("profiles")
+      .select("referrals_completed")
+      .eq("id", profileId)
+      .single();
+
+    if (referralError) {
+      console.error("Orange key eligibility check failed:", referralError.message);
+      return NextResponse.json({ error: "Couldn't check your keys right now." }, { status: 503 });
+    }
+
+    if ((referralProfile?.referrals_completed ?? 0) >= ORANGE_KEY_MIN_REFERRALS) {
+      const { error: insertError } = await admin
+        .from("profile_keys")
+        .insert({ profile_id: profileId, key_color: "orange" });
+
+      if (insertError) {
+        if (insertError.code !== "23505") {
+          console.error("Orange key insert failed:", insertError.message);
+        }
+      } else {
+        newlyEarned.push("orange");
+        await admin.from("log_entries").insert({
+          profile_id: profileId,
+          description: "Earned the Orange Heart String -- real people brought to Same Heart, who actually stayed.",
+          category: "personal",
+          xp_awarded: 0,
+        });
+      }
+    }
+  }
+
+
   // Black: the meta-key -- only earned by already holding a real number
-  // of the other nine at once. Checked last on purpose, and reads
+  // of the other ten at once. Checked last on purpose, and reads
   // alreadyHeld.size + newlyEarned.length rather than re-querying the
   // database, so a key earned earlier in this very call (e.g. someone
   // crossing several thresholds in one visit) counts immediately

@@ -3,6 +3,14 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { computeCheckIn } from "@/lib/streak";
 import { getStanding } from "@/lib/standing";
 
+// The referral bonus -- Rob, Sep 15 2026: "put the idea about giving
+// people heartbeats bonus for users who join and stay." "Stay" was
+// scoped deliberately narrow: a verified email plus one real first
+// check-in, not just a click on a signup form. This route is the one
+// place that can honestly know a first real check-in just happened, so
+// it's also the one place the referral reward ever fires.
+const REFERRAL_BONUS_XP = 25;
+
 // The return-engagement check-in, moved fully server-side. This used to
 // run client-side (compute the new streak, then write xp/standing/streak
 // straight from the browser) -- which meant a technically curious user
@@ -30,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profileRow, error: profileError } = await admin
     .from("profiles")
-    .select("xp, current_streak, longest_streak, last_visit_date")
+    .select("xp, current_streak, longest_streak, last_visit_date, referred_by, referral_reward_claimed_at, email_verified_at")
     .eq("id", profileId)
     .single();
 
@@ -90,6 +98,74 @@ export async function POST(request: NextRequest) {
 
   if (logInsertError) {
     console.error("Check-in log_entries insert failed:", logInsertError.message);
+  }
+
+  // Referral completion -- only on someone's genuine first-ever
+  // check-in (last_visit_date was null going into this request), only
+  // once (the conditional update below only succeeds if
+  // referral_reward_claimed_at is still null, which is what makes this
+  // safe against a retried or duplicate request double-awarding the
+  // referrer), and only if their email is actually verified -- an
+  // unverified throwaway account never completes a referral.
+  const isFirstEverCheckIn = profileRow.last_visit_date === null;
+  if (
+    isFirstEverCheckIn &&
+    profileRow.referred_by &&
+    !profileRow.referral_reward_claimed_at &&
+    profileRow.email_verified_at
+  ) {
+    const { data: claimedRows, error: claimError } = await admin
+      .from("profiles")
+      .update({ referral_reward_claimed_at: new Date().toISOString() })
+      .eq("id", profileId)
+      .is("referral_reward_claimed_at", null)
+      .select("id");
+
+    if (claimError) {
+      console.error("Referral claim-lock failed:", claimError.message);
+    } else if (claimedRows && claimedRows.length > 0) {
+      const referrerId = profileRow.referred_by as string;
+      const { data: referrerRow, error: referrerError } = await admin
+        .from("profiles")
+        .select("xp, referrals_completed")
+        .eq("id", referrerId)
+        .single();
+
+      if (referrerError || !referrerRow) {
+        console.error("Referral referrer lookup failed:", referrerError?.message);
+      } else {
+        const referrerNewXp = (referrerRow.xp ?? 0) + REFERRAL_BONUS_XP;
+        const referrerNewStanding = getStanding(referrerNewXp);
+        const referrerNewReferrals = (referrerRow.referrals_completed ?? 0) + 1;
+
+        const { error: referrerUpdateError } = await admin
+          .from("profiles")
+          .update({
+            xp: referrerNewXp,
+            standing: referrerNewStanding,
+            referrals_completed: referrerNewReferrals,
+          })
+          .eq("id", referrerId);
+
+        if (referrerUpdateError) {
+          console.error("Referral referrer update failed:", referrerUpdateError.message);
+        } else {
+          await admin.from("log_entries").insert({
+            profile_id: referrerId,
+            description: "A friend you invited joined and stayed -- Heart String progress and Heartbeats earned.",
+            category: "personal",
+            xp_awarded: REFERRAL_BONUS_XP,
+          });
+
+          await admin.from("notifications").insert({
+            profile_id: referrerId,
+            actor_id: profileId,
+            kind: "referral",
+            body: `Someone you invited just joined and stayed. +${REFERRAL_BONUS_XP} Heartbeats.`,
+          });
+        }
+      }
+    }
   }
 
   return NextResponse.json({

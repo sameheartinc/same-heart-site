@@ -138,6 +138,18 @@ export async function listExchangeFeed(limit = 40): Promise<FeedTransmission[]> 
   return data as FeedTransmission[];
 }
 
+// A single transmission, for the public detail page
+// (app/commons/exchange/[id]/page.tsx). Works for a signed-out visitor
+// too -- get_transmission is granted to anon, same posture as
+// list_exchange_transmissions -- since the whole point of this page is
+// that a transmitted link is now something a stranger can actually open.
+export async function getTransmission(id: string): Promise<FeedTransmission | null> {
+  const { data, error } = await supabase.rpc("get_transmission", { p_id: id });
+  if (error || !data) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as FeedTransmission) ?? null;
+}
+
 export interface ResonanceResult {
   resonated: boolean;
   resonanceCount: number;

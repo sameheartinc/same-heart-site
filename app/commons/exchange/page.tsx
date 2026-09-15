@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import PageLoading from "@/components/PageLoading";
 import { LinkEmbedPreview } from "@/components/LinkEmbedPreview";
+import { ShareButton } from "@/components/ShareButton";
 import { fetchProfilesByIds, type PublicProfile } from "@/lib/commons";
 import { listExchangeFeed, toggleResonance, type FeedTransmission } from "@/lib/exchange";
 import { getWorldIssue } from "@/lib/worldIssues";
@@ -251,43 +252,63 @@ export default function ExchangePage() {
                       marginTop: "10px",
                     }}
                   >
-                    {issue ? (
-                      <span
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      {issue && (
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "10px",
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                            color: "var(--ink-faint, #a29cb0)",
+                          }}
+                        >
+                          {issue.label}
+                        </span>
+                      )}
+                      <Link
+                        href={`/commons/exchange/${t.id}`}
                         style={{
                           fontFamily: "var(--font-mono)",
                           fontSize: "10px",
                           letterSpacing: "0.04em",
                           textTransform: "uppercase",
-                          color: "var(--ink-faint, #a29cb0)",
+                          color: "var(--gold)",
+                          textDecoration: "none",
                         }}
                       >
-                        {issue.label}
-                      </span>
-                    ) : (
-                      <span />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleResonate(t.id)}
-                      disabled={reactingId === t.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "6px 12px",
-                        borderRadius: "999px",
-                        border: `1px solid ${t.my_resonated ? ACCENT : "var(--border)"}`,
-                        background: t.my_resonated ? "rgba(201,87,106,0.1)" : "var(--void)",
-                        color: t.my_resonated ? ACCENT : "var(--ink-dim)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "11px",
-                        cursor: reactingId === t.id ? "default" : "pointer",
-                        opacity: reactingId === t.id ? 0.6 : 1,
-                      }}
-                    >
-                      <span aria-hidden="true">{t.my_resonated ? "♥" : "♡"}</span>
-                      {t.resonance_count > 0 ? t.resonance_count : "Resonate"}
-                    </button>
+                        View &rarr;
+                      </Link>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleResonate(t.id)}
+                        disabled={reactingId === t.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
+                          borderRadius: "999px",
+                          border: `1px solid ${t.my_resonated ? ACCENT : "var(--border)"}`,
+                          background: t.my_resonated ? "rgba(201,87,106,0.1)" : "var(--void)",
+                          color: t.my_resonated ? ACCENT : "var(--ink-dim)",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "11px",
+                          cursor: reactingId === t.id ? "default" : "pointer",
+                          opacity: reactingId === t.id ? 0.6 : 1,
+                        }}
+                      >
+                        <span aria-hidden="true">{t.my_resonated ? "♥" : "♡"}</span>
+                        {t.resonance_count > 0 ? t.resonance_count : "Resonate"}
+                      </button>
+                      <ShareButton
+                        url={`https://sameheart.ca/commons/exchange/${t.id}`}
+                        title={t.tagline || t.title || t.domain || "A transmission on Same Heart"}
+                        text="Transmitted through Same Heart's Exchange"
+                      />
+                    </div>
                   </div>
                 </div>
               );
