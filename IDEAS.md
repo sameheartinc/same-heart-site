@@ -3166,3 +3166,62 @@ Verified with `npx tsc --noEmit` (clean) after every file. Needs the
 schema.sql migration run in Supabase before any of it works -- new
 function, three new profiles columns, and handle_new_user() replaced
 with the referral-aware version. All additive and safe to run once.
+
+## Commons threads and communities go public-read (Sep 15, 2026)
+
+"okay next" -- the deferred piece from the entry above. Rob had already
+given the green light for this shape in the message before it ("the
+same shape as Pinterest and Reddit... reversing it is worth doing on
+purpose, with your eyes open about what it means"), so this is that
+reversal, done carefully instead of rushed.
+
+**The RLS change (supabase/schema.sql).** commons_threads and
+commons_replies used to require `auth.uid() is not null` to read at
+all -- now a thread (and its replies) in a public community, or with no
+community attached, is readable by anyone; a thread inside a PRIVATE
+community still requires membership, unchanged. The subtle part:
+threads/replies' own policies check `communities.is_private` in a
+subquery, and that subquery is itself subject to communities' own RLS
+for whoever's actually running the query. Leaving communities' SELECT
+policy at "signed in only" would have made every private community's
+threads look public to a signed-out visitor -- the subquery would
+always return zero rows, so `not exists (... and is_private)` would
+always evaluate true. Fixed by loosening communities' own SELECT
+policy first. commons_reactions (the Heartfelt/Heartache counts) got
+the same treatment for the same reason a Reddit or Pinterest visitor
+sees real numbers, not zeroes -- it doesn't carry community_id itself,
+so its policy walks to whichever thread the reaction targets and
+reuses the identical public/private test.
+
+**The two pages**, same server+client split as the Exchange transmission
+page: app/commons/t/[id]/page.tsx and app/commons/c/[slug]/page.tsx are
+now server components with generateMetadata doing a plain REST fetch
+(the anon key, subject to the same RLS above, so a private thread or
+circle's metadata comes back empty rather than leaking anything); the
+actual interactive body moved to ThreadDetail.tsx and
+CommunityDetail.tsx. Reading needs no account now. Every actual
+interaction still does -- reacting, flagging, replying, joining,
+starting a new discussion all redirect a signed-out click straight to
+/login?next=<back-here>, the same pattern the Exchange page's Resonate
+button already used. Most of the page's other gated pieces (Stewardship
+Flag, Guidance Shelf, Kinship Encourage/Nudge, Post Boost, the
+community's own Developer API and Initiative panels) needed no new
+guard at all -- they were already conditioned on Practice tiers or
+`userId === created_by`, both of which are naturally false/zero for a
+signed-out visitor. The community page also picked up a Share button,
+matching the thread page's, shown only for public circles -- a private
+one's link means nothing to someone who hasn't been invited.
+
+**robots.ts and sitemap.ts** opened /commons/t and /commons/c the same
+way /commons/exchange was opened last entry -- allow rules for the
+specific paths (a longer allow always wins over the shorter /commons
+disallow), plus the sitemap now pulls in up to 500 recent threads and
+public communities. No manual "and it's not private" filter was needed
+in either fetch -- they run under the same anon key and the same RLS,
+so a private thread or community simply never comes back from the
+query. The sitemap can't leak what the database won't hand it.
+
+Verified with `npx tsc --noEmit` (clean) after every file. Needs the
+new RLS migration run in Supabase before any of this actually opens up
+-- until then these pages behave exactly as they did before (empty
+reads, same as a private community today).
