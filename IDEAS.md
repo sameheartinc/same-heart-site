@@ -2803,3 +2803,53 @@ it here rather than pretending member sync is fully self-serve today.
 Verified with `npx tsc --noEmit` (clean). Rob still needs to run the
 `community_api_keys` migration in the Supabase SQL editor himself before
 any of this works end to end.
+
+## "Connect with Same Heart" -- the handshake (Sep 15, 2026)
+
+Rob: "okay lets go on this idea of the handshake" -- following straight
+from the gap flagged in the white-label API entry above: a business
+could only add a member it already knew the profile id for. This is
+the real answer -- an outside site lets its own visitor connect their
+Same Heart account, on purpose, and learns who they are (and enrolls
+them) only because that visitor explicitly said yes.
+
+Modeled on OAuth's authorization-code shape, kept as light as it can
+be: rather than a whole separate "register your app" system, an
+existing `community_api_keys` row already is the app. Its `id` becomes
+a public client_id (safe to hand out -- it's just an identifier, same
+as a community's own slug being public); its real key stays the
+private secret, used only server-side to redeem a code, exactly as
+before.
+
+Flow: a business links a visitor to
+`/connect?clientId=<key id>&redirectUri=<their callback>&state=...`.
+That page (app/connect/page.tsx) confirms the link is real via the new
+public `GET /api/v1/connect/app`, makes sure a real person is signed in
+(bouncing through `/login?next=/connect?...` if not -- which needed
+`next` support added to the login page's three post-auth redirects,
+guarded against off-site redirects since it's untrusted query-string
+input), and shows a plain consent screen: "this adds you as a member of
+X, and shares your display name/Standing/leading Practice with X's own
+site." Approving (`POST /api/v1/connect/approve`, session-authenticated)
+is where the actual join happens -- immediately, for real, not deferred
+to whenever the business's server gets around to redeeming the code --
+so the promise on screen is true the moment it's granted. It also mints
+a single-use, 5-minute code (hashed at rest, same posture as the API
+keys themselves). The business's own server then calls
+`POST /api/v1/connect/exchange` with its secret key to redeem that code
+for the visitor's profile id, display name, Standing, and leading
+Practice -- and only the same key that was used as client_id can redeem
+a code issued to it, mirroring OAuth's client_id/client_secret pairing.
+
+Redirect URIs are allowlisted per key, not left open -- a business adds
+them from the same Developer API panel, under a per-key "Connect setup"
+disclosure (collapsed by default, same reasoning as the panel itself:
+stay out of the way for everyone who'll never touch this). Enforced
+both when `/connect` renders the consent screen and again, independently,
+when approve() actually grants it -- never trusting the earlier check
+alone.
+
+Verified with `npx tsc --noEmit` (clean). Rob needs to run the two new
+schema pieces (community_api_keys.redirect_uris column,
+community_connect_codes table) in the Supabase SQL editor -- see the
+tail of supabase/schema.sql.

@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await result.admin
     .from("community_api_keys")
-    .select("id, label, key_prefix, created_at, last_used_at, revoked_at")
+    .select("id, label, key_prefix, redirect_uris, created_at, last_used_at, revoked_at")
     .eq("community_id", communityId)
     .order("created_at", { ascending: false });
 

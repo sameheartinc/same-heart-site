@@ -36,6 +36,17 @@ function LoginPageInner() {
   const searchParams = useSearchParams();
   const claimMode = searchParams.get("claim") === "1";
 
+  // Where to land after a successful sign-in -- defaults to /hub like
+  // always. Only ever a same-site relative path (must start with "/"
+  // and not "//", which browsers treat as protocol-relative to another
+  // host) -- this comes straight from a query string, so treat it as
+  // untrusted and never redirect anywhere it could point off-site. Used
+  // by app/connect/page.tsx to send someone back to finish approving a
+  // "Connect with Same Heart" request after they sign in.
+  const nextParam = searchParams.get("next");
+  const landingPath =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/hub";
+
   const [stage, setStage] = useState<Stage>(claimMode ? "form" : "gate");
   const [mode, setMode] = useState<"signin" | "signup">("signup");
   const [email, setEmail] = useState("");
@@ -60,7 +71,7 @@ function LoginPageInner() {
       const { data } = await supabase.auth.getUser();
       const user = data.user as { is_anonymous?: boolean } | null;
       if (user && user.is_anonymous === false) {
-        router.replace("/hub");
+        router.replace(landingPath);
       }
       // No user at all, or genuinely anonymous: fall through and show the
       // form -- handleSubmit below does the right thing either way.
@@ -103,7 +114,7 @@ function LoginPageInner() {
     if (profileData?.archetype) {
       setArrivalMessage("Welcome back.");
       setStage("arriving");
-      setTimeout(() => router.push("/hub"), 1400);
+      setTimeout(() => router.push(landingPath), 1400);
       return;
     }
 
@@ -184,7 +195,7 @@ function LoginPageInner() {
       }
       setArrivalMessage("Your account is permanent now.");
       setStage("arriving");
-      setTimeout(() => router.push("/hub"), 1400);
+      setTimeout(() => router.push(landingPath), 1400);
       return;
     }
 

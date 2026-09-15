@@ -2105,3 +2105,42 @@ create index if not exists community_api_keys_hash_idx on community_api_keys(key
 -- cron-only-write table (see lib/supabaseAdmin.ts's header comment).
 alter table community_api_keys enable row level security;
 revoke all on community_api_keys from anon, authenticated;
+
+-- "Connect with Same Heart" (Sep 15, 2026) -- the handshake flagged in
+-- the white-label API's own IDEAS.md entry: lets an outside business's
+-- own site learn a *specific visitor's* Same Heart profile id (and
+-- enroll them as a community member) through real, explicit consent,
+-- rather than the business already needing to know a profile id up
+-- front, which is all app/api/v1/community/members's POST could do.
+-- Modeled on OAuth's authorization-code shape, deliberately
+-- lightweight: an existing community_api_keys row IS the "app" -- its
+-- id doubles as a public client_id (safe to expose, it's just an
+-- identifier), its actual key stays the private secret, used only
+-- server-side to redeem a code. No separate app-registration system.
+alter table community_api_keys add column if not exists redirect_uris text[] not null default '{}';
+
+-- A short-lived, single-use code minted the moment a real person clicks
+-- Approve on the /connect consent screen (see app/connect/page.tsx).
+-- Community membership happens right then, at approval, not at
+-- exchange -- so the promise on the consent screen ("this adds you as
+-- a member of X") is true the instant it's granted, whether or not the
+-- business's server ever calls exchange afterward. Only a hash of the
+-- code is stored, same reasoning as community_api_keys.key_hash.
+create table if not exists community_connect_codes (
+  id uuid default gen_random_uuid() primary key,
+  api_key_id uuid references community_api_keys(id) on delete cascade not null,
+  community_id uuid references communities(id) on delete cascade not null,
+  profile_id uuid references profiles(id) on delete cascade not null,
+  redirect_uri text not null,
+  code_hash text not null,
+  created_at timestamptz default now(),
+  expires_at timestamptz not null default (now() + interval '5 minutes'),
+  used_at timestamptz
+);
+
+create index if not exists community_connect_codes_hash_idx on community_connect_codes(code_hash);
+
+-- Same posture as community_api_keys: service-role only, RLS on with no
+-- policies at all -- see that table's own comment.
+alter table community_connect_codes enable row level security;
+revoke all on community_connect_codes from anon, authenticated;

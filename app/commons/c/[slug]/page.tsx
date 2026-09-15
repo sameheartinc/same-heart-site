@@ -39,13 +39,24 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
   // lib/communityApi.ts.
   const [apiPanelOpen, setApiPanelOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState<
-    { id: string; label: string; key_prefix: string; created_at: string; last_used_at: string | null; revoked_at: string | null }[]
+    {
+      id: string;
+      label: string;
+      key_prefix: string;
+      created_at: string;
+      last_used_at: string | null;
+      revoked_at: string | null;
+      redirect_uris?: string[];
+    }[]
   >([]);
   const [apiKeysLoading, setApiKeysLoading] = useState(false);
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [creatingKey, setCreatingKey] = useState(false);
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [expandedKeyId, setExpandedKeyId] = useState<string | null>(null);
+  const [redirectUriDraft, setRedirectUriDraft] = useState("");
+  const [savingRedirectUris, setSavingRedirectUris] = useState(false);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [threads, setThreads] = useState<CommonsThread[]>([]);
@@ -331,6 +342,30 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
     loadApiKeys();
   }
 
+  async function saveRedirectUris(keyId: string, uris: string[]) {
+    setSavingRedirectUris(true);
+    setApiKeyError(null);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setSavingRedirectUris(false);
+      return;
+    }
+    const res = await fetch(`/api/v1/keys/${keyId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ redirectUris: uris }),
+    });
+    const json = await res.json();
+    setSavingRedirectUris(false);
+    if (!res.ok) {
+      setApiKeyError(json.error ?? "Couldn't update that right now.");
+      return;
+    }
+    setApiKeys((prev) => prev.map((k) => (k.id === keyId ? { ...k, redirect_uris: json.redirect_uris } : k)));
+    setRedirectUriDraft("");
+  }
+
   return (
     <main
       style={{
@@ -600,14 +635,13 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {apiKeys.map((k) => (
+                      <div key={k.id} style={{ opacity: k.revoked_at ? 0.5 : 1 }}>
                       <div
-                        key={k.id}
                         style={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: "10px",
-                          opacity: k.revoked_at ? 0.5 : 1,
                         }}
                       >
                         <div>
@@ -630,25 +664,117 @@ export default function CommunityPage({ params }: { params: { slug: string } }) 
                           )}
                         </div>
                         {!k.revoked_at && (
-                          <button
-                            type="button"
-                            onClick={() => revokeApiKey(k.id)}
-                            style={{
-                              padding: "3px 9px",
-                              borderRadius: "8px",
-                              border: "1px solid var(--border)",
-                              background: "none",
-                              color: "var(--ink-faint)",
-                              fontFamily: "var(--font-mono)",
-                              fontSize: "8px",
-                              textTransform: "uppercase",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Revoke
-                          </button>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedKeyId(expandedKeyId === k.id ? null : k.id);
+                                setRedirectUriDraft("");
+                              }}
+                              style={{
+                                padding: "3px 9px",
+                                borderRadius: "8px",
+                                border: "1px solid var(--border)",
+                                background: "none",
+                                color: "var(--ink-faint)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "8px",
+                                textTransform: "uppercase",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {expandedKeyId === k.id ? "Close" : "Connect setup"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => revokeApiKey(k.id)}
+                              style={{
+                                padding: "3px 9px",
+                                borderRadius: "8px",
+                                border: "1px solid var(--border)",
+                                background: "none",
+                                color: "var(--ink-faint)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "8px",
+                                textTransform: "uppercase",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Revoke
+                            </button>
+                          </div>
                         )}
                       </div>
+
+                      {expandedKeyId === k.id && !k.revoked_at && (
+                        <div
+                          style={{
+                            marginTop: "10px",
+                            paddingTop: "10px",
+                            borderTop: "1px solid var(--border)",
+                          }}
+                        >
+                          <p style={{ margin: "0 0 8px", fontSize: "0.78rem", color: "var(--ink-dim)" }}>
+                            client_id for "Connect with Same Heart" links: <code>{k.id}</code>. Only URLs listed
+                            here can receive a code from a connect request for this key.
+                          </p>
+                          {(k.redirect_uris ?? []).length > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "8px" }}>
+                              {(k.redirect_uris ?? []).map((uri) => (
+                                <div key={uri} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                                  <code style={{ fontSize: "0.76rem", color: "var(--ink)", wordBreak: "break-all" }}>{uri}</code>
+                                  <button
+                                    type="button"
+                                    onClick={() => saveRedirectUris(k.id, (k.redirect_uris ?? []).filter((u) => u !== uri))}
+                                    disabled={savingRedirectUris}
+                                    style={{ background: "none", border: "none", color: "var(--ink-faint)", cursor: "pointer", fontSize: "0.8rem" }}
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <input
+                              value={redirectUriDraft}
+                              onChange={(e) => setRedirectUriDraft(e.target.value)}
+                              placeholder="https://yourapp.com/connect/callback"
+                              style={{
+                                flex: 1,
+                                background: "var(--void, transparent)",
+                                border: "1px solid var(--border)",
+                                borderRadius: "8px",
+                                padding: "6px 8px",
+                                color: "var(--ink)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "0.76rem",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              disabled={savingRedirectUris || !redirectUriDraft.trim()}
+                              onClick={() =>
+                                saveRedirectUris(k.id, [...(k.redirect_uris ?? []), redirectUriDraft.trim()])
+                              }
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: "8px",
+                                border: "1px solid var(--border)",
+                                background: "none",
+                                color: "var(--ink-dim)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "9px",
+                                textTransform: "uppercase",
+                                cursor: "pointer",
+                              }}
+                            >
+                              + Add
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     ))}
                   </div>
                 )}
