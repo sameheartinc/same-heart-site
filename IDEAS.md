@@ -3038,3 +3038,59 @@ the way it's always worked rather than trying to make it a playable
 embed too.
 
 Verified with `npx tsc --noEmit` (clean).
+
+## The Exchange Feed + Resonance (Sep 15, 2026)
+
+Rob's follow-up after the transmit animation shipped: "how does someone
+else see it or interact with it? can we have some relevancy and
+integration into the heart strings and how signals connect? where does
+the information go?" Asked him to pick a direction; he chose "bring
+back a visible feed, with reactions."
+
+Worth being honest about the reversal: on Sep 5, the explicit ask was
+"not a list underneath" the compose box, and that removed a visible
+list from the Comms Deck panel. Today's ask points the other way -- a
+real, browsable feed. Both are true and both are respected: no list
+came back inline under the compose form (that part of Sep 5 still
+holds), but a full feed now lives at its own page, /commons/exchange,
+linked from the panel next to Roster and Who's Here.
+
+The feed shows every transmission, newest first -- not just the ones
+that clear the 70-score bar for the rotating bubble on the homepage.
+Deliberately no score floor: this is meant to be the honest complete
+record, not a second curated highlight reel. Each card shows who sent
+it, when, the real score and Heartbeats it earned, the tagline if there
+is one, and -- reusing the same embed work from the transmit animation
+build -- a live YouTube or X preview right in the feed, not just a
+domain and a link out. That embed component (ExchangeLinkPreview) got
+pulled out of app/commons/page.tsx into components/LinkEmbedPreview.tsx
+so both the compose box and the feed share the exact same code instead
+of two copies drifting apart.
+
+"Resonate" is the reaction -- a heart tap, toggle on/off, with a public
+count. Kept deliberately separate from Heartbeats: resonating never
+awards XP to the sender or the person reacting, on either side. That
+was an explicit choice, not an oversight -- the real reward already
+gets decided once, honestly, by actual scoring in
+app/api/exchange/transmit/route.ts, and a reaction that also paid out
+XP would turn "does this matter to people" into something worth
+gaming. New table exchange_resonances and a resonance_count column on
+exchange_transmissions, both only ever touched through two new
+SECURITY DEFINER functions (toggle_transmission_resonance,
+list_exchange_transmissions) -- same zero-client-policy posture as
+community_api_keys / community_connect_codes elsewhere in this file.
+list_exchange_transmissions exists specifically because the feed needs
+to know which rows *you* resonated with, without a public RLS policy
+that would let anyone read everyone else's reactions directly.
+
+One thing flagged back to Rob, not built: "Heart Strings" already
+exists on this site as the user-facing name for the Key system
+(lib/keys.ts, PLAN.md's Keys and Doors) -- Green Heart String is what
+unlocks Impact History today. His question may have meant tying the
+feed or reactions into that system specifically (e.g. something a
+Heart String holder gets that others don't), which is a real, separate
+feature from "a visible feed with reactions" and wasn't assumed here.
+
+Verified with `npx tsc --noEmit` (clean). Needs the schema.sql
+migration run in Supabase before it'll work -- new table, new column,
+two new functions, all additive and safe to run once.

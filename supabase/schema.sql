@@ -2144,3 +2144,130 @@ create index if not exists community_connect_codes_hash_idx on community_connect
 -- policies at all -- see that table's own comment.
 alter table community_connect_codes enable row level security;
 revoke all on community_connect_codes from anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+-- The Exchange feed + resonance (Sep 15, 2026) -- Rob asked for
+-- relevancy: "bring back a visible feed... a real list of
+-- transmissions that anyone can browse, plus a lightweight way to
+-- react." Reverses the Sep 5 "not a list underneath" decision on
+-- purpose -- see app/commons/exchange/page.tsx. "Resonate" is
+-- deliberately separate from Heartbeats: it never awards XP to anyone,
+-- sender or resonator, on either side -- purely a light social signal,
+-- not a second reward economy layered on top of the real scoring in
+-- app/api/exchange/transmit/route.ts.
+alter table exchange_transmissions add column if not exists resonance_count integer not null default 0;
+
+create table if not exists exchange_resonances (
+  id uuid default gen_random_uuid() primary key,
+  transmission_id uuid references exchange_transmissions(id) on delete cascade not null,
+  profile_id uuid references profiles(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  unique (transmission_id, profile_id)
+);
+
+create index if not exists exchange_resonances_transmission_idx on exchange_resonances(transmission_id);
+create index if not exists exchange_resonances_profile_idx on exchange_resonances(profile_id);
+
+-- Same posture as community_api_keys / community_connect_codes: RLS on,
+-- zero policies. Nobody reads or writes this table directly -- both
+-- functions below run as SECURITY DEFINER and are the only path in or
+-- out, which is what keeps resonance_count trustworthy (a client can't
+-- just insert a row and skip incrementing the counter, or resonate as
+-- somebody else).
+alter table exchange_resonances enable row level security;
+revoke all on exchange_resonances from anon, authenticated;
+
+notify pgrst, 'reload schema';
+
+-- Toggle your own resonance on a transmission -- tap once to resonate,
+-- tap again to take it back. Keeps exchange_transmissions.resonance_count
+-- in sync atomically in the same transaction, so it can never drift from
+-- the actual row count in exchange_resonances.
+create or replace function public.toggle_transmission_resonance(p_transmission_id uuid)
+returns table (resonated boolean, resonance_count integer) as $$
+declare
+  v_profile_id uuid := auth.uid();
+  v_existing uuid;
+  v_resonated boolean;
+  v_new_count integer;
+begin
+  if v_profile_id is null then
+    raise exception 'Sign in to resonate.';
+  end if;
+
+  if not exists (select 1 from exchange_transmissions where id = p_transmission_id) then
+    raise exception 'That transmission no longer exists.';
+  end if;
+
+  select id into v_existing from exchange_resonances
+    where transmission_id = p_transmission_id and profile_id = v_profile_id;
+
+  if v_existing is not null then
+    delete from exchange_resonances where id = v_existing;
+    v_resonated := false;
+  else
+    insert into exchange_resonances (transmission_id, profile_id)
+      values (p_transmission_id, v_profile_id);
+    v_resonated := true;
+  end if;
+
+  update exchange_transmissions
+    set resonance_count = greatest(0, resonance_count + case when v_resonated then 1 else -1 end)
+    where id = p_transmission_id
+    returning exchange_transmissions.resonance_count into v_new_count;
+
+  return query select v_resonated, v_new_count;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+grant execute on function public.toggle_transmission_resonance(uuid) to authenticated;
+
+notify pgrst, 'reload schema';
+
+-- The feed's own read -- a SECURITY DEFINER function instead of a plain
+-- table select because it also needs to tell the caller which rows
+-- *they* have resonated with, without a public RLS policy on
+-- exchange_resonances that would let anyone read everyone else's
+-- reactions directly. exchange_transmissions itself is already publicly
+-- readable (see its own tagline column's comment above), so this is a
+-- superset of what was already exposed, not a new disclosure.
+create or replace function public.list_exchange_transmissions(p_limit integer default 40)
+returns table (
+  id uuid,
+  profile_id uuid,
+  url text,
+  title text,
+  domain text,
+  issue_key text,
+  impact_score integer,
+  reasoning text,
+  heartbeats_awarded integer,
+  tagline text,
+  image_url text,
+  created_at timestamptz,
+  resonance_count integer,
+  my_resonated boolean
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    t.id, t.profile_id, t.url, t.title, t.domain, t.issue_key, t.impact_score,
+    t.reasoning, t.heartbeats_awarded, t.tagline, t.image_url, t.created_at,
+    t.resonance_count,
+    exists (
+      select 1 from exchange_resonances r
+      where r.transmission_id = t.id and r.profile_id = auth.uid()
+    ) as my_resonated
+  from exchange_transmissions t
+  order by t.created_at desc
+  limit greatest(1, least(p_limit, 200));
+$$;
+
+revoke all on function public.list_exchange_transmissions(integer) from public;
+grant execute on function public.list_exchange_transmissions(integer) to anon, authenticated;
+
+notify pgrst, 'reload schema';

@@ -27,7 +27,7 @@ import {
 } from "@/lib/commons";
 import { listRecentTransmissions, transmitLink, type Transmission } from "@/lib/exchange";
 import { getWorldIssue } from "@/lib/worldIssues";
-import { youtubeVideoId, isXStatusUrl } from "@/lib/linkEmbed";
+import { LinkEmbedPreview } from "@/components/LinkEmbedPreview";
 
 const SEEN_KEY = "commons-entrance-seen";
 const ACCENT = "#c9576a";
@@ -752,6 +752,23 @@ export default function CommonsPage() {
             </div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <Link
+                href="/commons/exchange"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "var(--gold)",
+                  textDecoration: "none",
+                  border: "1px solid rgba(184,134,63,0.5)",
+                  borderRadius: "3px",
+                  padding: "8px 14px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                View the Feed &rarr;
+              </Link>
+              <Link
                 href="/commons/roster"
                 style={{
                   fontFamily: "var(--font-mono)",
@@ -878,7 +895,7 @@ export default function CommonsPage() {
             </button>
           </form>
 
-          <ExchangeLinkPreview url={transmitUrl} />
+          <LinkEmbedPreview url={transmitUrl} />
 
           {transmitImageUrl && (
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
@@ -931,15 +948,20 @@ export default function CommonsPage() {
             </p>
           )}
 
-          {/* No visible feed here on purpose (Rob, Sep 5 2026: "not a
-              list underneath"). A transmission's reward already lands
-              in transmitSuccess above the moment it's scanned; anything
-              scoring well enough gets its shot at the rotating
-              SignalBubble up top instead of sitting in a permanent
-              scrollable log -- see featuredItems below. Your own past
-              transmissions are still all visible on your Impact History
-              page (the Green Key door, lib/exchange.ts's
-              listMyTransmissions) even though nothing renders here. */}
+          {/* Still no inline list directly under the compose box (Rob,
+              Sep 5 2026: "not a list underneath" -- that part hasn't
+              changed). But Rob, Sep 15 2026, asked for the opposite of
+              silence once something's actually sent: "bring back a
+              visible feed... anyone can browse." That feed lives at
+              /commons/exchange (linked above) rather than inline here,
+              so this compose panel stays uncluttered while the feed
+              itself gets a real page. A transmission's reward still
+              lands in transmitSuccess above the moment it's scanned;
+              anything scoring well enough also gets its shot at the
+              rotating SignalBubble up top -- see featuredItems below.
+              Your own past transmissions are additionally visible on
+              your Impact History page (the Green Key door,
+              lib/exchange.ts's listMyTransmissions). */}
         </div>
 
         <form
@@ -1401,127 +1423,6 @@ function ExchangeLaunchOverlay({ stars }: { stars: Star[] }) {
         />
         Signal in transit -- analyzing against real-world impact
       </p>
-    </div>
-  );
-}
-
-// A live preview of what's about to be transmitted -- Rob, Sep 15 2026:
-// "I want people to be able to drop a link from X or youtube ... and
-// for the video or feed to come up." YouTube renders instantly (just a
-// video ID parsed out of the URL client-side, no network call needed);
-// X needs a server round-trip through /api/exchange/oembed since
-// Twitter's oEmbed endpoint won't reliably answer a browser fetch
-// cross-origin. Anything else still transmits exactly as it always has
-// -- this is a bonus preview, never a requirement to transmit.
-function ExchangeLinkPreview({ url }: { url: string }) {
-  const trimmed = url.trim();
-  const ytId = useMemo(() => youtubeVideoId(trimmed), [trimmed]);
-  const isX = useMemo(() => isXStatusUrl(trimmed), [trimmed]);
-  const [xEmbed, setXEmbed] = useState<{ html: string; forUrl: string } | null>(null);
-  const [xLoading, setXLoading] = useState(false);
-  const [xFailed, setXFailed] = useState(false);
-
-  useEffect(() => {
-    if (!isX) return;
-    if (xEmbed?.forUrl === trimmed) return;
-    setXFailed(false);
-    const timer = setTimeout(async () => {
-      setXLoading(true);
-      try {
-        const res = await fetch(`/api/exchange/oembed?url=${encodeURIComponent(trimmed)}`);
-        const json = await res.json();
-        if (res.ok && typeof json.html === "string") {
-          setXEmbed({ html: json.html, forUrl: trimmed });
-        } else {
-          setXFailed(true);
-        }
-      } catch {
-        setXFailed(true);
-      } finally {
-        setXLoading(false);
-      }
-    }, 550);
-    return () => clearTimeout(timer);
-  }, [trimmed, isX, xEmbed]);
-
-  // Twitter's embed HTML only renders once widgets.js has run over it --
-  // load it once, lazily, only the first time there's actually a tweet
-  // to show (never on page load; this panel is public and most visitors
-  // never touch the Exchange).
-  useEffect(() => {
-    if (!xEmbed) return;
-    const w = window as any;
-    if (w.twttr?.widgets) {
-      w.twttr.widgets.load();
-      return;
-    }
-    if (document.getElementById("twitter-widgets-js")) return;
-    const script = document.createElement("script");
-    script.id = "twitter-widgets-js";
-    script.src = "https://platform.twitter.com/widgets.js";
-    script.async = true;
-    document.body.appendChild(script);
-  }, [xEmbed]);
-
-  if (!ytId && !isX) return null;
-
-  return (
-    <div style={{ marginBottom: "14px" }}>
-      <p
-        style={{
-          margin: "0 0 8px",
-          fontFamily: "var(--font-mono)",
-          fontSize: "9px",
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: "var(--gold)",
-        }}
-      >
-        {ytId
-          ? "Video detected \u2014 ready to transmit"
-          : xLoading
-          ? "Pulling in the post..."
-          : xEmbed
-          ? "Post detected \u2014 ready to transmit"
-          : xFailed
-          ? "Couldn't preview that post -- it'll still transmit fine."
-          : "Checking..."}
-      </p>
-      {ytId && (
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            maxWidth: "420px",
-            paddingTop: "56.25%",
-            borderRadius: "8px",
-            overflow: "hidden",
-            border: "1px solid rgba(184,134,63,0.4)",
-          }}
-        >
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${ytId}`}
-            title="YouTube preview"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-          />
-        </div>
-      )}
-      {isX && xEmbed && (
-        <div
-          style={{
-            maxWidth: "420px",
-            maxHeight: "420px",
-            overflowY: "auto",
-            borderRadius: "8px",
-            border: "1px solid rgba(184,134,63,0.4)",
-            background: "#fff",
-            padding: "6px",
-          }}
-          dangerouslySetInnerHTML={{ __html: xEmbed.html }}
-        />
-      )}
     </div>
   );
 }

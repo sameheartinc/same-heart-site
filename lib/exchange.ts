@@ -117,3 +117,43 @@ export async function transmitLink(url: string, tagline?: string, imageUrl?: str
   }
   return json as TransmitResult;
 }
+
+// The Exchange feed -- Rob, Sep 15 2026, reversing the Sep 5 "not a
+// list underneath" call: "bring back a visible feed... a real list of
+// transmissions that anyone can browse, plus a lightweight way to
+// react." Reads list_exchange_transmissions (supabase/schema.sql), a
+// SECURITY DEFINER function rather than a plain table select, because
+// it needs to also tell the caller which transmissions *they've*
+// already resonated with -- something a public RLS policy on
+// exchange_resonances couldn't do without exposing everyone else's
+// resonances too. See app/commons/exchange/page.tsx.
+export interface FeedTransmission extends Transmission {
+  resonance_count: number;
+  my_resonated: boolean;
+}
+
+export async function listExchangeFeed(limit = 40): Promise<FeedTransmission[]> {
+  const { data, error } = await supabase.rpc("list_exchange_transmissions", { p_limit: limit });
+  if (error || !data) return [];
+  return data as FeedTransmission[];
+}
+
+export interface ResonanceResult {
+  resonated: boolean;
+  resonanceCount: number;
+}
+
+// Tap to resonate, tap again to take it back -- toggle_transmission_resonance
+// (supabase/schema.sql) does the flip and keeps resonance_count in sync
+// atomically, so this never has to trust an optimistic client-side count.
+// Deliberately never awards Heartbeats to either side -- a light social
+// signal, not a second reward economy layered on top of the real scoring
+// in app/api/exchange/transmit/route.ts.
+export async function toggleResonance(transmissionId: string): Promise<ResonanceResult> {
+  const { data, error } = await supabase.rpc("toggle_transmission_resonance", {
+    p_transmission_id: transmissionId,
+  });
+  if (error) throw new Error(error.message || "Couldn't update that -- try again.");
+  const row = Array.isArray(data) ? data[0] : data;
+  return { resonated: Boolean(row?.resonated), resonanceCount: Number(row?.resonance_count ?? 0) };
+}
