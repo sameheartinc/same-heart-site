@@ -87,6 +87,25 @@ export default function GalaxyPage() {
   // depends on viewport width.
   const [isMobile, setIsMobile] = useState(false);
 
+  // Rob, Sep 15 2026: "can we also make the galaxy randomize where the
+  // icons are everytime." slotOrder is a permutation of the 8 tuned
+  // position "slots" (each node's own hand-placed angleDeg/radiusPct/
+  // scale on desktop, or its place in the even ring on mobile -- see
+  // MOBILE_QUERY above) -- reshuffled once per visit in the effect
+  // below. A node's IDENTITY (its own href/icon/label, keyed off its
+  // own index into GALAXY_NODES) never moves; only which of the 8
+  // tuned spots it lands in does, so the exact same well-spaced
+  // arrangement Rob hand-tuned is reused every time, just with a
+  // different node sitting in each spot -- no new overlap risk, since
+  // it is always the same multiset of 8 positions. Starts as the
+  // identity order ([0,1,2,...]) so the very first server-rendered
+  // paint matches every past layout exactly -- shuffling only happens
+  // client-side, post-mount, same hydration-mismatch reasoning
+  // isMobile above already follows.
+  const [slotOrder, setSlotOrder] = useState<number[]>(() =>
+    GALAXY_NODES.map((_, idx) => idx)
+  );
+
   // The Same Heart mark's secret tap bonus (Sep 9 2026, Rob's idea --
   // see lib/heartTap.ts and app/api/galaxy/heart-tap/route.ts for the
   // rest of it). heartParticles is purely cosmetic -- every tap adds a
@@ -132,6 +151,19 @@ export default function GalaxyPage() {
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Fisher-Yates, run once on mount -- a fresh shuffle every time this
+  // page is visited (see slotOrder's own comment above), never
+  // mid-visit, so it doesn't fight the slow orbit animation already
+  // carrying the nodes around the center.
+  useEffect(() => {
+    const shuffled = GALAXY_NODES.map((_, idx) => idx);
+    for (let k = shuffled.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [shuffled[k], shuffled[j]] = [shuffled[j], shuffled[k]];
+    }
+    setSlotOrder(shuffled);
   }, []);
 
   // The whole console tilts toward wherever the cursor is, clamped (see
@@ -658,9 +690,11 @@ export default function GalaxyPage() {
             // Mobile: an even ring (360 / count apart, one shared radius)
             // instead of this node's own hand-placed angle/radius --
             // see the MOBILE_QUERY comment above. Desktop is untouched.
-            const angleDeg = isMobile ? (360 / GALAXY_NODES.length) * i - 90 : node.angleDeg;
-            const radiusPct = isMobile ? MOBILE_RADIUS_PCT : node.radiusPct;
-            const scale = isMobile ? MOBILE_SCALE : node.scale;
+            const slotIndex = slotOrder[i] ?? i;
+            const slotNode = GALAXY_NODES[slotIndex];
+            const angleDeg = isMobile ? (360 / GALAXY_NODES.length) * slotIndex - 90 : slotNode.angleDeg;
+            const radiusPct = isMobile ? MOBILE_RADIUS_PCT : slotNode.radiusPct;
+            const scale = isMobile ? MOBILE_SCALE : slotNode.scale;
             const pos = orbitPosition(angleDeg, radiusPct);
             const opacity = node.dim ? 0.62 : 1;
             // "More modular play" (Rob, Sep 3 2026): each node's own

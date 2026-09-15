@@ -2526,3 +2526,87 @@ No new state, no JS-driven animation loop, no schema change -- purely
 two new CSS rules and two new wrapping divs around markup that already
 existed. Verified by full read-through of the diff only, same caveat
 as always -- the device shell stayed wedged the whole session.
+
+## Galaxy: a fresh arrangement every visit (Sep 15, 2026)
+
+Rob: "can we also make the galaxy randomize where the icons are
+everytime."
+
+Each node's angleDeg/radiusPct/scale (lib/galaxyNodes.ts) is Rob's own
+hand-tuned placement -- deliberately uneven, not a plain evenly-spaced
+ring (see the Sep 9 mobile-layout comment in app/galaxy/page.tsx for
+the whole history of why). Randomizing by just generating fresh random
+angles per node risked wrecking that spacing -- two nodes landing close
+together that were never meant to. Instead, slotOrder is a shuffled
+permutation of the 8 existing tuned positions: on each visit, the same
+8 well-spaced spots get used, just reassigned to different nodes. A
+node's own identity (its href/icon/label) always stays tied to its own
+index in GALAXY_NODES -- only which of the 8 tuned spots it's rendered
+at moves. Same trick applies on mobile's even ring, just permuting
+which ring slot (0-7) each node lands in instead of which tuned
+angle/radius/scale.
+
+Shuffled with a plain Fisher-Yates, once, in a useEffect on mount --
+never mid-visit, so it doesn't fight the orbit animation from earlier
+tonight. Starts as the identity order ([0,1,2,...]) for the initial
+render so server and client agree on the very first paint, same
+hydration-mismatch reasoning isMobile already uses just above it --
+the shuffle only ever happens client-side, after mount.
+
+No schema change, no new state beyond one array. Verified with
+npx tsc --noEmit only, run directly on device this time (the shell
+came unstuck partway through tonight) -- no full manual read-through
+of the rendered page yet.
+
+## The Capsule gets a real Journal (Sep 15, 2026)
+
+Rob: "i want to make sure that the capsule feels like a place where
+people can journal.....and share their own thoughts or blog or
+something that they could host and output as a signal if they choose
+to."
+
+Scoped this down deliberately before building. Went and actually
+checked what "Signal" already means in this codebase first, since it's
+a loaded word here -- The Signal (curated external news, lib/rssFeeds.ts),
+Deep Signals (fixed founder-authored unlocks, lib/deepSignals.ts), and
+the Standing tier named "Signal" (80 XP, lib/standing.ts) are all
+already spoken for. None of them, and nothing else in the app, gave a
+person anywhere to actually write -- the closest thing was "Your log,"
+a 500-character one-liner (log_entries) built for "things you did or
+earned," not real writing. Rob's call, given that landscape: build the
+private journal first, tonight, and keep it out of "Signal" naming
+entirely so it never gets confused with the news feed. The
+public-sharing / self-hosting / RSS-out half of the ask is real and
+worth doing, but it's a genuinely different, bigger build (a public
+per-user page, real outbound syndication, walking back robots.ts's
+current blanket no-index-user-content stance, moderation on
+public-by-default writing) -- deliberately not part of tonight.
+
+**What shipped**: "Your Journal," a new panel on the Hub, right below
+"Your log." Title (optional) + a real multi-paragraph textarea, save,
+expand/collapse per entry, delete. Fully private -- own table
+(journal_entries), RLS scoped to auth.uid() = profile_id on every
+operation, no public read policy at all. No XP, no Practice-tier gate,
+nothing to game -- available the moment you land in the Capsule,
+distinct from every other progression system here on purpose (see
+lib/journal.ts's header comment for the full reasoning on both
+counts).
+
+- supabase/schema.sql: new `journal_entries` table (title nullable,
+  body required, created_at/updated_at) + its own select/insert/
+  update/delete policies + an index on (profile_id, created_at desc).
+  **Rob needs to run this migration by hand in the Supabase SQL editor
+  -- see the SQL I handed him separately.**
+- lib/journal.ts (new): listMyJournalEntries, addJournalEntry,
+  deleteJournalEntry, plus updateJournalEntry (written now, not wired
+  to any UI yet -- V1 is add + delete only). JOURNAL_TITLE_MAX (120),
+  JOURNAL_BODY_MAX (20,000).
+- app/hub/page.tsx: new "Your Journal" panel, same visual language as
+  Resource Shelf's bordered-panel pattern just above it. Loads once
+  userId lands (no tier to wait on, unlike Resource Shelf).
+
+Edited directly on-device with python read-modify-write this time
+(the shell was working again tonight) rather than the stage/edit/
+commit round trip -- faster, and sidesteps the mtime-guard dance
+entirely. Verified with npx tsc --noEmit only; no manual click-through
+yet since the table doesn't exist until Rob runs the migration.

@@ -52,6 +52,7 @@ import {
   type PracticePoints,
 } from "@/lib/practices";
 import { listMyShelf, removeFromShelf, setShelfItemCategory, shelfCapacity, type ShelfItem } from "@/lib/resourceShelf";
+import { listMyJournalEntries, addJournalEntry, deleteJournalEntry, JOURNAL_TITLE_MAX, JOURNAL_BODY_MAX, type JournalEntry } from "@/lib/journal";
 import ShelfCategoryPicker from "@/components/ShelfCategoryPicker";
 import { activateDoubleXp } from "@/lib/abilities";
 import WidgetFrame from "@/components/WidgetFrame";
@@ -179,6 +180,19 @@ export default function HubPage() {
   const [signatureSaving, setSignatureSaving] = useState(false);
   const [signatureError, setSignatureError] = useState<string | null>(null);
   const SIGNATURE_MAX = 80;
+
+  // Capsule Journal (lib/journal.ts) -- private, multi-paragraph
+  // writing, separate from the one-line "Your log" below and
+  // unrelated to The Signal/Deep Signals. No Practice-tier gate,
+  // unlike Resource Shelf above -- see lib/journal.ts's header
+  // comment for why this one's open from day one.
+  const [journal, setJournal] = useState<JournalEntry[]>([]);
+  const [journalTitleDraft, setJournalTitleDraft] = useState("");
+  const [journalBodyDraft, setJournalBodyDraft] = useState("");
+  const [journalSaving, setJournalSaving] = useState(false);
+  const [journalError, setJournalError] = useState<string | null>(null);
+  const [deletingJournalId, setDeletingJournalId] = useState<string | null>(null);
+  const [expandedJournalId, setExpandedJournalId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -399,6 +413,42 @@ export default function HubPage() {
       setShelf(previous);
       setShelfError(result.error ?? "Couldn't tag that right now.");
     }
+  }
+
+  // Capsule Journal -- loads once userId lands, no tier to wait on
+  // (see the state comment above).
+  useEffect(() => {
+    if (!userId) return;
+    listMyJournalEntries(userId).then(setJournal);
+  }, [userId]);
+
+  async function submitJournalEntry(e: React.FormEvent) {
+    e.preventDefault();
+    if (!userId || journalSaving) return;
+    setJournalSaving(true);
+    setJournalError(null);
+    const result = await addJournalEntry(userId, journalTitleDraft, journalBodyDraft);
+    setJournalSaving(false);
+    if (!result.ok) {
+      setJournalError(result.error ?? "Couldn't save that right now.");
+      return;
+    }
+    setJournalTitleDraft("");
+    setJournalBodyDraft("");
+    listMyJournalEntries(userId).then(setJournal);
+  }
+
+  async function removeJournalEntry(entryId: string) {
+    setDeletingJournalId(entryId);
+    setJournalError(null);
+    const result = await deleteJournalEntry(entryId);
+    setDeletingJournalId(null);
+    if (!result.ok) {
+      setJournalError(result.error ?? "Couldn't remove that right now.");
+      return;
+    }
+    setJournal((prev) => prev.filter((entry) => entry.id !== entryId));
+    if (expandedJournalId === entryId) setExpandedJournalId(null);
   }
 
   // Kindred Sparks opt-out -- flips profiles.kindred_opt_out and clears
@@ -3007,6 +3057,213 @@ export default function HubPage() {
             ))}
           </ul>
         )}
+
+        {/* Capsule Journal -- lib/journal.ts. Private, multi-paragraph
+            writing, distinct from "Your log" just above -- see
+            lib/journal.ts's header comment for the full reasoning.
+            Open to everyone in the Capsule from day one, no
+            Practice-tier gate: there's no trust to build up before
+            writing something only you can see. */}
+        <div
+          style={{
+            marginTop: "30px",
+            marginBottom: "22px",
+            padding: "18px 20px",
+            borderRadius: "12px",
+            border: "1px solid var(--widget-border)",
+            background: "var(--widget-panel, transparent)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "8px",
+              marginBottom: "4px",
+            }}
+          >
+            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.05rem", margin: 0 }}>
+              Your Journal
+            </h2>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--widget-text-faint)",
+              }}
+            >
+              Private -- only you can see this
+            </span>
+          </div>
+          <p
+            style={{
+              margin: "4px 0 16px",
+              fontFamily: "var(--font-body)",
+              fontStyle: "italic",
+              fontSize: "0.85rem",
+              color: "var(--widget-text-dim)",
+            }}
+          >
+            A real place to write, not the one-line log above. Nobody else ever sees this, and it earns nothing -- writing it is the point.
+          </p>
+
+          <form onSubmit={submitJournalEntry} style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
+            <input
+              value={journalTitleDraft}
+              onChange={(e) => setJournalTitleDraft(e.target.value)}
+              placeholder="Title (optional)"
+              maxLength={JOURNAL_TITLE_MAX}
+              style={{
+                background: "var(--widget-panel)",
+                border: "1px solid var(--widget-border)",
+                borderRadius: "10px",
+                padding: "10px 14px",
+                color: "var(--widget-text)",
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: "0.92rem",
+              }}
+            />
+            <textarea
+              value={journalBodyDraft}
+              onChange={(e) => setJournalBodyDraft(e.target.value)}
+              placeholder="Write whatever's actually true today..."
+              maxLength={JOURNAL_BODY_MAX}
+              rows={5}
+              style={{
+                background: "var(--widget-panel)",
+                border: "1px solid var(--widget-border)",
+                borderRadius: "10px",
+                padding: "12px 14px",
+                color: "var(--widget-text)",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.92rem",
+                lineHeight: 1.55,
+                resize: "vertical",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={journalSaving || !journalBodyDraft.trim()}
+              style={{
+                alignSelf: "flex-end",
+                background: "var(--widget-accent)",
+                border: "none",
+                borderRadius: "999px",
+                padding: "10px 22px",
+                color: "var(--widget-background)",
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: "0.82rem",
+                cursor: journalSaving || !journalBodyDraft.trim() ? "default" : "pointer",
+                opacity: journalSaving || !journalBodyDraft.trim() ? 0.6 : 1,
+              }}
+            >
+              {journalSaving ? "…" : "Save entry"}
+            </button>
+          </form>
+          {journalError && (
+            <p style={{ color: "var(--widget-rose)", fontSize: "0.82rem", marginTop: "-10px", marginBottom: "16px" }}>
+              {journalError}
+            </p>
+          )}
+
+          {journal.length === 0 ? (
+            <p style={{ color: "var(--widget-text-dim)", fontStyle: "italic", fontFamily: "var(--font-body)" }}>
+              Nothing written yet. This is just for you.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {journal.map((entry) => {
+                const expanded = expandedJournalId === entry.id;
+                const preview = entry.body.length > 60 ? `${entry.body.slice(0, 60)}…` : entry.body;
+                return (
+                  <div
+                    key={entry.id}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      background: "var(--widget-panel-soft, rgba(255,255,255,0.03))",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px" }}>
+                      <button
+                        onClick={() => setExpandedJournalId(expanded ? null : entry.id)}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "2px" }}>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--widget-accent)" }}>
+                            {new Date(entry.created_at).toLocaleDateString()}
+                          </span>
+                          <span
+                            style={{
+                              fontFamily: "var(--font-display)",
+                              fontWeight: 600,
+                              fontSize: "0.9rem",
+                              color: "var(--widget-text)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {entry.title || preview}
+                          </span>
+                        </div>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.88rem",
+                            color: "var(--widget-text-dim)",
+                            lineHeight: 1.55,
+                            whiteSpace: "pre-wrap",
+                            display: expanded ? "block" : "-webkit-box",
+                            WebkitLineClamp: expanded ? undefined : 2,
+                            WebkitBoxOrient: expanded ? undefined : ("vertical" as const),
+                            overflow: expanded ? "visible" : "hidden",
+                          }}
+                        >
+                          {entry.body}
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => removeJournalEntry(entry.id)}
+                        disabled={deletingJournalId === entry.id}
+                        style={{
+                          flexShrink: 0,
+                          padding: "3px 9px",
+                          borderRadius: "8px",
+                          border: "1px solid var(--widget-border)",
+                          background: "none",
+                          color: "var(--widget-text-faint)",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "8px",
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {deletingJournalId === entry.id ? "..." : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
             </div>
           </WidgetFrame>
         </div>

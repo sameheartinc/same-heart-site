@@ -2027,3 +2027,42 @@ revoke update on communities from authenticated;
 grant update (theme_key) on communities to authenticated;
 
 notify pgrst, 'reload schema';
+
+-- Capsule Journal (lib/journal.ts) -- a real, multi-paragraph place to
+-- write. log_entries just above is "things you did or earned" (see its
+-- own comment) capped at a one-line description; this is "what you
+-- actually sat down and wrote," so it gets its own table rather than
+-- stretching that single column, same reasoning notifications already
+-- got its own table for instead of folding into log_entries. Rob, Sep
+-- 15 2026: "make sure the capsule feels like a place where people can
+-- journal." Deliberately private-only for this first build -- select/
+-- insert/update/delete all scoped to auth.uid() = profile_id, no public
+-- read policy at all, and nothing awards XP for a row existing here, so
+-- there's nothing to game by padding entries. updated_at lets an entry
+-- be edited later without losing its original created_at ordering.
+create table if not exists journal_entries (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  title text,
+  body text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table journal_entries enable row level security;
+
+drop policy if exists "Users see their own journal" on journal_entries;
+create policy "Users see their own journal" on journal_entries for select using (auth.uid() = profile_id);
+
+drop policy if exists "Users insert their own journal" on journal_entries;
+create policy "Users insert their own journal" on journal_entries for insert with check (auth.uid() = profile_id);
+
+drop policy if exists "Users update their own journal" on journal_entries;
+create policy "Users update their own journal" on journal_entries for update using (auth.uid() = profile_id) with check (auth.uid() = profile_id);
+
+drop policy if exists "Users delete their own journal" on journal_entries;
+create policy "Users delete their own journal" on journal_entries for delete using (auth.uid() = profile_id);
+
+create index if not exists journal_entries_profile_idx on journal_entries (profile_id, created_at desc);
+
+notify pgrst, 'reload schema';
