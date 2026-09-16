@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -66,6 +66,10 @@ export default function CommonsPage() {
   const [pendingQuery, setPendingQuery] = useState("");
 
   const [stats, setStats] = useState({ humansPresent: 0, communitiesActive: 0, activeConversations: 0 });
+  // Holds the in-flight touchPresence() write from the effect below, so
+  // loadHome() can wait on this visitor's own presence actually landing
+  // before it counts "Humans present" -- see that call site's comment.
+  const presenceWriteRef = useRef<Promise<unknown> | null>(null);
   const [signal, setSignal] = useState<NewsArticle[]>([]);
   const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
   const [communities, setCommunities] = useState<Community[]>([]);
@@ -111,7 +115,14 @@ export default function CommonsPage() {
         return;
       }
       setUserId(data.user.id);
-      touchPresence(data.user.id); // fire-and-forget -- don't block the first paint on this
+      // Fire-and-forget for the page shell -- don't block first paint on
+      // this write. But loadHome()'s own stats fetch (see below) DOES
+      // wait on this exact promise before counting "Humans present":
+      // without that, a returning visitor (whose stage flips straight
+      // to "home", same tick as this call) could see the count run
+      // before their own last_seen write actually lands, showing "0"
+      // for someone who's looking right at the page.
+      presenceWriteRef.current = touchPresence(data.user.id);
       // Same Skin the Hub uses, carried over here -- previously the
       // Commons was always the default palette no matter what someone
       // picked on the Hub, which made the two feel like different
@@ -124,6 +135,12 @@ export default function CommonsPage() {
         .then(({ data: skinRow }) => {
           if (skinRow?.ship_skin) setMySkin(getSkin(skinRow.ship_skin));
         });
+      // Fetched here, not just in loadHome() below, so the entrance
+      // sphere (rendered ~4.3s into a first visit, well before stage
+      // ever reaches "home") has a real humansPresent number instead of
+      // rendering blind before loadHome ever runs -- see the sphere's
+      // own call site further down for what that used to fall back to.
+      presenceWriteRef.current.then(() => fetchCommonsStats()).then(setStats);
       const seen = typeof window !== "undefined" && window.localStorage.getItem(SEEN_KEY);
       if (seen) setStage("home");
       setChecking(false);
@@ -149,8 +166,22 @@ export default function CommonsPage() {
   }, [checking, stage]);
 
   const loadHome = useCallback(async () => {
+    // Waits on this visitor's own presence write (if one is in flight)
+    // before counting who's present -- otherwise a returning visitor
+    // could see their own count come back 0 on the very page they're
+    // looking at, purely from request ordering. Doesn't block anything
+    // else below; those fetches don't depend on presence and still run
+    // in parallel.
+    const statsPromise = (async () => {
+      try {
+        await presenceWriteRef.current;
+      } catch {
+        // Best-effort -- a failed presence write shouldn't block stats.
+      }
+      return fetchCommonsStats();
+    })();
     const [statsData, communitiesData, live, questions, signalData, transmissionsData] = await Promise.all([
-      fetchCommonsStats(),
+      statsPromise,
       listCommunities(),
       listThreads({ limit: 6 }),
       listThreads({ kind: "question", limit: 6 }),
@@ -479,7 +510,16 @@ export default function CommonsPage() {
         {entranceStep >= 3 && (
           <div key="reveal" className="commons-line" style={{ textAlign: "center", maxWidth: "480px" }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
-              <CommonsSphere size={220} humansPresent={stats.humansPresent || 12} />
+              {/* Real, not simulated -- humansPresent flows straight from
+                  fetchCommonsStats() (see the early fetch in the effect
+                  above). This used to fall back to a hardcoded 12
+                  whenever the real count was 0, which meant literally
+                  every new visitor's first impression was a fabricated
+                  number. CommonsSphere still floors its own node count
+                  at 6 purely so the shape reads as a sphere at very low
+                  counts -- that's a rendering minimum, not a claim
+                  about how many people are here. */}
+              <CommonsSphere size={220} humansPresent={stats.humansPresent} />
             </div>
 
             <p
