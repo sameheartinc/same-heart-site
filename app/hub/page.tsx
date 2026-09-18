@@ -811,11 +811,36 @@ export default function HubPage() {
           animation-delay: 0.15s;
         }
         @keyframes liftPulse {
-          0%, 100% { box-shadow: 0 0 0 0 var(--gold-glow, rgba(201,161,90,0.45)); }
-          50% { box-shadow: 0 0 0 10px rgba(201,161,90,0); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(224,112,58,0.55); }
+          50% { box-shadow: 0 0 0 14px rgba(224,112,58,0); }
         }
-        .liftoff-btn { animation: liftPulse 2.6s ease-in-out infinite; }
+        @keyframes liftShimmer {
+          0% { transform: translateX(-120%); }
+          100% { transform: translateX(220%); }
+        }
+        /* Lift Off is deliberately styled OFF the active widget skin's
+           tokens (--widget-panel/--widget-accent) -- those are exactly
+           what recolor per skin, which is how this button used to
+           disappear into a light or dark skin's own palette. Its gradient,
+           glow, and shimmer below are fixed brand colours (the same
+           Flame/Guardian accents used elsewhere) so it reads the same no
+           matter what skin is active underneath it. */
+        .liftoff-btn { position: relative; overflow: hidden; animation: liftPulse 2.6s ease-in-out infinite; }
+        .liftoff-btn::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 40%;
+          height: 100%;
+          background: linear-gradient(115deg, transparent, rgba(255,255,255,0.65), transparent);
+          transform: translateX(-120%);
+          animation: liftShimmer 3.2s ease-in-out infinite;
+          animation-delay: 1s;
+          pointer-events: none;
+        }
         .liftoff-btn:hover { animation-play-state: paused; }
+        .liftoff-btn:hover::after { animation-play-state: paused; }
         @keyframes streakPulse {
           0%, 100% { box-shadow: 0 0 24px rgba(201,161,90,0.32); }
           50% { box-shadow: 0 0 34px rgba(201,161,90,0.55); }
@@ -854,7 +879,7 @@ export default function HubPage() {
           .hub-floating-bubble { max-width: none !important; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .hub-quote, .liftoff-btn, .streak-glow-pulse { animation: none; }
+          .hub-quote, .liftoff-btn, .liftoff-btn::after, .streak-glow-pulse { animation: none; }
           .hub-floating-bubble { animation: none; }
         }
       `}</style>
@@ -2854,18 +2879,20 @@ export default function HubPage() {
             alignItems: "center",
             justifyContent: "center",
             gap: "10px",
-            background: "var(--widget-panel)",
-            border: "1px solid var(--widget-accent)",
+            // Fixed brand gradient (Flame ember -> Guardian gold), not a
+            // skin token -- see the .liftoff-btn comment above for why.
+            background: "linear-gradient(135deg, #e0703a, #c9a15a)",
+            border: "1px solid rgba(255,255,255,0.4)",
             borderRadius: "999px",
             padding: "14px 20px",
-            color: "var(--widget-accent)",
+            color: "#1a1006",
             fontFamily: "var(--font-display)",
             fontWeight: 700,
             fontSize: "0.85rem",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
             cursor: "pointer",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+            boxShadow: "0 10px 34px rgba(224,112,58,0.5), 0 4px 16px rgba(0,0,0,0.35)",
           }}
         >
           <svg width="16" height="16" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">

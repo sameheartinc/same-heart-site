@@ -598,21 +598,19 @@ export default function GalaxyPage() {
 
           {/* Center -- not a link (the five/eight nodes are the map),
               but tappable (see handleHeartTap above): a small, entirely
-              unannounced easter egg. Desktop keeps its Sep 3 2026 nudge
-              up-and-left of true center per Rob's request at the time;
-              on mobile Rob asked for it centered instead (Sep 9 2026,
-              "its way to the upper left") -- left/top stay at 50%/50%
-              either way so orbitPosition's own math (and every node
-              position built on it) is untouched; the offset lives only
-              in this element's own transform. */}
+              unannounced easter egg. Perfectly centered on both desktop
+              and mobile (Sep 18 2026, per Rob) -- this replaces the old
+              Sep 3 2026 desktop nudge up-and-left of true center, which
+              Rob asked to remove. left/top stay at 50%/50% either way so
+              orbitPosition's own math (and every node position built on
+              it) is untouched; centering lives only in this element's
+              own transform. */}
           <div
             style={{
               position: "absolute",
               left: "50%",
               top: "50%",
-              transform: isMobile
-                ? "translate(-50%, -50%) translateZ(40px)"
-                : "translate(calc(-50% - 26px), calc(-50% - 22px)) translateZ(40px)",
+              transform: "translate(-50%, -50%) translateZ(40px)",
               textAlign: "center",
             }}
           >

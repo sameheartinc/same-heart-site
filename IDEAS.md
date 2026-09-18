@@ -3318,3 +3318,53 @@ same-day Four Tribes reskin above (which was tried, then reverted):
   Voice/Kinship/Guidance/Stewardship sub-tier work: worth building once
   there's a concrete shape for it, not guessed at from a short
   description.
+
+## Shipped: Lift Off button, fixed brand styling instead of skin tokens (Sep 18, 2026)
+
+Rob: "make the liftoff button more flash so people can clearly see it at
+the bottom of the page...when you pick your skin it kind of blends in at
+the bottom."
+
+Root cause: the Lift Off button (app/hub/page.tsx, near the bottom of the
+Capsule) was styled from the Capsule's own WidgetFrame skin tokens --
+`background: var(--widget-panel)`, `border`/`color: var(--widget-accent)`
+(see lib/widgetSkins.ts). That's exactly backwards for a fixed,
+always-visible call-to-action sitting on top of a page whose background
+also shifts with the active Hub skin/background image: any widget skin
+whose panel/accent happened to sit close to the surrounding page tone (a
+light skin like Retro, a dark one like Classic against the dark void) made
+the button read as just another panel instead of the one constant exit
+button.
+
+Fix: decoupled the button from `--widget-panel`/`--widget-accent`
+entirely and gave it a fixed brand identity that no widget skin can
+recolor -- a Flame-ember-to-Guardian-gold gradient fill, dark ink text for
+contrast against it, a stronger persistent shadow/glow, the existing pulse
+kept but on a fixed color instead of the never-actually-skinned
+`--gold-glow` var, and a new subtle light-sweep shimmer across the pill
+every few seconds. Purely visual -- `onClick`/`router.push("/galaxy")`
+untouched, no functional change. Verified via diff against a pre-edit
+backup and a clean `npx tsc --noEmit`.
+
+Follow-up idea, not yet asked about: if a future widget skin is ever meant
+to *replace* this treatment on purpose (an art-driven skin with its own
+lift-off visual), that'd need an explicit opt-in field on the skin record
+rather than just falling back to widget tokens the way the old code did --
+worth raising if that ever comes up, not assumed.
+
+## Shipped: Same Heart logo re-centered on the Galaxy page (Sep 18, 2026)
+
+Rob: "make sure that on the galaxy page the same heart it perfectly
+centered."
+
+The center "SAME HEART" mark (app/galaxy/page.tsx, the tappable
+easter-egg element in the middle of the orbit) had a deliberate
+up-and-left offset on desktop from an earlier Sep 3, 2026 request
+(`translate(calc(-50% - 26px), calc(-50% - 22px))` instead of a plain
+`translate(-50%, -50%)`) -- mobile was already centered from a separate
+Sep 9, 2026 request. Rob now wants it dead center on desktop too, so the
+offset is removed; both desktop and mobile use the same
+`translate(-50%, -50%) translateZ(40px)` now. `orbitPosition()` and every
+node's position were never touched by this -- they were always built off
+true 50%/50% center, so only the mark itself moved. Verified via diff
+against a pre-edit backup and a clean `npx tsc --noEmit`.
