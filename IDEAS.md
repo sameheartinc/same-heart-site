@@ -3225,3 +3225,96 @@ Verified with `npx tsc --noEmit` (clean) after every file. Needs the
 new RLS migration run in Supabase before any of this actually opens up
 -- until then these pages behave exactly as they did before (empty
 reads, same as a private community today).
+
+## Four Paths reskinned into Four Tribes (Sep 18, 2026)
+
+Rob's ask: rename the four Path archetypes (Guardian/Seeker/Weaver/Flame)
+into four tribal totems set at compass directions -- a lion to the east,
+a bull to the west, an eagle to the north, and (confirmed as "mandrill,"
+not the plant, since he wants four animals) a mandrill to the south.
+Explicitly a reskin, not a rewrite -- the quiz in
+components/PathOnboarding.tsx, the scoring in lib/paths.ts, and every
+PathKey value already sitting in profiles.path_key stay completely as
+they are; only each path's display name, tagline/essence flavor, and a
+new direction field changed.
+
+Mapping (kept the existing key -> pairing thematic, not arbitrary):
+- flame -> The Lion, East (dawn's first light, the loud announcement --
+  matches Flame's existing "shows up loud" essence)
+- seeker -> The Eagle, North (height, far sight, always circling --
+  matches Seeker's existing "circling toward what hasn't been explained")
+- weaver -> The Mandrill, South (the wild's largest, tightest social
+  troop -- matches Weaver's existing "ties strangers together")
+- guardian -> The Bull, West (steadiness, the herd's protector -- matches
+  Guardian's existing "calm at the center of the room")
+
+What changed: lib/paths.ts (new PathDirection type, direction field on
+PathDef, renamed `name`, one added sentence of animal-flavor text on
+seeker/weaver/flame's `essence`, tagline tightened on flame from "shows
+up loud" to "roars" -- guardian's tagline/essence left untouched since
+it already fit the Bull without changes needed). Surfaced the new
+direction in the two places a Path's identity is actually shown to a
+person: app/login/page.tsx's reveal screen ("Tribe of the {direction}"
+under the name) and app/hub/page.tsx's own profile line ("Walks as
+{name} -- Tribe of the {direction}"). `accent`/`accentSoft` colors,
+`motion`, `PATH_ORDER`, and the PathKey values themselves are
+untouched -- no schema change, no migration, since path_key already
+stores "guardian"/"seeker"/"weaver"/"flame" and always will.
+
+Left alone on purpose: lib/kindredSparks.ts still builds "You're both
+{name}s" dynamically off PATHS[key].name, so it'll automatically read
+"You're both The Mandrills" etc. if that dormant widget's ever revived
+-- not fixed further since it isn't rendered anywhere right now (see
+the Sep 15 2026 Kindred Sparks removal entry).
+
+**Deferred, per Rob:** each of the four tribes should eventually branch
+into sub-tribes/subcategories depending on how someone actually uses
+the site. Not built now -- there's no real usage signal yet to split
+on, and this project's own rule is to ship one real slice rather than
+a speculative hierarchy. Worth revisiting once there's an actual
+pattern in how people behave within a tribe that a subcategory could
+meaningfully capture.
+
+Verified with `npx tsc --noEmit` (clean) and reviewed the full diff by
+eye across all three touched files. No migration needed.
+
+**Follow-up (Sep 18, 2026):** Rob asked to revert this -- reason given:
+"mandrake," not "mandrill," was the animal he actually meant, and more
+importantly the real direction he's after is bigger than a same-shape
+reskin (see the Ideas Bank entry below). Reverted lib/paths.ts,
+app/login/page.tsx, and app/hub/page.tsx to exactly the Guardian /
+Seeker / Weaver / Flame copy and JSX that predated this entry (restored
+from the pre-edit backups rather than hand-reconstructed, then diffed
+back to a clean match) -- verified `npx tsc --noEmit` clean again after
+the revert. Nothing about this reskin ships; it's superseded by the
+banked idea below.
+
+
+## Ideas Bank: Four Tribes, branching into sub-tribes (Sep 18, 2026)
+
+Not built -- banked for later, per Rob. Correcting and expanding on the
+same-day Four Tribes reskin above (which was tried, then reverted):
+
+- The fourth animal is **the mandrake**, not a mandrill -- Rob was
+  specific about this on the revert. Whatever the real build ends up
+  being, don't substitute a different animal for a similar-sounding
+  one; ask if it's ever unclear again rather than guessing.
+- This isn't meant to be a same-shape reskin of the existing four Paths
+  (same PathKey, same quiz, just new names) -- Rob's direction is a
+  real hierarchy: four main branches (the tribes/directions), each of
+  which has its own branches underneath it. That's a bigger structural
+  change than lib/paths.ts's current flat `Record<PathKey, PathDef>`
+  can hold as-is -- it likely needs an actual tree shape (each tribe
+  owning a list of sub-tribes, however many levels deep this ends up
+  being) rather than one more field bolted onto the existing four
+  entries.
+- Still open, worth asking about before building: how someone actually
+  lands in a sub-branch (is it still derived from quiz-style signals
+  the way the top-level Path already is, or chosen directly?), whether
+  the existing PathKey ("guardian"/"seeker"/"weaver"/"flame") survives
+  as the top-level branch's stable id or gets replaced entirely, and
+  how deep "branches within branches" is meant to go.
+- Same posture as the original four-tribes idea and the still-open
+  Voice/Kinship/Guidance/Stewardship sub-tier work: worth building once
+  there's a concrete shape for it, not guessed at from a short
+  description.
