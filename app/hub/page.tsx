@@ -57,6 +57,7 @@ import { listMyJournalEntries, addJournalEntry, deleteJournalEntry, JOURNAL_TITL
 import ShelfCategoryPicker from "@/components/ShelfCategoryPicker";
 import { activateDoubleXp } from "@/lib/abilities";
 import WidgetFrame from "@/components/WidgetFrame";
+import { computeOceanScores, isAxisScores, OCEAN_ORDER, OCEAN_TRAITS } from "@/lib/ocean";
 
 type Profile = {
   display_name: string | null;
@@ -68,6 +69,12 @@ type Profile = {
   joined_at: string;
   ship_skin: string | null;
   path_key: string | null;
+  // The AxisScores this profile's Path was actually assigned from (see
+  // combineScores in lib/paths.ts) -- kept as `unknown` here since it's
+  // a jsonb column; lib/ocean.ts's isAxisScores() checks its real shape
+  // before anything reads it. Only ever written once, at Path assignment
+  // (app/login/page.tsx's handlePathComplete).
+  path_signals: unknown;
   spark_id: number | null;
   current_streak: number;
   longest_streak: number;
@@ -125,6 +132,9 @@ export default function HubPage() {
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [keys, setKeys] = useState<ProfileKey[]>([]);
   const [deeperOpen, setDeeperOpen] = useState(false);
+  // The five within -- OCEAN sub-scores nested under the Path (Sep 18
+  // 2026, see lib/ocean.ts). Same open/closed pattern as deeperOpen above.
+  const [oceanOpen, setOceanOpen] = useState(false);
   const [starDayVisitDays, setStarDayVisitDays] = useState(0);
   const [welcomeNote, setWelcomeNote] = useState<string | null>(null);
   const [founderNoteDraft, setFounderNoteDraft] = useState("");
@@ -204,7 +214,7 @@ export default function HubPage() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at, kinship_streak_current, kinship_streak_longest, voice_signature, referrals_completed"
+          "display_name, designation, frequency, archetype, xp, standing, joined_at, ship_skin, path_key, path_signals, spark_id, current_streak, longest_streak, last_visit_date, commons_accent, hub_background_url, kindred_opt_out, practice_points, verified_rank, double_xp_until, last_double_xp_at, kinship_streak_current, kinship_streak_longest, voice_signature, referrals_completed"
         )
         .eq("id", userData.user.id)
         .single();
@@ -776,6 +786,9 @@ export default function HubPage() {
     ? `linear-gradient(rgba(5,7,13,0.74), rgba(5,7,13,0.74)), url(${backgroundImage}) center / cover fixed no-repeat`
     : "var(--void)";
   const path = profile.path_key ? PATHS[profile.path_key as PathKey] : null;
+  // Derived, not stored -- see lib/ocean.ts's header for why this reads
+  // straight off path_signals instead of a new DB column.
+  const oceanScores = isAxisScores(profile.path_signals) ? computeOceanScores(profile.path_signals) : null;
   // Prime Levels -- see lib/primeLevels.ts. A pure function of XP, so no
   // fetch or server round-trip needed: it's just as trustworthy as the
   // XP number itself.
@@ -1427,30 +1440,116 @@ export default function HubPage() {
                 : "Every prime reached so far"}
             </p>
             {path && (
-              <p
-                style={{
-                  marginTop: "8px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "9px",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: path.accent,
-                }}
-              >
-                <span
+              <>
+                <p
                   style={{
-                    width: "6px",
-                    height: "6px",
-                    borderRadius: "50%",
-                    background: path.accent,
-                    display: "inline-block",
+                    marginTop: "8px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: path.accent,
                   }}
-                />
-                Walks as {path.name}
-              </p>
+                >
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      background: path.accent,
+                      display: "inline-block",
+                    }}
+                  />
+                  Walks as {path.name}
+                </p>
+                {/* The five within -- OCEAN sub-scores nested under the
+                    Path (Sep 18 2026, see lib/ocean.ts and IDEAS.md).
+                    Indented and rail-lined off the Path's own accent so
+                    it visually reads as a branch underneath the Path,
+                    not a sibling to it. */}
+                {oceanScores && (
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      marginLeft: "9px",
+                      paddingLeft: "11px",
+                      borderLeft: `2px solid ${path.accentSoft}`,
+                    }}
+                  >
+                    <button
+                      onClick={() => setOceanOpen((v) => !v)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "9px",
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--widget-text-faint)",
+                      }}
+                    >
+                      {oceanOpen ? "Hide the five within" : "The five within →"}
+                    </button>
+                    {oceanOpen && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "7px",
+                          maxWidth: "260px",
+                        }}
+                      >
+                        {OCEAN_ORDER.map((trait) => {
+                          const def = OCEAN_TRAITS[trait];
+                          const pct = Math.round(oceanScores[trait] * 100);
+                          return (
+                            <div key={trait} title={def.blurb}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  fontFamily: "var(--font-mono)",
+                                  fontSize: "8px",
+                                  letterSpacing: "0.04em",
+                                  color: "var(--widget-text-dim)",
+                                  marginBottom: "3px",
+                                }}
+                              >
+                                <span>{def.name}</span>
+                                <span>{pct}%</span>
+                              </div>
+                              <div
+                                style={{
+                                  height: "4px",
+                                  borderRadius: "999px",
+                                  background: "var(--widget-border)",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: `${pct}%`,
+                                    height: "100%",
+                                    background: path.accent,
+                                    borderRadius: "999px",
+                                    transition: "width 0.6s ease",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
             {(() => {
               const archetypeEntry = ARCHETYPES.find((a) => a.name === profile.archetype);

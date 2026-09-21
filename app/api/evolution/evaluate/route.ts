@@ -79,6 +79,8 @@ export async function POST(request: NextRequest) {
     currentStreak: profileRow.current_streak ?? 0,
     keysHeld: (keyRows ?? []).length,
     foundingKeysHeld,
+    keyColors: (keyRows ?? []).map((k) => k.key_color as string),
+    nowMs: Date.now(),
   };
 
   const newlyEarned: string[] = [];

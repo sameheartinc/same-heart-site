@@ -28,6 +28,10 @@ import {
 import { listRecentTransmissions, transmitLink, type Transmission } from "@/lib/exchange";
 import { getWorldIssue } from "@/lib/worldIssues";
 import { LinkEmbedPreview } from "@/components/LinkEmbedPreview";
+import CategoryPicker from "@/components/CategoryPicker";
+import CategoryChips from "@/components/CategoryChips";
+import { CATEGORIES } from "@/lib/categories";
+import { logInteraction } from "@/lib/interactionEvents";
 
 const SEEN_KEY = "commons-entrance-seen";
 const ACCENT = "#c9576a";
@@ -89,6 +93,8 @@ export default function CommonsPage() {
   const [newThreadKind, setNewThreadKind] = useState<"discussion" | "question">("discussion");
   const [newThreadTitle, setNewThreadTitle] = useState("");
   const [newThreadBody, setNewThreadBody] = useState("");
+  const [newThreadTags, setNewThreadTags] = useState<string[]>([]);
+  const [topic, setTopic] = useState<string | null>(null);
   const [newThreadBusy, setNewThreadBusy] = useState(false);
   const [newThreadError, setNewThreadError] = useState<string | null>(null);
 
@@ -283,6 +289,19 @@ export default function CommonsPage() {
     }
   }
 
+  // Topic filter for the "Live now" list -- re-queries just that list
+  // (and fills in any new authors), rather than reloading the whole
+  // Commons home. Picking the active topic again clears it.
+  async function selectTopic(key: string | null) {
+    const next = key === topic ? null : key;
+    setTopic(next);
+    const threads = await listThreads({ tag: next ?? undefined, limit: next ? 20 : 6 });
+    setLiveThreads(threads);
+    const more = await fetchProfilesByIds(threads.map((t) => t.profile_id));
+    setAuthors((prev) => ({ ...prev, ...more }));
+    if (next) logInteraction("browsed_topic", "topic", next);
+  }
+
   async function handleCreateThread(e: React.FormEvent) {
     e.preventDefault();
     if (!userId || !newThreadTitle.trim() || !newThreadBody.trim()) return;
@@ -295,6 +314,7 @@ export default function CommonsPage() {
         kind: newThreadKind,
         title: newThreadTitle,
         body: newThreadBody,
+        tags: newThreadTags,
       });
       router.push(`/commons/t/${thread.id}`);
     } catch {
@@ -1286,13 +1306,43 @@ export default function CommonsPage() {
                   setTitle={setNewThreadTitle}
                   body={newThreadBody}
                   setBody={setNewThreadBody}
+                  tags={newThreadTags}
+                  setTags={setNewThreadTags}
                   busy={newThreadBusy}
                   error={newThreadError}
                   onSubmit={handleCreateThread}
                 />
               )}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "14px" }}>
+                {CATEGORIES.map((c) => {
+                  const active = topic === c.key;
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => selectTopic(c.key)}
+                      aria-pressed={active}
+                      style={{
+                        padding: "5px 11px",
+                        borderRadius: "999px",
+                        border: `1px solid ${active ? ACCENT : "var(--border)"}`,
+                        background: active ? `${ACCENT}22` : "transparent",
+                        color: active ? ACCENT : "var(--ink-dim)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        letterSpacing: "0.03em",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
               {liveThreads.length === 0 ? (
-                <EmptyState>Nothing yet -- be the first to start a conversation.</EmptyState>
+                <EmptyState>
+                  {topic ? "Nothing in this topic yet -- start the first one." : "Nothing yet -- be the first to start a conversation."}
+                </EmptyState>
               ) : (
                 <ThreadList threads={liveThreads} authors={authors} />
               )}
@@ -1787,6 +1837,11 @@ function ThreadList({ threads, authors }: { threads: CommonsThread[]; authors: R
               <span style={{ color: authors[t.profile_id]?.commons_accent || undefined }}>{authorName(authors[t.profile_id])}</span>
               <VoiceMarker practicePoints={authors[t.profile_id]?.practice_points} /> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}
             </p>
+            {t.tags.length > 0 && (
+              <p style={{ margin: "8px 0 0" }}>
+                <CategoryChips tags={t.tags} accent={ACCENT} />
+              </p>
+            )}
           </Link>
         </li>
       ))}
@@ -1801,6 +1856,8 @@ function NewThreadForm({
   setTitle,
   body,
   setBody,
+  tags,
+  setTags,
   busy,
   error,
   onSubmit,
@@ -1811,6 +1868,8 @@ function NewThreadForm({
   setTitle: (v: string) => void;
   body: string;
   setBody: (v: string) => void;
+  tags: string[];
+  setTags: (t: string[]) => void;
   busy: boolean;
   error: string | null;
   onSubmit: (e: React.FormEvent) => void;
@@ -1854,6 +1913,7 @@ function NewThreadForm({
         required
         style={{ ...inputStyle, resize: "vertical" as const, marginBottom: "8px" }}
       />
+      <CategoryPicker title={title} body={body} value={tags} onChange={setTags} accent={ACCENT} />
       {error && <p style={errorStyle}>{error}</p>}
       <button type="submit" disabled={busy} style={submitButtonStyle}>
         {busy ? "Posting..." : "Post"}

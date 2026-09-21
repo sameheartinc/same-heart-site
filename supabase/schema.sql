@@ -2448,3 +2448,22 @@ create policy "Anyone sees reactions on visible threads and replies" on commons_
 );
 
 notify pgrst, 'reload schema';
+
+-- Commons topic tags (Sep 18, 2026) -- the first half of PLAN.md's
+-- curation engine: every thread carries up to 3 topic keys from
+-- lib/categories.ts, suggested on the spot while the post is written
+-- (components/CategoryPicker.tsx) and shown as chips in the Commons.
+-- text[] of category keys rather than a join table: the vocabulary is a
+-- small fixed list living in code, the same choice ship_skin and
+-- theme_key already made, so adding or renaming a topic is a code
+-- change, not a migration. Existing threads default to no tags and keep
+-- working exactly as before. No new policy needed -- "Users start their
+-- own threads" already covers the whole row at insert time, and there is
+-- still deliberately no general update policy on commons_threads. The
+-- GIN index is what makes "show me threads tagged X" (tags @> array[X])
+-- cheap as the table grows.
+alter table commons_threads add column if not exists tags text[] not null default '{}';
+
+create index if not exists commons_threads_tags_idx on commons_threads using gin (tags);
+
+notify pgrst, 'reload schema';

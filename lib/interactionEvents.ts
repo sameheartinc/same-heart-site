@@ -13,7 +13,8 @@ export type InteractionEventType =
   | "started_thread"
   | "posted_reply"
   | "set_reaction"
-  | "read_signal_article";
+  | "read_signal_article"
+  | "browsed_topic";
 
 export async function logInteraction(
   eventType: InteractionEventType,

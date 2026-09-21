@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { logInteraction } from "@/lib/interactionEvents";
+import { cleanTags } from "@/lib/categories";
 
 // The Commons -- v1. This is the real, functional core of the much
 // bigger vision (see README): communities, discussions/questions, and
@@ -78,6 +79,9 @@ export interface CommonsThread {
   // below a real, temporary trending bonus and lets the UI show a
   // "Boosted" badge.
   boosted_until: string | null;
+  // Topic keys from lib/categories.ts, suggested while the post was
+  // written -- empty for anything posted before tagging existed.
+  tags: string[];
 }
 
 export interface CommonsReply {
@@ -339,6 +343,7 @@ export async function listThreads(opts: {
   communityId?: string;
   kind?: "discussion" | "question";
   search?: string;
+  tag?: string;
   limit?: number;
 }): Promise<CommonsThread[]> {
   let query = supabase
@@ -347,6 +352,7 @@ export async function listThreads(opts: {
     .order("last_activity_at", { ascending: false });
   if (opts.communityId) query = query.eq("community_id", opts.communityId);
   if (opts.kind) query = query.eq("kind", opts.kind);
+  if (opts.tag) query = query.contains("tags", [opts.tag]);
   if (opts.search && opts.search.trim()) {
     const term = opts.search.trim();
     query = query.or(`title.ilike.%${term}%,body.ilike.%${term}%`);
@@ -357,6 +363,7 @@ export async function listThreads(opts: {
   return (data as any[]).map((row) => ({
     ...row,
     reply_count: row.commons_replies?.[0]?.count ?? 0,
+    tags: cleanTags(row.tags),
   })) as CommonsThread[];
 }
 
@@ -423,20 +430,32 @@ export async function createThread(input: {
   // has no XP/money/trust value riding on these two columns.
   imageUrl?: string | null;
   resourceUrl?: string | null;
+  // Topic keys from lib/categories.ts -- see components/CategoryPicker.tsx.
+  tags?: string[];
 }) {
-  const { data, error } = await supabase
+  const row: Record<string, unknown> = {
+    community_id: input.communityId,
+    profile_id: input.profileId,
+    kind: input.kind,
+    title: input.title.trim(),
+    body: input.body.trim(),
+    image_url: input.imageUrl ?? null,
+    resource_url: input.resourceUrl ?? null,
+  };
+  const tags = cleanTags(input.tags);
+
+  let result = await supabase
     .from("commons_threads")
-    .insert({
-      community_id: input.communityId,
-      profile_id: input.profileId,
-      kind: input.kind,
-      title: input.title.trim(),
-      body: input.body.trim(),
-      image_url: input.imageUrl ?? null,
-      resource_url: input.resourceUrl ?? null,
-    })
+    .insert(tags.length > 0 ? { ...row, tags } : row)
     .select()
     .single();
+  // If this ships before the tags column migration has been run,
+  // PostgREST rejects the unknown column (PGRST204) -- post without
+  // tags instead of failing the whole post over a topic label.
+  if (result.error && tags.length > 0 && result.error.code === "PGRST204") {
+    result = await supabase.from("commons_threads").insert(row).select().single();
+  }
+  const { data, error } = result;
   if (error) throw error;
   logInteraction("started_thread", "community_post", data.id);
 

@@ -3368,3 +3368,76 @@ offset is removed; both desktop and mobile use the same
 node's position were never touched by this -- they were always built off
 true 50%/50% center, so only the mark itself moved. Verified via diff
 against a pre-edit backup and a clean `npx tsc --noEmit`.
+
+## Shipped: OCEAN sub-scores nested under each Path -- "the five within" (Sep 18, 2026)
+
+Rob: wanted to explore the Big Five/OCEAN model as a richer personality
+layer, nested under the existing Path system rather than sitting
+alongside it -- explicitly picked "nested under each Path" as the shape,
+which is the same "branches within branches" direction already banked in
+the Four Tribes entry above.
+
+Also from this conversation: Rob shared a photographed page of an old
+statistical printout (scientific-notation values under headers like
+"warm-hearted," "opera," "impress") and asked if we could use it. That
+data was declined -- Rob confirmed he wasn't sure of its source, and
+"warm-hearted" is specifically the label Cattell's 16PF (a commercially
+licensed personality test) gives one of its factors, so it read as very
+likely proprietary test material rather than something safe to transcribe
+into a live product. Went with the public-domain Five Factor Model
+(OCEAN) instead, built from scratch -- no external data, no license risk.
+
+What shipped: lib/ocean.ts -- OceanTrait/OceanScores types, OCEAN_TRAITS
+(name/labels/blurb per trait), a hand-set PATH_TO_OCEAN signature per
+Path (derived from each PathDef's own existing `essence` copy in
+lib/paths.ts, not from any outside source), and computeOceanScores(),
+a pure function that blends a person's four Path axis scores into five
+OCEAN scores weighted by how strongly each axis actually showed up in
+their picks. Deliberately NOT a second quiz -- it reads straight off
+profiles.path_signals (the AxisScores already stored at Path assignment,
+see app/login/page.tsx's handlePathComplete), so this needed zero new
+onboarding questions, zero new DB columns, and zero migrations. Same
+posture as lib/primeLevels.ts computing a Level from XP: a derived
+reading of data that's already there.
+
+Surfaced on the Hub (app/hub/page.tsx) right under "Walks as {path.name}"
+as a collapsed "The five within ->" toggle, indented and rail-lined off
+the Path's own accent colour so it visually reads as a branch underneath
+the Path rather than a sibling section -- five small labeled bars
+(Openness, Conscientiousness, Extraversion, Agreeableness, "Emotional
+Intensity") that fill to each computed percentage in the Path's accent
+colour. Verified via diff against a pre-edit backup and a clean
+`npx tsc --noEmit`.
+
+Open for later, not yet built: giving each OCEAN trait its own short
+narrative blurb per Path (right now every Path shares the same five
+trait descriptions) if Rob wants the copy to feel less generic; and
+whether this ever needs its own onboarding signal instead of being
+purely derived, if the blended read ever feels too imprecise in
+practice.
+
+## Ideas Bank: BRICS-aligned global expansion (Sep 18, 2026)
+
+Not built -- banked per Rob, explicitly chose "bank it for now" over
+starting a content hub or data dashboard.
+
+Rob's framing: Same Heart eventually becoming a "global economic computer
+engine," with Brazil, Russia, India, China, and South Africa specifically
+named as the countries to build resources and services around, tying
+into sameheart.ca to help "solve their fundamental problems moving
+forward in an ever-changing, evolving environment."
+
+Genuinely early-stage and unscoped -- no concrete feature, page, or
+service has been defined yet. Before building anything here, worth
+getting clarity on: what "solving their fundamental problems" actually
+means in Same Heart's terms (is this the existing Hearth/Commons/Wallet
+model extended with country-specific content, a genuinely new kind of
+service, something economic/financial, or something else entirely);
+whether this is content-first (resource pages, community threads) or
+data-first (an actual "computer engine" -- dashboards, live economic
+indicators, computation); and why these five countries specifically, in
+case there's a real-world partnership, community, or opportunity behind
+the BRICS framing that should shape the build rather than the bloc name
+alone. Same posture as the other banked, unscoped ideas in this file:
+worth building once there's a concrete shape for it, not guessed at from
+a short description.

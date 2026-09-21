@@ -35,8 +35,9 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { getLevel } from "@/lib/primeLevels";
+import { CARDS, CARDS_MIN_LEVEL, cardUnlockId, describeCardSource } from "@/lib/cards";
 
-export type UnlockKind = "widget-skin" | "milestone" | "ability"; // more kinds join this union as they ship
+export type UnlockKind = "widget-skin" | "milestone" | "ability" | "card"; // more kinds join this union as they ship
 
 // Every signal here is a plain, already-trustworthy derived number --
 // never a raw client claim. See computeSignals() in the evaluate route
@@ -54,6 +55,13 @@ export interface UnlockableSignals {
   // through, say, Purple+Pink+Magenta+Indigo and never have touched the
   // Exchange or the Signal at all, which isn't what this gate is for.
   foundingKeysHeld: number;
+  // Which Heart String colors are held, for anything tied to one
+  // specific color (see lib/cards.ts's heart-string cards).
+  keyColors: string[];
+  // Epoch ms, supplied by the evaluate route so eligibility stays a pure
+  // function -- event cards (see lib/cards.ts) are only claimable inside
+  // their window.
+  nowMs: number;
 }
 
 export interface Unlockable {
@@ -114,6 +122,31 @@ export const UNLOCKABLES: Unlockable[] = [
     isEligible: (s) => getLevel(s.totalXP) >= 15,
   },
 ];
+
+// Cards (see lib/cards.ts) are unlockables too -- generated from the
+// catalog so adding one never touches this file. Levels are derived from
+// totalXP the same way the Hub shows them. Nothing is granted below
+// CARDS_MIN_LEVEL whatever the source; past that, heart-string cards
+// check the specific color and event cards only pass inside their window.
+const CARD_UNLOCKABLES: Unlockable[] = CARDS.map((card) => ({
+  id: cardUnlockId(card.id),
+  kind: "card" as const,
+  name: `${card.name} Card`,
+  description: describeCardSource(card.source),
+  isEligible: (s: UnlockableSignals) => {
+    if (getLevel(s.totalXP) < CARDS_MIN_LEVEL) return false;
+    switch (card.source.type) {
+      case "level":
+        return getLevel(s.totalXP) >= card.source.level;
+      case "heart-string":
+        return s.keyColors.includes(card.source.color);
+      case "event":
+        return s.nowMs >= Date.parse(card.source.from) && s.nowMs <= Date.parse(card.source.until);
+    }
+  },
+}));
+
+UNLOCKABLES.push(...CARD_UNLOCKABLES);
 
 export function findUnlockable(id: string): Unlockable | undefined {
   return UNLOCKABLES.find((u) => u.id === id);

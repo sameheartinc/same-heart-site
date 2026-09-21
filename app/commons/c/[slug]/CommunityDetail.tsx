@@ -8,6 +8,8 @@ import { getSkin, SKINS } from "@/lib/skins";
 import PageLoading from "@/components/PageLoading";
 import VoiceMarker from "@/components/VoiceMarker";
 import { ShareButton } from "@/components/ShareButton";
+import CategoryPicker from "@/components/CategoryPicker";
+import CategoryChips from "@/components/CategoryChips";
 import {
   authorName,
   createThread,
@@ -93,6 +95,7 @@ export default function CommunityDetail({ slug }: { slug: string }) {
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [resourceUrl, setResourceUrl] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
 
   // Pink's door -- inviting someone into a private circle by Spark ID
   // (see lib/commons.ts's inviteToCircle). Only ever rendered for the
@@ -276,6 +279,7 @@ export default function CommunityDetail({ slug }: { slug: string }) {
         body,
         imageUrl: voiceTier >= 1 ? imageUrl : null,
         resourceUrl: guidanceTier >= 1 ? resourceUrl.trim() || null : null,
+        tags,
       });
       router.push(`/commons/t/${thread.id}`);
     } catch {
@@ -991,6 +995,7 @@ export default function CommunityDetail({ slug }: { slug: string }) {
               required
               style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--void)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: "0.88rem", marginBottom: "8px", resize: "vertical" }}
             />
+            <CategoryPicker title={title} body={body} value={tags} onChange={setTags} accent={accent} />
             {voiceTier >= 1 && (
               <div style={{ marginBottom: "8px" }}>
                 <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)", marginBottom: "6px" }}>
@@ -1053,6 +1058,11 @@ export default function CommunityDetail({ slug }: { slug: string }) {
                     )}
                     <VoiceMarker practicePoints={authors[t.profile_id]?.practice_points} /> &middot; {t.reply_count} {t.reply_count === 1 ? "reply" : "replies"}
                   </p>
+                  {t.tags.length > 0 && (
+                    <p style={{ margin: "8px 0 0" }}>
+                      <CategoryChips tags={t.tags} accent={accent} />
+                    </p>
+                  )}
                 </Link>
               </li>
             ))}
