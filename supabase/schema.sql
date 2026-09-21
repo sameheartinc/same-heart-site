@@ -2467,3 +2467,182 @@ alter table commons_threads add column if not exists tags text[] not null defaul
 create index if not exists commons_threads_tags_idx on commons_threads using gin (tags);
 
 notify pgrst, 'reload schema';
+
+-- XP action engine (Sep 20, 2026) -- Rob's "Community XP, Reputation &
+-- Unlock System" spec. Every XP award that goes through lib/xpEngine.ts
+-- leaves one row here, and this table is what makes the engine safe:
+--
+--   * The partial unique index below means a given reply, thread, or
+--     whatever an action points at can pay out exactly once per person,
+--     ever -- re-posting the same request, refreshing a page, or
+--     replaying a call can't earn it twice. (Before this, the award
+--     routes took no target at all, so they could be called repeatedly
+--     up to the daily cap without having posted anything.)
+--   * base_xp vs xp_awarded keeps daily caps measured in base XP, so a
+--     Boost multiplies what a cap allowed instead of hitting it sooner.
+--   * It's an append-only history -- permanent XP is never subtracted, so
+--     nothing here is ever updated or deleted by the app.
+--
+-- No client policies at all except reading your own rows: the only writer
+-- is the service-role client inside app/api/xp/award/route.ts, which
+-- verifies the target row itself. Safe to run more than once.
+create table if not exists xp_events (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  action text not null,
+  category text not null,
+  target_id text,
+  base_xp integer not null default 0,
+  xp_awarded integer not null default 0,
+  boost_percent integer not null default 0,
+  created_at timestamptz default now()
+);
+
+alter table xp_events enable row level security;
+
+drop policy if exists "Users see their own XP events" on xp_events;
+create policy "Users see their own XP events" on xp_events for select using (auth.uid() = profile_id);
+
+create unique index if not exists xp_events_once_per_target on xp_events (profile_id, action, target_id) where target_id is not null;
+create index if not exists xp_events_profile_time_idx on xp_events (profile_id, created_at desc);
+
+-- Temporary boosts granted by cards, events, challenges, and future
+-- achievements -- each with its own expiry, so they fade on their own
+-- (an expired row is simply ignored; nothing needs to delete it, and
+-- nothing about permanent XP, cards, or history is ever touched). The
+-- boost that comes from live Momentum and streaks isn't stored at all --
+-- it's computed fresh (lib/xpActions.ts). Server-written only, same as
+-- xp_events. percent is bounded here as a second lock behind the cap in
+-- lib/xpActions.ts (BOOST_CAP_PERCENT).
+create table if not exists profile_boosts (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references profiles(id) on delete cascade,
+  source text not null,
+  label text not null,
+  percent integer not null check (percent > 0 and percent <= 25),
+  expires_at timestamptz not null,
+  created_at timestamptz default now()
+);
+
+alter table profile_boosts enable row level security;
+
+drop policy if exists "Users see their own boosts" on profile_boosts;
+create policy "Users see their own boosts" on profile_boosts for select using (auth.uid() = profile_id);
+
+create index if not exists profile_boosts_profile_idx on profile_boosts (profile_id, expires_at desc);
+
+notify pgrst, 'reload schema';
+
+-- XP rescale v2 (Sep 21, 2026) -- carries every member's existing XP onto
+-- the new, much longer level curve (lib/levels.ts: Level L costs 3 * L^2
+-- XP; before this, Level N was simply the Nth prime, topping out at 7,919
+-- XP for Level 1000). Rob: "it's gotta be really hard to max out... it
+-- should take people years."
+--
+-- WHAT THIS DOES: for each member with any XP, works out their OLD level
+-- (how many primes are <= their XP) and how far they were toward the next
+-- one, then sets their XP to the same level and the same fraction of the
+-- way to the next level on the new curve. So nobody's Level changes and
+-- nobody loses progress toward the next one -- XP just moves to the new
+-- scale (rounded DOWN, so a member can never be bumped up a level by
+-- rounding). Standing is recomputed to match. Every member with XP gets
+-- one line in their own log explaining it.
+--
+-- SAFETY
+--   * Runs at most once: it records itself in app_migrations and every
+--     later run just prints a notice and stops.
+--   * Backs up first: profiles_xp_backup_v1 holds every member's original
+--     xp and standing (it's created before anything is changed).
+--   * All-or-nothing: it's a single transaction, so a failure changes
+--     nothing.
+--   * Deploy the new code FIRST, then run this. Running it first would
+--     briefly make old-scale members look like enormous levels under the
+--     old code, and level-based unlocks are permanent once granted.
+--
+-- TO UNDO (only if needed; it discards any XP earned since):
+--   update profiles p set xp = b.xp, standing = b.standing
+--     from profiles_xp_backup_v1 b where b.id = p.id;
+--   delete from app_migrations where name = 'xp_rescale_v2';
+--
+-- TO PREVIEW WITHOUT CHANGING ANYTHING, run this on its own first:
+--   with primes as (select n from generate_series(2, (select greatest(coalesce(max(xp),0),2) + 200 from profiles)) n
+--                   where not exists (select 1 from generate_series(2, floor(sqrt(n))::int) d where n % d = 0))
+--   select id, xp as old_xp,
+--          (select count(*) from primes q where q.n <= xp) as level
+--   from profiles where xp > 0 order by xp desc limit 20;
+
+create table if not exists app_migrations (
+  name text primary key,
+  ran_at timestamptz not null default now()
+);
+
+alter table app_migrations enable row level security;
+
+do $$
+declare
+  v_max_xp integer;
+  v_changed integer;
+begin
+  if exists (select 1 from app_migrations where name = 'xp_rescale_v2') then
+    raise notice 'xp_rescale_v2 was already applied -- nothing to do.';
+    return;
+  end if;
+
+  create table if not exists profiles_xp_backup_v1 as
+    select id, xp, standing, now() as backed_up_at from profiles;
+  alter table profiles_xp_backup_v1 enable row level security;
+
+  select coalesce(max(xp), 0) into v_max_xp from profiles;
+
+  create temp table _old_primes on commit drop as
+    select n from generate_series(2, greatest(v_max_xp, 2) + 200) n
+    where not exists (select 1 from generate_series(2, floor(sqrt(n))::int) d where n % d = 0);
+  create index on _old_primes (n);
+
+  update profiles p
+  set xp = c.new_xp,
+      standing = case
+        when c.new_xp >= 115248 then 'Same Heart'
+        when c.new_xp >= 35643 then 'Constant'
+        when c.new_xp >= 8427 then 'Beacon'
+        when c.new_xp >= 1452 then 'Signal'
+        else 'Listener'
+      end
+  from (
+    select s.id,
+           case
+             -- Levels are capped at 1000 now (3,000,000 XP); nobody could
+             -- have been past it in practice, but never exceed the cap.
+             when s.lvl >= 1000 then 3000000
+             else floor(3.0 * s.lvl * s.lvl
+                        + ((s.old_xp - s.lo)::numeric / (s.hi - s.lo)) * (3.0 * (s.lvl + 1) * (s.lvl + 1) - 3.0 * s.lvl * s.lvl))::integer
+           end as new_xp
+    from (
+      select pr.id,
+             pr.xp as old_xp,
+             (select count(*) from _old_primes q where q.n <= pr.xp) as lvl,
+             coalesce((select max(q.n) from _old_primes q where q.n <= pr.xp), 0) as lo,
+             (select min(q.n) from _old_primes q where q.n > pr.xp) as hi
+      from profiles pr
+      where pr.xp > 0
+    ) s
+  ) c
+  where p.id = c.id;
+
+  get diagnostics v_changed = row_count;
+
+  insert into log_entries (profile_id, description, category, xp_awarded)
+  select id,
+         'Your progress moved to the new, longer XP scale -- your Level and your progress toward the next one carried over unchanged.',
+         'system',
+         0
+  from profiles
+  where xp > 0;
+
+  insert into app_migrations (name) values ('xp_rescale_v2');
+
+  raise notice 'xp_rescale_v2 applied: % members rescaled.', v_changed;
+end
+$$;
+
+notify pgrst, 'reload schema';

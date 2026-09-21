@@ -13,11 +13,11 @@
 // Sep 2, 2026; re-check before adding new Signals or if this file gets
 // old.
 //
-// Deliberately a plain, ordered, pure-data sequence -- like Prime Levels
-// (lib/primeLevels.ts) itself, there's no new database table. Signal N
+// Deliberately a plain, ordered, pure-data sequence -- like Levels
+// (lib/levels.ts) itself, there's no new database table. Signal N
 // unlocks exactly when someone reaches Level N; the Deep Signals page
 // computes "which signals are unlocked" fresh from XP every time, the
-// same way Prime Levels computes Level fresh from XP. Nothing to persist,
+// same way Levels are computed fresh from XP. Nothing to persist,
 // nothing to go stale except the content itself.
 
 export type SignalCategory = "media-literacy" | "youth-futures";

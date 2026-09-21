@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStanding } from "@/lib/standing";
 import { toUTCDateString } from "@/lib/streak";
+import { XP_SCALE } from "@/lib/levels";
 
 // The Same Heart mark's secret tap bonus (Sep 9 2026, Rob's own idea --
 // see lib/heartTap.ts and app/galaxy/page.tsx for the client half).
@@ -16,8 +17,8 @@ import { toUTCDateString } from "@/lib/streak";
 // but it never gets to say how much XP, or whether it's allowed today.
 // Both of those are entirely this route's call.
 
-const MIN_BONUS_XP = 4;
-const MAX_BONUS_XP = 14;
+const MIN_BONUS_XP = 4 * XP_SCALE;
+const MAX_BONUS_XP = 14 * XP_SCALE;
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");

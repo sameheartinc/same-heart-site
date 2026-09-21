@@ -16,7 +16,7 @@
 // as profiles.path_signals) and blends them through a fixed, original
 // weighting matrix below into five OCEAN sub-scores "within" their Path.
 // A pure function of data that's already been collected -- same posture
-// as lib/primeLevels.ts turning XP into a level, no new signal, no new
+// as lib/levels.ts turning XP into a level, no new signal, no new
 // migration.
 
 import { AxisScores, PathKey, PATH_ORDER } from "./paths";

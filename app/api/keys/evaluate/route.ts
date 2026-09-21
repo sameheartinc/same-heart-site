@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { xpForLevel } from "@/lib/levels";
+import { STANDING_TIER_LEVELS } from "@/lib/standing";
 import { YELLOW_KEY_MIN_ARTICLES, PURPLE_KEY_MIN_VISIT_DAYS, ORANGE_KEY_MIN_REFERRALS } from "@/lib/keys";
 
 // Keys, part 1 -- see the Keys and Doors design in PLAN.md. This route is
@@ -22,7 +24,7 @@ const MAGENTA_KEY_MIN_MEMBERS = 5;
 const MAGENTA_KEY_MIN_NON_FOUNDER_THREADS = 3;
 const INDIGO_KEY_MIN_GUIDE_DAYS = 10;
 const WHITE_KEY_MIN_TENURE_DAYS = 180;
-const WHITE_KEY_MIN_XP = 250; // matches Beacon in lib/standing.ts -- "sustained good standing," not just time served
+const WHITE_KEY_MIN_XP = xpForLevel(STANDING_TIER_LEVELS.Beacon); // Beacon standing (lib/standing.ts) -- "sustained good standing," not just time served
 const BLACK_KEY_MIN_OTHER_KEYS = 5; // out of the 10 other colors (was 9 before Orange, Sep 15 2026)
 // ORANGE_KEY_MIN_REFERRALS lives in lib/keys.ts, same reasoning as
 // YELLOW/PURPLE's constants above -- shared with the Hub's Invite panel.
@@ -493,8 +495,8 @@ export async function POST(request: NextRequest) {
 
   // White: tenure and legacy -- real account age carried alongside
   // sustained good standing, not just "been here a while." xp is only
-  // ever written by app/api/streak/check-in/route.ts and
-  // app/api/commons/award-reply/route.ts (see the column-level revoke
+  // ever written by server routes -- app/api/streak/check-in/route.ts
+  // and the XP engine (lib/xpEngine.ts) (see the column-level revoke
   // in supabase/schema.sql), so this read is trustworthy.
   if (!alreadyHeld.has("white")) {
     const { data: profileRow, error: profileError } = await admin

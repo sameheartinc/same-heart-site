@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { getLevel } from "@/lib/primeLevels";
+import { getLevel } from "@/lib/levels";
 import {
   PRACTICE_ORDER,
   normalizePracticePoints,

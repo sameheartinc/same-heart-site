@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import PageLoading from "@/components/PageLoading";
-import { getLevel, nextPrimeThreshold } from "@/lib/primeLevels";
+import { getLevel, nextLevelThreshold } from "@/lib/levels";
 import { DEEP_SIGNALS, CATEGORY_LABELS } from "@/lib/deepSignals";
 
 const ACCENT = "#5b5fc7";
@@ -38,7 +38,7 @@ export default function DeepSignalsPage() {
   if (checking) return <PageLoading />;
 
   const level = getLevel(xp);
-  const nextThreshold = nextPrimeThreshold(xp);
+  const nextThreshold = nextLevelThreshold(xp);
   const unlocked = DEEP_SIGNALS.filter((s) => s.unlockLevel <= level);
   const locked = DEEP_SIGNALS.filter((s) => s.unlockLevel > level);
   const nextUp = locked[0];

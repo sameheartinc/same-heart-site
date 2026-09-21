@@ -1,3 +1,4 @@
+import { XP_SCALE } from "@/lib/levels";
 // Same Heart -- the return-engagement streak.
 //
 // The idea (from IDEAS.md): give people a real, honest reason to keep
@@ -33,15 +34,15 @@ export interface CheckInResult {
 // One-time bonuses on top of the flat daily amount -- deliberately not a
 // smooth curve, so hitting one actually feels like hitting something.
 export const MILESTONES: StreakMilestone[] = [
-  { day: 3, bonusXp: 12, label: "Momentum" },
-  { day: 7, bonusXp: 25, label: "One full cycle" },
-  { day: 14, bonusXp: 40, label: "Locked in" },
-  { day: 30, bonusXp: 75, label: "Same Heart, for real" },
-  { day: 60, bonusXp: 150, label: "Two months running" },
-  { day: 100, bonusXp: 300, label: "A hundred days" },
+  { day: 3, bonusXp: 12 * XP_SCALE, label: "Momentum" },
+  { day: 7, bonusXp: 25 * XP_SCALE, label: "One full cycle" },
+  { day: 14, bonusXp: 40 * XP_SCALE, label: "Locked in" },
+  { day: 30, bonusXp: 75 * XP_SCALE, label: "Same Heart, for real" },
+  { day: 60, bonusXp: 150 * XP_SCALE, label: "Two months running" },
+  { day: 100, bonusXp: 300 * XP_SCALE, label: "A hundred days" },
 ];
 
-export const BASE_CHECKIN_XP = 8;
+export const BASE_CHECKIN_XP = 8 * XP_SCALE; // amounts x XP_SCALE since the Sep 21, 2026 rescale -- see lib/levels.ts
 
 // Exported (was file-private) so other one-per-day server checks --
 // e.g. app/api/galaxy/heart-tap/route.ts -- can reuse the exact same

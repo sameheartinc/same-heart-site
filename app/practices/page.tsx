@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import PageLoading from "@/components/PageLoading";
-import { getLevel } from "@/lib/primeLevels";
+import { getLevel } from "@/lib/levels";
 import {
   PRACTICE_ORDER,
   PRACTICES,

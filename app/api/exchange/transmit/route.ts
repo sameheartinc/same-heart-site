@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { WORLD_ISSUES } from "@/lib/worldIssues";
 import { getStanding } from "@/lib/standing";
+import { XP_SCALE } from "@/lib/levels";
 
 // The Exchange -- score a submitted link's real-world impact and award
 // Heartbeats (the `xp` column) for it. This is the ONE place a
@@ -14,9 +15,9 @@ import { getStanding } from "@/lib/standing";
 // a small flat award with an honest note if it's missing or the call
 // fails, so a submission never just breaks.
 
-const DAILY_HEARTBEATS_CAP = 200; // real, but meant to take several strong links in one day to hit
+const DAILY_HEARTBEATS_CAP = 200 * XP_SCALE; // real, but meant to take several strong links in one day to hit
 const DAILY_COUNT_CAP = 8; // separate cap on attempts -- protects against spam and runaway API cost
-const MAX_HEARTBEATS_PER_TRANSMISSION = 60; // only a perfect (100) impact score earns this much
+const MAX_HEARTBEATS_PER_TRANSMISSION = 60 * XP_SCALE; // only a perfect (100) impact score earns this much
 
 function heartbeatsForScore(score: number): number {
   const clamped = Math.max(0, Math.min(100, score));

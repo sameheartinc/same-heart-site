@@ -34,7 +34,7 @@
 // UI wiring for another widget-skin-kind reward.
 
 import { supabase } from "@/lib/supabaseClient";
-import { getLevel } from "@/lib/primeLevels";
+import { getLevel } from "@/lib/levels";
 import { CARDS, CARDS_MIN_LEVEL, cardUnlockId, describeCardSource } from "@/lib/cards";
 
 export type UnlockKind = "widget-skin" | "milestone" | "ability" | "card"; // more kinds join this union as they ship

@@ -6,8 +6,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 // last_double_xp_at (both locked away from "authenticated" in
 // supabase/schema.sql, same as Post Boost's last_boost_at). The actual
 // payoff -- doubled Heartbeats -- lives in
-// app/api/commons/award-reply/route.ts, which checks double_xp_until
-// itself; this route only ever starts the hour, re-deriving the unlock
+// lib/xpEngine.ts (the XP engine every Commons award goes through),
+// which checks double_xp_until itself; this route only ever starts the hour, re-deriving the unlock
 // and the once-a-week cooldown itself rather than trusting the client.
 
 const DOUBLE_XP_DURATION_MS = 60 * 60 * 1000;

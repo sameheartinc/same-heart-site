@@ -23,7 +23,7 @@ import {
 import { ShareButton } from "@/components/ShareButton";
 import { ARCHETYPES } from "@/lib/starDay";
 import { founderStatus } from "@/lib/founders";
-import { getLevel, nextPrimeThreshold } from "@/lib/primeLevels";
+import { getLevel, nextLevelThreshold } from "@/lib/levels";
 import {
   listMyNotifications,
   markNotificationsRead,
@@ -109,8 +109,8 @@ type LogEntry = {
 // "Floating ideas that are getting more attention" only start showing
 // up once someone's engaged enough to have leveled up a few times --
 // Rob's own framing ("evolve for consistent users as they become more
-// engaged"). Level 3 (5 XP) is an early but genuine threshold, not the
-// very first visit -- see lib/primeLevels.ts.
+// engaged"). Level 3 (27 XP) is an early but genuine threshold, not the
+// very first visit -- see lib/levels.ts.
 const TRENDING_UNLOCK_LEVEL = 3;
 
 export default function HubPage() {
@@ -288,7 +288,7 @@ export default function HubPage() {
       setProfile(currentProfile);
       setLog(currentLog);
 
-      // Prime Levels (see lib/primeLevels.ts) -- a one-time "Level up"
+      // Levels (see lib/levels.ts) -- a one-time "Level up"
       // banner the first time this browser sees a higher level than it
       // last recorded. Purely a client-side courtesy: Level itself is
       // just a pure function of XP, recomputed fresh on every visit, so
@@ -789,11 +789,11 @@ export default function HubPage() {
   // Derived, not stored -- see lib/ocean.ts's header for why this reads
   // straight off path_signals instead of a new DB column.
   const oceanScores = isAxisScores(profile.path_signals) ? computeOceanScores(profile.path_signals) : null;
-  // Prime Levels -- see lib/primeLevels.ts. A pure function of XP, so no
+  // Levels -- see lib/levels.ts. A pure function of XP, so no
   // fetch or server round-trip needed: it's just as trustworthy as the
   // XP number itself.
   const level = getLevel(profile.xp);
-  const nextLevelAt = nextPrimeThreshold(profile.xp);
+  const nextLevelAt = nextLevelThreshold(profile.xp);
   const streakTier = streakVisualTier(profile.current_streak ?? 0);
   const shipName = profile.display_name?.trim() || profile.archetype || "Unnamed Vessel";
   // Skins with an unlockId only join the Capsule's cycle once this
@@ -1026,7 +1026,7 @@ export default function HubPage() {
                 fontSize: "0.85rem",
               }}
             >
-              Your Heartbeats just crossed a prime number -- that's what a level is here.
+              You earned enough to reach a new level. Each one takes more than the last.
             </p>
           </div>
         )}
@@ -1426,7 +1426,7 @@ export default function HubPage() {
               {profile.frequency}Hz &middot; {profile.standing} &middot; {profile.xp} XP &middot; Level {level}
             </p>
             <p
-              title="A level is how many prime numbers your Heartbeats total has passed -- 2, 3, 5, 7, 11, and so on. They thin out the higher you go, on purpose."
+              title="Every level costs more than the one before it, on purpose -- reaching Level L takes 3 x L x L Heartbeats in total. The highest levels take years."
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: "9px",
@@ -1437,7 +1437,7 @@ export default function HubPage() {
             >
               {nextLevelAt !== null
                 ? `${nextLevelAt - profile.xp} XP to Level ${level + 1}`
-                : "Every prime reached so far"}
+                : "Top level reached"}
             </p>
             {path && (
               <>

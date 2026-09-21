@@ -6,8 +6,9 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import PageLoading from "@/components/PageLoading";
 import CollectibleCard from "@/components/CollectibleCard";
+import ProgressionSummary from "@/components/ProgressionSummary";
 import { CARDS, CARDS_MIN_LEVEL, cardUnlockId, type CardDef } from "@/lib/cards";
-import { getLevel } from "@/lib/primeLevels";
+import { getLevel } from "@/lib/levels";
 import { evaluateEvolution, listMyUnlocks } from "@/lib/evolution";
 
 // The Cards collection -- see lib/cards.ts. Runs the Evolution check on
@@ -60,9 +61,10 @@ export default function CardsPage() {
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.6rem", margin: "20px 0 4px" }}>
           Cards
         </h1>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)", margin: "0 0 8px" }}>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)", margin: "0 0 14px" }}>
           {collected} of {CARDS.length} collected
         </p>
+        <ProgressionSummary />
         <p style={{ fontFamily: "var(--font-body)", color: "var(--ink-dim)", maxWidth: "56ch", margin: "0 0 18px" }}>
           Earned by leveling up, earning Heart Strings, and being here for special moments. Once a card is
           yours, it stays yours.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { computeCheckIn } from "@/lib/streak";
 import { getStanding } from "@/lib/standing";
+import { XP_SCALE } from "@/lib/levels";
 
 // The referral bonus -- Rob, Sep 15 2026: "put the idea about giving
 // people heartbeats bonus for users who join and stay." "Stay" was
@@ -9,7 +10,7 @@ import { getStanding } from "@/lib/standing";
 // check-in, not just a click on a signup form. This route is the one
 // place that can honestly know a first real check-in just happened, so
 // it's also the one place the referral reward ever fires.
-const REFERRAL_BONUS_XP = 25;
+const REFERRAL_BONUS_XP = 25 * XP_SCALE;
 
 // The return-engagement check-in, moved fully server-side. This used to
 // run client-side (compute the new streak, then write xp/standing/streak

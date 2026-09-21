@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { logInteraction } from "@/lib/interactionEvents";
 import { cleanTags } from "@/lib/categories";
+import { claimXp } from "@/lib/progression";
 
 // The Commons -- v1. This is the real, functional core of the much
 // bigger vision (see README): communities, discussions/questions, and
@@ -459,23 +460,11 @@ export async function createThread(input: {
   if (error) throw error;
   logInteraction("started_thread", "community_post", data.id);
 
-  // A small Heartbeats reward for starting a real discussion or
-  // question -- see app/api/commons/award-thread/route.ts, the only
-  // place that ever writes xp/standing for this. Best-effort: never let
-  // this block the thread itself from posting, same posture as
-  // createReply's own award call below.
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (token) {
-      await fetch("/api/commons/award-thread", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    }
-  } catch (err) {
-    console.error("thread Heartbeats award failed:", err);
-  }
+  // Heartbeats for starting a real discussion or question -- decided
+  // entirely server-side by the XP engine (lib/xpEngine.ts), which checks
+  // this exact thread and pays out at most once for it. Never blocks or
+  // fails the post itself.
+  await claimXp("start_thread", data.id);
 
   return data as CommonsThread;
 }
@@ -516,24 +505,12 @@ export async function createReply(input: { threadId: string; profileId: string; 
     console.error("notify_thread_reply failed:", err);
   }
 
-  // A small Heartbeats reward for participating -- capped low and kept
-  // separate from the Exchange, so replying is real but modest next to
-  // actually transmitting genuine impact. Goes through a server route
-  // (app/api/commons/award-reply/route.ts) rather than writing xp/standing
-  // straight from here -- see that route's comment for why. Best-effort:
-  // never let this block the reply itself from posting.
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (token) {
-      await fetch("/api/commons/award-reply", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    }
-  } catch (err) {
-    console.error("reply Heartbeats award failed:", err);
-  }
+  // Heartbeats for replying -- modest next to actually transmitting
+  // genuine impact, and decided entirely server-side by the XP engine
+  // (lib/xpEngine.ts), which checks this exact reply (real, yours,
+  // recent, not a repeat, not on your own thread) and pays out at most
+  // once for it. Never blocks or fails the reply itself.
+  await claimXp("reply", data.id);
 
   return data as CommonsReply;
 }
