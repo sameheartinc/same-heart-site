@@ -118,6 +118,7 @@ export default function ThreadDetail({ threadId }: { threadId: string }) {
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
   const [boosting, setBoosting] = useState(false);
   const [boostError, setBoostError] = useState<string | null>(null);
+  const [mySparkId, setMySparkId] = useState<number | null>(null);
 
   // Public read for the Commons (Sep 15, 2026) -- Rob: "the same shape
   // as Pinterest and Reddit." A signed-out visitor still gets to see a
@@ -139,12 +140,13 @@ export default function ThreadDetail({ threadId }: { threadId: string }) {
         // unlocked Stewardship Tier 1 (see lib/practices.ts).
         supabase
           .from("profiles")
-          .select("ship_skin, practice_points")
+          .select("ship_skin, practice_points, spark_id")
           .eq("id", uid)
           .single()
           .then(({ data: profileRow }) => {
             if (profileRow?.ship_skin) setMySkin(getSkin(profileRow.ship_skin));
             setMyPracticePoints(normalizePracticePoints(profileRow?.practice_points));
+            setMySparkId(profileRow?.spark_id ?? null);
           });
         listMyUnlocks().then((ids) => setUnlockedIds(new Set(ids)));
       }
@@ -483,6 +485,7 @@ export default function ThreadDetail({ threadId }: { threadId: string }) {
             url={`https://sameheart.ca/commons/t/${threadId}`}
             title={thread.title}
             text={`${thread.kind === "question" ? "A question" : "A discussion"} on Same Heart`}
+            sparkId={mySparkId}
           />
         </div>
 

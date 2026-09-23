@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { ensureSession } from "@/lib/session";
 import { getTurnstileToken } from "@/lib/turnstile";
+import { getCapturedRef } from "@/lib/shareAttribution";
 import { usePathSignal } from "@/lib/cursorSignal";
 import { AxisScores, PathKey, PATHS, combineScores, pickPath } from "@/lib/paths";
 import { ONBOARDING_WORLD, WORLDS } from "@/lib/worlds";
@@ -55,6 +56,16 @@ function LoginPageInner() {
   // -- this page never trusts or stores who referred whom itself.
   const refSparkId = searchParams.get("ref");
   const refIsValid = Boolean(refSparkId && /^\d+$/.test(refSparkId));
+  // Fallback for someone who first landed on a *shared content* page
+  // (a thread, a community, an Exchange transmission) rather than a
+  // direct /login?ref= link -- components/ShareAttributionCapture.tsx
+  // already captured that Spark ID into localStorage the moment they
+  // arrived; this is read once so it still counts if they navigate here
+  // separately, even a while later. An explicit ?ref= on this page's own
+  // URL always wins over the captured one.
+  const capturedRefSparkId = refIsValid ? null : getCapturedRef()?.sparkId ?? null;
+  const effectiveRefSparkId = refIsValid ? refSparkId : capturedRefSparkId;
+  const effectiveRefIsValid = Boolean(effectiveRefSparkId);
 
   const [stage, setStage] = useState<Stage>(claimMode ? "form" : "gate");
   const [mode, setMode] = useState<"signin" | "signup">("signup");
@@ -216,7 +227,7 @@ function LoginPageInner() {
     const captchaToken = await getTurnstileToken();
     const signUpOptions: { captchaToken?: string; data?: { ref_spark_id: string } } = {};
     if (captchaToken) signUpOptions.captchaToken = captchaToken;
-    if (refIsValid) signUpOptions.data = { ref_spark_id: refSparkId as string };
+    if (effectiveRefIsValid) signUpOptions.data = { ref_spark_id: effectiveRefSparkId as string };
 
     const result =
       mode === "signup"

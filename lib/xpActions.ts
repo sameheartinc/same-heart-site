@@ -49,6 +49,7 @@ export interface XpAction {
 // used to blow through a cap -- it multiplies what the cap allowed.
 export const CAP_GROUPS: Record<string, { dailyBaseXp: number }> = {
   commons: { dailyBaseXp: 15 * XP_SCALE },
+  media: { dailyBaseXp: 6 * XP_SCALE * 3 }, // up to 3 rewarded media drops a day
 };
 
 // Amounts are written as (old amount) * XP_SCALE (lib/levels.ts), so the
@@ -66,6 +67,26 @@ export const ACTIONS: Record<string, XpAction> = {
     cooldownSeconds: 30,
     capGroup: "commons",
     logDescription: "Started a discussion in the Commons.",
+    logCategory: "commons",
+  },
+  // "Uploading media" / "Creating artwork" from Rob's Contribute list
+  // (Sep 20, 2026 spec) -- rewards a thread that genuinely carries an
+  // image or a real, embeddable video link, verified server-side (see
+  // lib/xpEngine.ts). Deliberately does NOT touch who's allowed to
+  // attach one -- that's still Voice Tier 1 for images
+  // (app/commons/c/[slug]/CommunityDetail.tsx); this only rewards it once
+  // someone can. Its own cap group, separate from the Commons 120/day
+  // allowance, since dropping real media is a distinct, valuable thing
+  // from posting text.
+  share_media: {
+    key: "share_media",
+    label: "Shared a photo or video",
+    category: "contribute",
+    baseXp: 6 * XP_SCALE,
+    enabled: true,
+    cooldownSeconds: 30,
+    capGroup: "media",
+    logDescription: "Shared a photo or video in the Commons.",
     logCategory: "commons",
   },
   reply: {

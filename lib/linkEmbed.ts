@@ -47,3 +47,17 @@ export function isXStatusUrl(url: string): boolean {
   if (host !== "x.com" && host !== "twitter.com") return false;
   return /^\/[^/]+\/status\/\d+/.test(parsed.pathname);
 }
+
+// Scans a block of text for a URL that would actually produce a live
+// embed (see LinkEmbedPreview) -- used to tell whether a post genuinely
+// "dropped a video," not just typed a stray word like "youtube."
+const URL_PATTERN = /https?:\/\/[^\s)]+/g;
+
+export function findEmbeddableVideoUrl(text: string): string | null {
+  const matches = text.match(URL_PATTERN);
+  if (!matches) return null;
+  for (const url of matches) {
+    if (youtubeVideoId(url) || isXStatusUrl(url)) return url;
+  }
+  return null;
+}

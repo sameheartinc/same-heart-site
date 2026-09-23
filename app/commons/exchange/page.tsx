@@ -51,7 +51,7 @@ export default function ExchangePage() {
 
       const rows = await listExchangeFeed(limit);
       setFeed(rows);
-      setAuthors(await fetchProfilesByIds(rows.map((r) => r.profile_id)));
+      setAuthors(await fetchProfilesByIds([...rows.map((r) => r.profile_id), data.user.id]));
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -307,6 +307,7 @@ export default function ExchangePage() {
                         url={`https://sameheart.ca/commons/exchange/${t.id}`}
                         title={t.tagline || t.title || t.domain || "A transmission on Same Heart"}
                         text="Transmitted through Same Heart's Exchange"
+                        sparkId={userId ? authors[userId]?.spark_id ?? null : null}
                       />
                     </div>
                   </div>

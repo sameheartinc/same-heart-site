@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { getSkin } from "@/lib/skins";
+import { fetchShareVisitCount } from "@/lib/shareAttribution";
 import {
   listMyKeys,
   evaluateKeys,
@@ -153,6 +154,7 @@ export default function HubPage() {
   const [replyBubbleDismissed, setReplyBubbleDismissed] = useState(false);
   const [trendingBubbleDismissed, setTrendingBubbleDismissed] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [shareVisitCount, setShareVisitCount] = useState(0);
   // Double XP Hour -- see lib/evolution.ts's "ability-double-xp" and
   // app/api/abilities/double-xp/route.ts. The actual doubling happens
   // server-side in app/api/commons/award-reply/route.ts; this state is
@@ -339,6 +341,7 @@ export default function HubPage() {
       }
       setPracticePoints(normalizePracticePoints(currentProfile.practice_points));
       setUnlockedIds(new Set(myUnlocks));
+      fetchShareVisitCount().then(setShareVisitCount);
       setMonetizationStatus(myMonetizationStatus);
       setNotifications(myNotifications);
       setNotifAuthors(notifAuthorProfiles);
@@ -2250,6 +2253,20 @@ export default function HubPage() {
               earn Heartbeats and real progress toward the Orange Heart String --{" "}
               {profile.referrals_completed ?? 0} of {ORANGE_KEY_MIN_REFERRALS} so far.
             </p>
+            {shareVisitCount > 0 && (
+              <p
+                style={{
+                  margin: "0 0 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.04em",
+                  color: "var(--widget-text-faint)",
+                }}
+                title="Real, distinct people who clicked a link you shared -- from any of your posts, not just this invite link. No Heartbeats attached to this number, just so sharing feels like it's doing something."
+              >
+                {shareVisitCount} {shareVisitCount === 1 ? "person has" : "people have"} clicked a link you shared.
+              </p>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <code
                 style={{

@@ -33,6 +33,7 @@ export default function CommunityDetail({ slug }: { slug: string }) {
   const [checking, setChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [mySkin, setMySkin] = useState(getSkin(null));
+  const [mySparkId, setMySparkId] = useState<number | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isMember, setIsMember] = useState(false);
@@ -135,12 +136,13 @@ export default function CommunityDetail({ slug }: { slug: string }) {
         // someone who's actually unlocked them (see lib/practices.ts).
         supabase
           .from("profiles")
-          .select("ship_skin, practice_points")
+          .select("ship_skin, practice_points, spark_id")
           .eq("id", uid)
           .single()
           .then(({ data: profileRow }) => {
             if (profileRow?.ship_skin) setMySkin(getSkin(profileRow.ship_skin));
             setMyPracticePoints(normalizePracticePoints(profileRow?.practice_points));
+            setMySparkId(profileRow?.spark_id ?? null);
           });
       }
 
@@ -496,6 +498,7 @@ export default function CommunityDetail({ slug }: { slug: string }) {
               url={`https://sameheart.ca/commons/c/${community.slug}`}
               title={community.name}
               text={community.description || "A community on Same Heart"}
+              sparkId={mySparkId}
             />
           </div>
         )}

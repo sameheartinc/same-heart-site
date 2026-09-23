@@ -55,7 +55,7 @@ export default function PrivacyPage() {
             margin: "0 0 32px",
           }}
         >
-          Effective September 14, 2026
+          Effective September 22, 2026
         </p>
 
         <div
@@ -104,6 +104,15 @@ export default function PrivacyPage() {
             understand real activity on the Site and, over time, to make features like
             recommendations more relevant to you. We do not sell this data, and it&rsquo;s covered
             by the same rights described under &ldquo;Your Rights&rdquo; below.
+          </p>
+          <p>
+            <strong style={{ color: "var(--ink)" }}>Shared links.</strong> When a member shares a
+            link to the Site, that link can carry a code identifying them as the sharer. If you
+            follow one, we record that a visit happened (using a random identifier stored in your
+            browser, not your name, email, or account) so the person who shared it can see that
+            their link was used. If you go on to create an account, we may credit that signup to
+            whoever shared the link with you. This does not affect what you see on the Site or
+            require you to do anything.
           </p>
 
           <h2 style={sectionStyle}>How We Use Information</h2>

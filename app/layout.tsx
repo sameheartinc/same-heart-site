@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import GlobalPlayer from "@/components/GlobalPlayer";
+import ShareAttributionCapture from "@/components/ShareAttributionCapture";
 import "./globals.css";
 
 const SITE_URL = "https://sameheart.ca";
@@ -90,6 +91,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
         />
         <GlobalPlayer />
+        <ShareAttributionCapture />
         {children}
         <Analytics />
       </body>

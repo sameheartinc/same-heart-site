@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStanding } from "@/lib/standing";
 import { getLevel, nextLevelThreshold } from "@/lib/levels";
 import { toUTCDateString } from "@/lib/streak";
+import { findEmbeddableVideoUrl } from "@/lib/linkEmbed";
 import {
   ACTIONS,
   CAP_GROUPS,
@@ -69,6 +70,18 @@ async function verifyAction(admin: Admin, profileId: string, actionKey: string, 
         return { ok: true, quality: 0, reason: "too_short" };
       }
       return { ok: true, quality: 1 };
+    }
+
+    case "share_media": {
+      const { data: thread } = await admin
+        .from("commons_threads")
+        .select("profile_id, body, image_url, created_at")
+        .eq("id", targetId)
+        .maybeSingle();
+      if (!thread || thread.profile_id !== profileId) return { ok: false, reason: "not_yours" };
+      if (Date.now() - Date.parse(thread.created_at) > TARGET_MAX_AGE_MS) return { ok: false, reason: "too_old" };
+      const hasRealMedia = Boolean(thread.image_url) || Boolean(findEmbeddableVideoUrl(thread.body ?? ""));
+      return hasRealMedia ? { ok: true, quality: 1 } : { ok: true, quality: 0, reason: "no_media" };
     }
 
     case "reply": {
@@ -273,6 +286,38 @@ export async function awardAction(admin: Admin, profileId: string, actionKey: st
   });
 
   return { awarded: amount, boostPercent: boost.total };
+}
+
+// -- Tracked share links --------------------------------------------------
+// Rob's call (Sep 22, 2026): no XP for an anonymous click-through --
+// only a completed signup is rewarded, which already goes through the
+// existing referral system untouched (referred_by, the Orange Heart
+// String). This just counts real distinct visits for the sharer to see
+// on their own Hub (see fetchShareStats in lib/shareAttribution.ts) --
+// dedup is still real (the unique index on share_visits), it just
+// doesn't pay anything out on its own anymore.
+
+export async function recordShareVisit(
+  admin: Admin,
+  sharerId: string,
+  targetKind: string,
+  targetId: string,
+  visitorKey: string
+): Promise<{ recorded: boolean }> {
+  if (!visitorKey || visitorKey.length < 8 || visitorKey.length > 200) return { recorded: false };
+
+  const { data: inserted, error } = await admin
+    .from("share_visits")
+    .insert({ sharer_id: sharerId, target_kind: targetKind, target_id: targetId, visitor_key: visitorKey })
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "23505") return { recorded: false }; // already counted -- not an error
+    console.error("Share visit insert failed:", error.message);
+    return { recorded: false };
+  }
+  return { recorded: Boolean(inserted) };
 }
 
 // -- Reputation ----------------------------------------------------------------

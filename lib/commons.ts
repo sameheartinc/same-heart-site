@@ -465,6 +465,7 @@ export async function createThread(input: {
   // this exact thread and pays out at most once for it. Never blocks or
   // fails the post itself.
   await claimXp("start_thread", data.id);
+  await claimXp("share_media", data.id);
 
   return data as CommonsThread;
 }

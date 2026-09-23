@@ -23,6 +23,7 @@ export default function TransmissionDetail({ transmissionId }: { transmissionId:
   const [transmission, setTransmission] = useState<FeedTransmission | null>(null);
   const [sender, setSender] = useState<PublicProfile | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [mySparkId, setMySparkId] = useState<number | null>(null);
   const [reacting, setReacting] = useState(false);
 
   useEffect(() => {
@@ -33,9 +34,12 @@ export default function TransmissionDetail({ transmissionId }: { transmissionId:
       ]);
       setUserId(userData.user?.id ?? null);
       setTransmission(t);
-      if (t) {
-        const authors = await fetchProfilesByIds([t.profile_id]);
-        setSender(authors[t.profile_id] ?? null);
+      const idsToFetch = t ? [t.profile_id] : [];
+      if (userData.user?.id) idsToFetch.push(userData.user.id);
+      if (idsToFetch.length > 0) {
+        const authors = await fetchProfilesByIds(idsToFetch);
+        if (t) setSender(authors[t.profile_id] ?? null);
+        if (userData.user?.id) setMySparkId(authors[userData.user.id]?.spark_id ?? null);
       }
       setLoading(false);
     })();
@@ -263,6 +267,7 @@ export default function TransmissionDetail({ transmissionId }: { transmissionId:
             url={shareUrl}
             title={shareTitle}
             text="Transmitted through Same Heart's Exchange"
+            sparkId={mySparkId}
           />
         </div>
       </div>

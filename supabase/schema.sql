@@ -2646,3 +2646,36 @@ end
 $$;
 
 notify pgrst, 'reload schema';
+
+-- Tracked share links (Sep 22, 2026, Rob: "if you share links from our
+-- website onto other sites you would be able to gain points") -- safe
+-- before deploy (a new table only, nothing rewritten). See
+-- lib/shareAttribution.ts for the full design. One row per (sharer,
+-- target, real distinct visitor) -- the unique constraint is what makes
+-- this a real distinct-visitor count: the same visitor revisiting the
+-- same shared link is never counted twice. No XP rides on this table
+-- (Rob's call, Sep 22, 2026: an anonymous click-through can't be
+-- verified the way an account action can, so it's shown on the Hub as a
+-- plain count only) -- the real reward for sharing is a completed
+-- signup, which goes through the existing referral system untouched. No
+-- insert policy at all: the only writer is the service-role client
+-- inside app/api/share/visit/route.ts, which resolves the sharer from a
+-- Spark ID itself -- nothing here ever trusts a claim from the request.
+create table if not exists share_visits (
+  id uuid default gen_random_uuid() primary key,
+  sharer_id uuid references profiles(id) on delete cascade,
+  target_kind text not null,
+  target_id text not null,
+  visitor_key text not null,
+  created_at timestamptz default now(),
+  unique (sharer_id, target_kind, target_id, visitor_key)
+);
+
+alter table share_visits enable row level security;
+
+drop policy if exists "Sharers see their own share visits" on share_visits;
+create policy "Sharers see their own share visits" on share_visits for select using (auth.uid() = sharer_id);
+
+create index if not exists share_visits_sharer_idx on share_visits (sharer_id, created_at desc);
+
+notify pgrst, 'reload schema';

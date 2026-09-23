@@ -13,15 +13,34 @@ import { useEffect, useRef, useState } from "react";
 // `url` should be an absolute URL (the page this button lives on
 // already knows its own canonical link) -- this component doesn't try
 // to guess or resolve a relative path.
+//
+// `sparkId`, when passed, is the CURRENT VIEWER's own Spark ID (never
+// the content's author) -- it tags the shared link with `?ref=<Spark
+// ID>` so a click-through or eventual signup can be credited back to
+// whoever actually shared it (see lib/shareAttribution.ts). Omit it (or
+// pass null, e.g. a signed-out visitor with nothing to credit) to share
+// the plain link with no tracking at all.
 export function ShareButton({
   url,
   title,
   text,
+  sparkId,
 }: {
   url: string;
   title: string;
   text?: string;
+  sparkId?: string | number | null;
 }) {
+  const shareUrl = (() => {
+    if (sparkId === null || sparkId === undefined) return url;
+    try {
+      const withRef = new URL(url);
+      withRef.searchParams.set("ref", String(sparkId));
+      return withRef.toString();
+    } catch {
+      return url;
+    }
+  })();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
@@ -45,7 +64,7 @@ export function ShareButton({
   async function handleClick() {
     if (canNativeShare) {
       try {
-        await navigator.share({ title, text, url });
+        await navigator.share({ title, text, url: shareUrl });
       } catch {
         // AbortError just means the person closed the native sheet --
         // nothing to show for that.
@@ -57,7 +76,7 @@ export function ShareButton({
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -70,15 +89,15 @@ export function ShareButton({
   const intents = [
     {
       label: "X",
-      href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`,
+      href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`,
     },
     {
       label: "Facebook",
-      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
     },
     {
       label: "LinkedIn",
-      href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+      href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
     },
   ];
 
