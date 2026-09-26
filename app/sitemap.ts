@@ -103,6 +103,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
     { url: `${base}/contact`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${base}/commons/exchange`, lastModified: now, changeFrequency: "hourly", priority: 0.7 },
+    { url: `${base}/commons/communities`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     ...transmissions.map((t) => ({
       url: `${base}/commons/exchange/${t.id}`,
       lastModified: new Date(t.created_at),

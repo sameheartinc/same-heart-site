@@ -3441,3 +3441,23 @@ the BRICS framing that should shape the build rather than the bloc name
 alone. Same posture as the other banked, unscoped ideas in this file:
 worth building once there's a concrete shape for it, not guessed at from
 a short description.
+
+## Communities directory opens to public read (Sep 25, 2026)
+
+The last gap from the "same shape as Pinterest and Reddit" pass --
+/commons/communities (the full directory, linked from the Commons
+homepage's own "Communities" stat card) still bounced a signed-out
+visitor to /login even after the individual community and thread pages
+underneath it were already public. Now it isn't: same server+client
+split as the rest of Phase 2, generateMetadata for a real preview
+(static this time -- a directory's own content is a constantly-changing
+list, not one thing worth a bespoke OG card), and "+ Start a community"
+redirects a signed-out click to /login?next=... instead of silently
+failing. No RLS change was needed here -- listCommunities() was already
+a plain select with no auth logic of its own, so it was already only
+ever returning what a given caller's RLS allows; a signed-out visitor
+simply sees the public communities and nothing private, same as it
+always would have. Added to robots.ts and sitemap.ts alongside the
+routes opened up on Sep 15.
+
+Verified with `npx tsc --noEmit` (clean).
