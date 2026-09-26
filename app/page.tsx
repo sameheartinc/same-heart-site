@@ -238,6 +238,23 @@ export default function Home() {
           Visit the Merch Ship
         </Link>
 
+        {/* The Hearth's own Stripe Payment Link (see lib/galaxyNodes.ts,
+            same href) -- Rob, Sep 22 2026: "that's what the hearth goes
+            to." External and un-tracked on purpose, same as the Galaxy
+            node: this is a direct gift to Same Heart's own operations,
+            not a charitable tax receipt (Same Heart Inc. isn't a
+            registered charity) and not part of the business-sponsorship
+            system in app/sponsor/[slug]/page.tsx. */}
+        <a
+          href="https://buy.stripe.com/6oUfZhgKz9dmbh3dovcAo01"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="merch-cta"
+          style={{ marginTop: "12px" }}
+        >
+          Donate
+        </a>
+
       </div>
 
       {/* Plays a soft heartbeat chime on tap/click -- browsers only allow
