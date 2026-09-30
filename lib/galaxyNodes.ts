@@ -36,6 +36,12 @@ export interface GalaxyNode {
   // distinct from the rest. Both rotate on hover -- see
   // .galaxy-node-icon in app/galaxy/page.tsx.
   icon?: "dodecahedron" | "icosahedron";
+  // True for a node whose icon can be clicked to "zoom in" in place and
+  // reveal a small ring of orbiting "moons" -- sub-links related to
+  // that destination (see app/galaxy/page.tsx's handleZoomableClick).
+  // Rob, Sep 26 2026: starting with just the Merch Ship, showing its
+  // real featured products; other nodes can opt in later the same way.
+  hasMoons?: boolean;
 }
 
 export const GALAXY_NODES: GalaxyNode[] = [
@@ -74,6 +80,7 @@ export const GALAXY_NODES: GalaxyNode[] = [
     angleDeg: -25,
     radiusPct: 33,
     scale: 1.34,
+    hasMoons: true,
   },
   {
     key: "wallet",
