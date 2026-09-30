@@ -17,7 +17,7 @@ import { evaluateEvolution, listMyUnlocks } from "@/lib/evolution";
 const ACCENT = "#e0703a";
 const TOTAL_KEY_COLORS = Object.keys(KEY_INFO).length;
 // How many card tiles the preview shelf shows at most -- a taste of the
-// real vault, not a second copy of it (the full grid lives at /cards).
+// real manifest, not a second copy of it (the full grid lives at /cards).
 const CARD_PREVIEW_MAX = 6;
 
 // The Wallet -- "everything you'll ever collect," for real, replacing the
@@ -27,18 +27,23 @@ const CARD_PREVIEW_MAX = 6;
 // already built for /cards) and Heart Strings (lib/keys.ts, so far only
 // ever shown as a silent inline row on the Hub). Cards themselves
 // already have a full, real collection page at /cards -- this doesn't
-// duplicate that grid, it fronts it with a real shelf of actual tiles
+// duplicate that grid, it fronts it with a real preview of actual tiles
 // (reusing CollectibleCard exactly, not a re-skinned copy) and a link.
 // "Gifts you can send to other people" is real, undesigned work -- named
 // honestly below rather than quietly dropped.
 //
-// Rob, Sep 30 2026, after the first plain-list version: "this has to
-// feel more digital...like a digital locker room filled with cool
-// hidden gems, unlockables, trophies." Rebuilt around that -- the same
-// WorldField starfield Galaxy and Login use as a living backdrop, Heart
-// Strings as glowing trophy medallions instead of list rows, and real
-// Card tiles standing in for "hidden gems" rather than describing them
-// in a sentence.
+// Visual language went through three passes with Rob before landing
+// here (Sep 30 2026): "more digital...like a digital locker room" ->
+// "more organic...like some garden you come to to find and store
+// special unlockable cards" -> finally "more rectangular, almost like
+// an aviation deck...it should feel like a command centre with all your
+// unlockables." This build is that last one: angular clipped-corner
+// panels (two corners cut at 45deg, the other two braced with HUD
+// corner brackets), a faint blueprint grid behind everything, amber
+// instrument-panel glow, and Heart Strings as small status modules
+// instead of circles or blooms. Same WorldField starfield backdrop
+// throughout all three passes -- this reads as a command deck
+// overlooking that same sky, not a different place.
 export default function WalletPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
@@ -77,8 +82,8 @@ export default function WalletPage() {
 
   // Keys stay silent about what's not yet held (same rule the Hub
   // already follows, see lib/evolution.ts's own comment on this) -- only
-  // the ones actually earned get their own trophy tile; everything else
-  // is just a bare count, never enumerated.
+  // the ones actually earned get their own status module; everything
+  // else is just a bare count, never enumerated.
   const KEY_ORDER = Object.keys(KEY_INFO) as KeyColor[];
   const orderedKeys = keys
     .slice()
@@ -114,62 +119,56 @@ export default function WalletPage() {
     >
       <WorldField world={ONBOARDING_WORLD} />
 
+      <div
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          backgroundImage:
+            "linear-gradient(rgba(201,161,90,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(201,161,90,0.05) 1px, transparent 1px)",
+          backgroundSize: "42px 42px",
+        }}
+      />
+
       <style>{`
-        /* Rob, Sep 30 2026: "more organic feels to the text blobs...like
-           some garden you come to to find and store special unlockable
-           cards." Every panel and medallion below trades its fixed
-           border-radius for a genuine blob -- four independent corner
-           percentages, no two panels the same -- and breathes slowly
-           between two blob shapes rather than sitting static, the way a
-           leaf or a pond never holds one exact outline for long. Still
-           the same night-sky WorldField backdrop as before; this is a
-           garden found under those same stars, not a different place. */
-        @keyframes walletBlobBreathe1 {
-          0%, 100% { border-radius: 63% 37% 54% 46% / 43% 51% 49% 57%; }
-          50% { border-radius: 42% 58% 38% 62% / 58% 44% 56% 42%; }
-        }
-        @keyframes walletBlobBreathe2 {
-          0%, 100% { border-radius: 39% 61% 47% 53% / 61% 41% 59% 39%; }
-          50% { border-radius: 58% 42% 63% 37% / 40% 60% 36% 64%; }
-        }
-        @keyframes walletBlobBreathe3 {
-          0%, 100% { border-radius: 51% 49% 63% 37% / 39% 57% 43% 61%; }
-          50% { border-radius: 35% 65% 44% 56% / 60% 38% 62% 40%; }
-        }
+        /* Rob, Sep 30 2026 (third pass): "make the bubbles more
+           rectangular and almost like a aviation deck...it should feel
+           like a command centre with all your unlockables." Every panel
+           clips two opposite corners at 45deg (an angular console-panel
+           silhouette, no curves anywhere) and braces the other two with
+           small HUD corner brackets. Status modules pulse like an
+           active instrument light, not an organic breathing shape. */
         .wallet-panel {
           position: relative;
-          background:
-            radial-gradient(130% 130% at 26% 18%, rgba(122,196,138,0.10), transparent 62%),
-            rgba(13, 16, 28, 0.72);
-          backdrop-filter: blur(6px);
-          border: 1px solid rgba(122,196,138,0.28);
-          box-shadow: 0 0 26px rgba(122,196,138,0.06);
-          transition: border-color 0.3s ease;
+          clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+          background: linear-gradient(135deg, rgba(22,26,40,0.88), rgba(9,11,18,0.92));
+          border: 1px solid rgba(201,161,90,0.4);
+          box-shadow: inset 0 0 0 1px rgba(201,161,90,0.06), 0 0 22px rgba(201,161,90,0.08);
         }
-        .wallet-panel-1 { animation: walletBlobBreathe1 15s ease-in-out infinite; }
-        .wallet-panel-2 { animation: walletBlobBreathe2 17s ease-in-out infinite; }
-        .wallet-panel-3 { animation: walletBlobBreathe3 19s ease-in-out infinite; }
+        .wallet-panel::before,
+        .wallet-panel::after {
+          content: "";
+          position: absolute;
+          width: 12px;
+          height: 12px;
+          border-color: var(--gold);
+          border-style: solid;
+          pointer-events: none;
+        }
+        .wallet-panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+        .wallet-panel::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 
-        @keyframes walletBloomGlow {
-          0%, 100% { box-shadow: 0 0 10px var(--wallet-glow, rgba(224,112,58,0.5)); }
-          50% { box-shadow: 0 0 20px var(--wallet-glow, rgba(224,112,58,0.5)); }
+        @keyframes walletModulePulse {
+          0%, 100% { box-shadow: 0 0 8px var(--wallet-glow, rgba(224,112,58,0.5)); }
+          50% { box-shadow: 0 0 16px var(--wallet-glow, rgba(224,112,58,0.5)); }
         }
-        @keyframes walletBloomBreatheA {
-          0%, 100% { border-radius: 42% 58% 53% 47% / 57% 44% 56% 43%; }
-          50% { border-radius: 58% 42% 46% 54% / 44% 58% 42% 56%; }
-        }
-        @keyframes walletBloomBreatheB {
-          0%, 100% { border-radius: 55% 45% 40% 60% / 46% 55% 45% 54%; }
-          50% { border-radius: 45% 55% 60% 40% / 55% 46% 54% 45%; }
-        }
-        .wallet-bloom {
-          animation: walletBloomGlow 3.4s ease-in-out infinite, walletBloomBreatheA 8s ease-in-out infinite;
-        }
-        .wallet-bloom-b {
-          animation: walletBloomGlow 3.4s ease-in-out infinite, walletBloomBreatheB 9s ease-in-out infinite;
+        .wallet-module {
+          animation: walletModulePulse 2.6s ease-in-out infinite;
         }
         @media (prefers-reduced-motion: reduce) {
-          .wallet-panel-1, .wallet-panel-2, .wallet-panel-3, .wallet-bloom, .wallet-bloom-b { animation: none; }
+          .wallet-module { animation: none; }
         }
       `}</style>
 
@@ -211,13 +210,13 @@ export default function WalletPage() {
             margin: "0 0 26px",
           }}
         >
-          A quiet garden of everything you&rsquo;ve grown here -- your Heartbeats, your Heart
-          Strings, and every Card you&rsquo;ve found. Nothing here wilts; nothing is ever spent.
+          Your own command deck -- every Heartbeat, Heart String, and Card you&rsquo;ve earned,
+          logged and on display. A permanent record; nothing here is ever spent.
         </p>
 
         <ProgressionSummary />
 
-        <section className="wallet-panel wallet-panel-1" style={{ padding: "22px 22px 24px", marginBottom: "26px" }}>
+        <section className="wallet-panel" style={{ padding: "22px 24px 24px", marginBottom: "22px" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
             <h2
               style={{
@@ -229,10 +228,10 @@ export default function WalletPage() {
                 margin: 0,
               }}
             >
-              In Bloom &middot; Heart Strings
+              Active &middot; Heart Strings
             </h2>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", letterSpacing: "0.06em", color: "var(--ink-faint, #5c6684)" }}>
-              {orderedKeys.length} of {TOTAL_KEY_COLORS} held
+              {orderedKeys.length} of {TOTAL_KEY_COLORS} online
             </span>
           </div>
 
@@ -241,46 +240,49 @@ export default function WalletPage() {
               <div
                 aria-hidden="true"
                 style={{
-                  width: "56px",
-                  height: "56px",
+                  width: "50px",
+                  height: "50px",
                   flexShrink: 0,
-                  borderRadius: "42% 58% 53% 47% / 57% 44% 56% 43%",
-                  border: "1px dashed rgba(122,196,138,0.45)",
+                  border: "1px dashed rgba(201,161,90,0.4)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "1.2rem",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.04em",
+                  color: "var(--ink-faint, #5c6684)",
                 }}
               >
-                &#127793;
+                OFFLINE
               </div>
               <p style={{ margin: 0, fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.85rem", color: "var(--ink-dim)" }}>
-                Nothing&rsquo;s sprouted yet -- Heart Strings are earned quietly through real
-                activity across the site. The first one blooms here the moment it&rsquo;s yours.
+                Nothing online yet -- Heart Strings are earned quietly through real activity
+                across the site. The first one lights up here the moment it&rsquo;s yours.
               </p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
-              {orderedKeys.map((k, i) => {
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+              {orderedKeys.map((k) => {
                 const info = KEY_INFO[k.key_color];
                 if (!info) return null;
                 return (
-                  <div key={k.key_color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", width: "84px" }} title={info.blurb}>
+                  <div key={k.key_color} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", width: "80px" }} title={info.blurb}>
                     <div
-                      className={i % 2 === 0 ? "wallet-bloom" : "wallet-bloom-b"}
+                      className="wallet-module"
                       aria-hidden="true"
                       style={{
-                        width: "62px",
-                        height: "62px",
-                        background: `radial-gradient(circle at 38% 32%, ${info.accent}, ${info.accent}33 72%)`,
-                        border: `2px solid ${info.accent}`,
+                        width: "54px",
+                        height: "54px",
+                        clipPath: "polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px))",
+                        background: `linear-gradient(135deg, ${info.accent}66, ${info.accent}1a)`,
+                        border: `1px solid ${info.accent}`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         ["--wallet-glow" as string]: `${info.accent}99`,
                       }}
                     >
-                      <span style={{ fontSize: "1.3rem", filter: "drop-shadow(0 0 4px rgba(0,0,0,0.35))" }}>&#9829;</span>
+                      <span style={{ fontSize: "1.15rem", filter: "drop-shadow(0 0 4px rgba(0,0,0,0.4))" }}>&#9829;</span>
                     </div>
                     <span
                       style={{
@@ -301,7 +303,7 @@ export default function WalletPage() {
           )}
         </section>
 
-        <section className="wallet-panel wallet-panel-2" style={{ padding: "22px 22px 24px", marginBottom: "26px" }}>
+        <section className="wallet-panel" style={{ padding: "22px 24px 24px", marginBottom: "22px" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
             <h2
               style={{
@@ -313,10 +315,10 @@ export default function WalletPage() {
                 margin: 0,
               }}
             >
-              Unearthed &middot; Cards
+              Manifest &middot; Cards
             </h2>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", letterSpacing: "0.06em", color: "var(--ink-faint, #5c6684)" }}>
-              {cardsOwned} of {CARDS.length} found
+              {cardsOwned} of {CARDS.length} logged
             </span>
           </div>
 
@@ -325,23 +327,25 @@ export default function WalletPage() {
               <div
                 aria-hidden="true"
                 style={{
-                  width: "56px",
-                  height: "56px",
+                  width: "50px",
+                  height: "50px",
                   flexShrink: 0,
-                  borderRadius: "38% 62% 55% 45% / 60% 42% 58% 40%",
-                  border: "1px dashed rgba(122,196,138,0.45)",
+                  border: "1px dashed rgba(201,161,90,0.4)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "1.2rem",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  letterSpacing: "0.04em",
+                  color: "var(--ink-faint, #5c6684)",
                 }}
               >
-                &#127793;
+                LOCKED
               </div>
               <p style={{ margin: 0, fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.85rem", color: "var(--ink-dim)" }}>
-                This patch of the garden opens at Level {CARDS_MIN_LEVEL}. You&rsquo;re Level {level}
-                -- anything you&rsquo;ve already earned, like a Heart String, will be waiting for you
-                when you get there.
+                Clearance required: Level {CARDS_MIN_LEVEL}. You&rsquo;re Level {level} -- anything
+                you&rsquo;ve already earned, like a Heart String, will be waiting for you when you
+                get there.
               </p>
             </div>
           ) : (
@@ -363,19 +367,18 @@ export default function WalletPage() {
             href="/cards"
             style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--gold)", textDecoration: "none" }}
           >
-            Wander the full garden &rarr;
+            Open the full manifest &rarr;
           </Link>
         </section>
 
         <section
-          className="wallet-panel wallet-panel-3"
+          className="wallet-panel"
           style={{
-            padding: "18px 20px",
-            borderStyle: "dashed",
+            padding: "16px 20px",
           }}
         >
           <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "9px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-faint, #5c6684)" }}>
-            Not yet planted &middot; Coming soon
+            Offline &middot; Coming soon
           </p>
           <p style={{ margin: "6px 0 0", fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.85rem", color: "var(--ink-dim)" }}>
             Sending a gift straight from your Wallet to someone else&rsquo;s -- being designed for real,
