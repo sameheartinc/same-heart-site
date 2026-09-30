@@ -142,12 +142,14 @@ export default function GalaxyPage() {
   const [tapThreshold] = useState(() => 17 + Math.floor(Math.random() * 7));
 
   // Zoom-and-moons (Sep 26 2026, Rob: "yes. build the zoom in
-  // functioons") -- clicking a node flagged hasMoons (currently just
-  // Merch Ship) zooms its own icon up in place and reveals its
-  // featured products as small orbiting "moons." zoomedKey holds which
-  // node (by its own node.key) is currently zoomed, or null. Real
-  // Shopify data only, fetched lazily on first zoom and cached in
-  // state for the rest of the visit -- no placeholder/fake products.
+  // functioons"; rebuilt Sep 30 after "it did not zoom... couldn't
+  // even go to the Merch ship") -- a small badge button on a node
+  // flagged hasMoons (currently just Merch Ship) opens a centered
+  // panel (see .galaxy-zoom-panel below) showing its real featured
+  // products as small "moons." zoomedKey holds which node (by its own
+  // node.key) has its panel open, or null. Real Shopify data only,
+  // fetched lazily on first open and cached in state for the rest of
+  // the visit -- no placeholder/fake products.
   const [zoomedKey, setZoomedKey] = useState<string | null>(null);
   const [shopProducts, setShopProducts] = useState<ShopifyProduct[] | null>(null);
   const [shopProductsLoading, setShopProductsLoading] = useState(false);
@@ -227,15 +229,19 @@ export default function GalaxyPage() {
     setZoomedKey(null);
   }
 
-  // First click on a hasMoons node zooms it in and (for Merch Ship)
-  // lazily loads its real featured products from the existing
-  // /api/shop/products route -- fetched once per visit and cached in
-  // shopProducts from then on, never re-fetched on later zooms. A
-  // second click on the SAME already-zoomed node acts like the plain
-  // nodes always have -- it navigates to node.href.
+  // The node itself is a plain, always-working <Link> exactly like
+  // every other node -- clicking it navigates to node.href, same as
+  // before this feature existed. This is a SEPARATE small badge button
+  // on hasMoons nodes only (see its onClick in the render below, which
+  // preventDefaults + stopPropagates so it never also triggers the
+  // Link). Clicking it opens a centered panel showing that node's real
+  // featured products; clicking it again while already open just
+  // closes the panel. Lazily loads Merch Ship's products from the
+  // existing /api/shop/products route on first open, cached in
+  // shopProducts from then on for the rest of the visit.
   async function handleZoomableClick(node: (typeof GALAXY_NODES)[number]) {
     if (zoomedKey === node.key) {
-      router.push(node.href);
+      setZoomedKey(null);
       return;
     }
     setZoomedKey(node.key);
@@ -313,11 +319,10 @@ export default function GalaxyPage() {
     >
       <WorldField world={ONBOARDING_WORLD} />
 
-      {/* Dimming backdrop for the zoom-and-moons view -- click (or
+      {/* Dimming backdrop for the zoom-panel view -- click (or
           Escape, see the effect above) closes whichever node is
-          zoomed. Sits above WorldField but below the zoomed node
-          itself (that node gets its own zIndex: 10, see the render
-          branch below). */}
+          zoomed. Sits above WorldField but below the panel itself
+          (see .galaxy-zoom-panel's z-index: 20 vs. this div's 5). */}
       {zoomedKey && (
         <div
           onClick={closeZoom}
@@ -330,6 +335,82 @@ export default function GalaxyPage() {
           }}
         />
       )}
+
+      {/* The zoom panel itself -- centered in the viewport, not tied to
+          the zoomed node's own (slot-shuffled, possibly near-edge)
+          on-screen position, so it's always fully visible regardless of
+          where that node happened to land this visit. zoomedNode is
+          looked up fresh from GALAXY_NODES (not the per-render `node`
+          from the map loop, which isn't in scope here). */}
+      {zoomedKey && (() => {
+        const zoomedNode = GALAXY_NODES.find((n) => n.key === zoomedKey);
+        if (!zoomedNode) return null;
+        return (
+          <div
+            className="galaxy-zoom-panel"
+            role="dialog"
+            aria-label={zoomedNode.name}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="galaxy-zoom-panel-close"
+              aria-label="Close"
+              onClick={closeZoom}
+            >
+              &#10005;
+            </button>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: "1.1rem",
+                color: "var(--ink)",
+              }}
+            >
+              {zoomedNode.name}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                fontStyle: "italic",
+                fontSize: "0.85rem",
+                color: "var(--ink-dim)",
+                marginTop: "-8px",
+              }}
+            >
+              {zoomedNode.tagline}
+            </div>
+            <div className="galaxy-moons-row">
+              {shopProductsLoading && <span className="galaxy-moon-status">Loading featured products...</span>}
+              {shopProductsError && <span className="galaxy-moon-status">{shopProductsError}</span>}
+              {!shopProductsLoading && !shopProductsError && shopProducts && shopProducts.length === 0 && (
+                <span className="galaxy-moon-status">No featured products yet.</span>
+              )}
+              {shopProducts?.map((product) => (
+                <Link
+                  key={product.id}
+                  href={product.onlineStoreUrl || zoomedNode.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="galaxy-moon"
+                >
+                  {product.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.imageUrl} alt="" className="galaxy-moon-image" />
+                  ) : (
+                    <span className="galaxy-moon-fallback" aria-hidden="true">&#10022;</span>
+                  )}
+                  <span className="galaxy-moon-label">{product.title}</span>
+                </Link>
+              ))}
+            </div>
+            <Link href={zoomedNode.href} className="galaxy-zoom-panel-visit">
+              Visit the Shop &rarr;
+            </Link>
+          </div>
+        );
+      })()}
 
       <style>{`
         @keyframes galaxyCoreGlow {
@@ -419,40 +500,113 @@ export default function GalaxyPage() {
           animation: galaxyNodeIn 0.6s ease both;
           cursor: inherit;
         }
-        /* Zoom-and-moons (Sep 26 2026). The zoomed node's own icon
-           grows via its inline transform (see zoomScale in the
-           component); .galaxy-moons rings that node's CURRENT
-           on-screen spot with its featured products, each one an
-           actual <Link> to that real Shopify product. Reuses
-           galaxyNodeIn for the same pop-in feel as the nodes
-           themselves. */
-        .galaxy-node-moon-button {
-          -webkit-tap-highlight-color: transparent;
-        }
-        .galaxy-moons {
+        /* Zoom-and-moons (Sep 26 2026, rebuilt after the first version
+           didn't actually zoom in production -- the node's own icon has
+           an infinite CSS animation (.galaxy-node-float) already
+           driving its transform, which silently wins over any inline
+           transform trying to scale it in place, and growing/clustering
+           moons around a node's own arbitrary, slot-shuffled on-screen
+           position risked clipping against <main>'s overflow: hidden
+           near screen edges. Rebuilt as: the node itself stays a plain,
+           always-working <Link>, exactly like every other node, so
+           clicking it never stops navigating; a small separate badge
+           button opens a centered panel (its own fixed, guaranteed-
+           visible coordinate space, not tied to the node's on-screen
+           spot at all) showing that node's real featured products. */
+        .galaxy-node-expand-badge {
           position: absolute;
+          top: 2px;
+          right: 2px;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(20,15,6,0.78);
+          border: 1px solid rgba(201,161,90,0.65);
+          color: var(--gold);
+          font-size: 13px;
+          line-height: 1;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+          box-shadow: 0 0 10px rgba(201,161,90,0.35);
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .galaxy-node-expand-badge:hover,
+        .galaxy-node-expand-badge:focus-visible {
+          transform: scale(1.12);
+          box-shadow: 0 0 16px rgba(201,161,90,0.55);
+        }
+        .galaxy-zoom-panel {
+          position: fixed;
           left: 50%;
           top: 50%;
-          width: 0;
-          height: 0;
-          pointer-events: none;
+          transform: translate(-50%, -50%);
+          z-index: 20;
+          width: min(420px, 88vw);
+          max-height: 80vh;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 14px;
+          padding: 28px 22px 24px;
+          border-radius: 20px;
+          background: rgba(15, 12, 8, 0.92);
+          border: 1px solid rgba(201,161,90,0.4);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 30px rgba(201,161,90,0.15);
+          animation: galaxyNodeIn 0.35s ease both;
+          text-align: center;
+        }
+        .galaxy-zoom-panel-close {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(201,161,90,0.35);
+          color: var(--ink);
+          font-size: 15px;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .galaxy-zoom-panel-visit {
+          display: inline-block;
+          margin-top: 2px;
+          padding: 9px 20px;
+          border-radius: 999px;
+          background: var(--gold);
+          color: #1c1206;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-decoration: none;
+        }
+        .galaxy-moons-row {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 14px;
+          width: 100%;
         }
         .galaxy-moon {
-          position: absolute;
-          left: 0;
-          top: 0;
-          pointer-events: auto;
           display: flex;
           flex-direction: column;
           align-items: center;
           gap: 4px;
-          width: 74px;
+          width: 78px;
           text-decoration: none;
-          animation: galaxyNodeIn 0.45s ease both;
         }
         .galaxy-moon-image {
-          width: 52px;
-          height: 52px;
+          width: 58px;
+          height: 58px;
           border-radius: 50%;
           object-fit: cover;
           border: 2px solid rgba(201,161,90,0.55);
@@ -466,8 +620,8 @@ export default function GalaxyPage() {
           box-shadow: 0 0 18px rgba(201,161,90,0.55);
         }
         .galaxy-moon-fallback {
-          width: 52px;
-          height: 52px;
+          width: 58px;
+          height: 58px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -484,7 +638,7 @@ export default function GalaxyPage() {
           color: rgba(240,225,200,0.92);
           text-align: center;
           line-height: 1.2;
-          max-width: 74px;
+          max-width: 78px;
           overflow: hidden;
           text-overflow: ellipsis;
           display: -webkit-box;
@@ -492,13 +646,8 @@ export default function GalaxyPage() {
           -webkit-box-orient: vertical;
         }
         .galaxy-moon-status {
-          position: absolute;
-          left: 50%;
-          top: calc(50% + 90px);
-          transform: translate(-50%, 0);
-          white-space: nowrap;
           font-family: var(--font-mono);
-          font-size: 11px;
+          font-size: 12px;
           color: rgba(240,225,200,0.75);
         }
         /* Duration and amplitude come from each node's own inline
@@ -673,7 +822,7 @@ export default function GalaxyPage() {
           .galaxy-node-counter-orbit,
           .galaxy-node-icon,
           .galaxy-node-star::before,
-          .galaxy-moon { animation: none; }
+          .galaxy-zoom-panel { animation: none; }
         }
       `}</style>
 
@@ -868,12 +1017,6 @@ export default function GalaxyPage() {
             const scale = isMobile ? MOBILE_SCALE : slotNode.scale;
             const pos = orbitPosition(angleDeg, radiusPct);
             const opacity = node.dim ? 0.62 : 1;
-            const isZoomed = zoomedKey === node.key;
-            // Grows the node's own icon in place on zoom -- 1.85x its
-            // normal size, same for every hasMoons node regardless of
-            // its own hand-tuned `scale`, so the effect reads the same
-            // whichever node it's applied to.
-            const zoomScale = isZoomed ? scale * 1.85 : scale;
             // "More modular play" (Rob, Sep 3 2026): each node's own
             // float duration/amplitude, not one shared rhythm -- see
             // .galaxy-node-float's comment above. Deterministic off the
@@ -883,239 +1026,8 @@ export default function GalaxyPage() {
             const floatDuration = 4 + (i % 4) * 0.9;
             const floatAmp = -(5 + (i % 3) * 2.5);
             const iconFlickerDelay = (i * 0.53) % 3.8;
-            return node.hasMoons ? (
-              <div
-                key={node.key}
-                className="galaxy-node galaxy-node-wrap galaxy-node-moon-parent"
-                style={{
-                  position: "absolute",
-                  left: pos.left,
-                  top: pos.top,
-                  width: "140px",
-                  height: "140px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transform: "translate(-50%, -50%) translateZ(60px)",
-                  textDecoration: "none",
-                  animationDelay: `${0.15 * i}s`,
-                  ["--node-opacity" as string]: opacity,
-                  opacity,
-                  zIndex: isZoomed ? 10 : undefined,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleZoomableClick(node)}
-                  aria-label={node.name}
-                  className="galaxy-node-moon-button"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    margin: 0,
-                    width: "100%",
-                    height: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "inherit",
-                    font: "inherit",
-                    color: "inherit",
-                  }}
-                >
-                <div className="galaxy-node-counter-orbit">
-                <div
-                  className="galaxy-node-inner galaxy-node-float"
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: `${6 * scale}px`,
-                    animationDelay: `${0.4 * i}s`,
-                    transform: `scale(${zoomScale})`,
-                    transition: "transform 0.35s ease",
-                    ["--float-duration" as string]: `${floatDuration}s`,
-                    ["--float-amp" as string]: `${floatAmp}px`,
-                  }}
-                >
-                  <span
-                    className="galaxy-node-dot galaxy-node-star"
-                    style={{
-                      width: "58px",
-                      height: "58px",
-                      borderRadius: "50%",
-                      // Was a near-black disc (#050810) so each node's
-                      // colored glow popped against a dark sky. Against
-                      // the heavenly light sky that read as a dark hole
-                      // instead of a glowing orb, so the base is now a
-                      // warm, bright light-source color instead.
-                      background: "#fef6e4",
-                      border: `1px solid ${node.accent}`,
-                      // Sep 9 2026, Rob: "make it more 3 dimensional" --
-                      // the two inset shadows are the fix. A dark one
-                      // pulling toward the bottom-right and a light one
-                      // toward the top-left read as one consistent light
-                      // source hitting a sphere, rather than a flat
-                      // tinted disc -- same light direction the
-                      // off-center star-core gradient and the specular
-                      // highlight (.galaxy-node-star::after) below use.
-                      // The original outer glow stays last in the list.
-                      boxShadow: `inset -3px -4px 7px rgba(20,14,6,0.28), inset 3px 4px 6px rgba(255,255,255,0.55), 0 0 ${node.dim ? 10 : 18}px ${node.accent}${node.dim ? "33" : "44"}`,
-                      transition: "box-shadow 0.28s ease",
-                      ["--n-accent" as string]: node.accent,
-                    }}
-                  >
-                    <span className="galaxy-node-star-core" aria-hidden="true" />
-                    {node.icon === "dodecahedron" && (
-                      <svg
-                        className="galaxy-node-icon"
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        width="34"
-                        height="34"
-                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent, animationDelay: `${iconFlickerDelay}s` }}
-                      >
-                        {/* A flat dodecahedron glyph: an outer and inner
-                            pentagon with their corners joined, the usual
-                            shorthand for a 12-sided form in line-art icon
-                            sets -- reads clearly at this size, unlike a
-                            true 3D projection would. */}
-                        <polygon
-                          points="12,2 21,9 17.5,20 6.5,20 3,9"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.3"
-                          strokeLinejoin="round"
-                        />
-                        <polygon
-                          points="12,7.5 15.5,10.2 14.2,14.5 9.8,14.5 8.5,10.2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1"
-                          strokeLinejoin="round"
-                          opacity={0.85}
-                        />
-                        <line x1="12" y1="2" x2="12" y2="7.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="21" y1="9" x2="15.5" y2="10.2" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="17.5" y1="20" x2="14.2" y2="14.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="6.5" y1="20" x2="9.8" y2="14.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="3" y1="9" x2="8.5" y2="10.2" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                      </svg>
-                    )}
-                    {node.icon === "icosahedron" && (
-                      <svg
-                        className="galaxy-node-icon"
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        width="34"
-                        height="34"
-                        style={{ position: "absolute", inset: 0, margin: "auto", color: node.accent, animationDelay: `${iconFlickerDelay}s` }}
-                      >
-                        {/* Same "outer shape + inner shape + joined
-                            corners" shorthand as the dodecahedron above,
-                            a hexagon in place of a pentagon -- reads as a
-                            faceted gem/icosahedron at icon size, same
-                            reasoning as that comment: clearer than a true
-                            3D projection would be this small. This is
-                            the default glyph for every node except the
-                            Hearth. */}
-                        <polygon
-                          points="12,3 19.8,7.5 19.8,16.5 12,21 4.2,16.5 4.2,7.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.3"
-                          strokeLinejoin="round"
-                        />
-                        <polygon
-                          points="12,7.5 15.9,9.75 15.9,14.25 12,16.5 8.1,14.25 8.1,9.75"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1"
-                          strokeLinejoin="round"
-                          opacity={0.85}
-                        />
-                        <line x1="12" y1="3" x2="12" y2="7.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="19.8" y1="7.5" x2="15.9" y2="9.75" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="19.8" y1="16.5" x2="15.9" y2="14.25" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="12" y1="21" x2="12" y2="16.5" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="4.2" y1="16.5" x2="8.1" y2="14.25" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                        <line x1="4.2" y1="7.5" x2="8.1" y2="9.75" stroke="currentColor" strokeWidth="0.8" opacity={0.7} />
-                      </svg>
-                    )}
-                  </span>
-                  <span
-                    className="galaxy-node-label"
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontWeight: 600,
-                      fontSize: "0.8rem",
-                      color: "var(--ink)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {node.name}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontStyle: "italic",
-                      fontSize: "0.7rem",
-                      color: "var(--ink-dim)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {node.tagline}
-                  </span>
-                </div>
-                </div>
-                </button>
-                {/* Moons: only ever rendered for the one node that's
-                    currently zoomed (isZoomed), positioned in a small
-                    ring around THIS node's own on-screen spot via
-                    orbitOffsetPx -- so they follow it around the slow
-                    outer orbit drift and the per-visit slot shuffle
-                    (see slotOrder above) automatically, with no extra
-                    position math of their own. stopPropagation keeps a
-                    moon click from also bubbling up as a second click
-                    on the button underneath. */}
-                {isZoomed && (
-                  <div className="galaxy-moons" onClick={(e) => e.stopPropagation()}>
-                    {shopProductsLoading && <span className="galaxy-moon-status">Loading...</span>}
-                    {shopProductsError && <span className="galaxy-moon-status">{shopProductsError}</span>}
-                    {!shopProductsLoading && !shopProductsError && shopProducts && shopProducts.length === 0 && (
-                      <span className="galaxy-moon-status">No featured products yet.</span>
-                    )}
-                    {shopProducts?.map((product, mi) => {
-                      const moonAngle = (mi / shopProducts.length) * 360 - 90;
-                      const moonPos = orbitOffsetPx(moonAngle, 92);
-                      return (
-                        <Link
-                          key={product.id}
-                          href={product.onlineStoreUrl || "/shop"}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="galaxy-moon"
-                          style={{
-                            transform: `translate(-50%, -50%) translate(${moonPos.x}px, ${moonPos.y}px)`,
-                            animationDelay: `${mi * 0.08}s`,
-                          }}
-                        >
-                          {product.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={product.imageUrl} alt="" className="galaxy-moon-image" />
-                          ) : (
-                            <span className="galaxy-moon-fallback" aria-hidden="true">&#10022;</span>
-                          )}
-                          <span className="galaxy-moon-label">{product.title}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              ) : (
-              <Link
+            return (
+<Link
                 key={node.key}
                 href={node.href}
                 className="galaxy-node galaxy-node-wrap"
@@ -1280,8 +1192,30 @@ export default function GalaxyPage() {
                   </span>
                 </div>
                 </div>
+                {node.hasMoons && (
+                  // A small explicit affordance, separate from the
+                  // node's own link -- clicking IT (not the node)
+                  // opens the centered zoom panel below with this
+                  // node's real featured products. preventDefault +
+                  // stopPropagation keep this from also firing the
+                  // surrounding <Link>'s navigation -- the node
+                  // itself still always just navigates normally,
+                  // exactly like every other node.
+                  <button
+                    type="button"
+                    className="galaxy-node-expand-badge"
+                    aria-label={`Show featured products for ${node.name}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleZoomableClick(node);
+                    }}
+                  >
+                    &#10022;
+                  </button>
+                )}
               </Link>
-              );
+            );
           })}
           </div>
         </div>
