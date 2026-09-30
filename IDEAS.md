@@ -3461,3 +3461,30 @@ always would have. Added to robots.ts and sitemap.ts alongside the
 routes opened up on Sep 15.
 
 Verified with `npx tsc --noEmit` (clean).
+
+
+## The Wallet becomes real (Sep 30, 2026)
+
+Replaced /wallet's ComingSoon placeholder with a real page. Digging in
+first turned up more already built than expected: Heartbeats/Level/
+Standing/Streak already had a whole reusable component
+(ProgressionSummary, built for /cards), and Cards themselves already had
+a complete, working collection page at /cards -- so Wallet doesn't
+duplicate that grid, it fronts it with a real count and a link, same as
+Deep Signals fronts its own catalog rather than re-listing it. The
+genuinely new piece was Heart Strings: they'd only ever been shown as a
+silent inline row on the Hub, never their own real section anywhere.
+Built one here, following the same "stay silent about what's not yet
+held" rule the Hub already uses (see lib/evolution.ts's own comment on
+this) -- held Heart Strings show their name and blurb, unheld ones are
+just a bare count, nothing enumerated or hinted at.
+
+"Gifts you can send to other people," the third thing the old
+placeholder copy promised, is real, undesigned work -- there's a
+code-redemption gifting system already (lib/rewards.ts, gift_codes) but
+no way to pick another person's profile and hand them something
+directly. Named honestly as Coming Soon rather than quietly dropped or
+guessed at; held for a real product conversation (what's giftable, does
+it leave your own wallet) before any of it gets built.
+
+Verified with `npx tsc --noEmit` (clean).
