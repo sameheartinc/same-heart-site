@@ -1296,6 +1296,20 @@ export default function HubPage() {
           >
             {profile.frequency}Hz &middot; adrift and holding
           </p>
+          <Link
+            href="/profile"
+            style={{
+              display: "inline-block",
+              marginTop: "6px",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              letterSpacing: "0.08em",
+              color: "var(--ink-faint)",
+              textDecoration: "none",
+            }}
+          >
+            Edit your profile &rarr;
+          </Link>
         </div>
 
         <div style={{ marginBottom: "16px", position: "relative" }}>

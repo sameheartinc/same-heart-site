@@ -3488,3 +3488,39 @@ guessed at; held for a real product conversation (what's giftable, does
 it leave your own wallet) before any of it gets built.
 
 Verified with `npx tsc --noEmit` (clean).
+
+
+## A real Profile page (Oct 3, 2026)
+
+Rob's ask was broad -- "get everything optimized so people can willingly
+build their profiles and start creating something unique for themselves."
+That's the same gap this file already named once, back when the Wallet
+work turned up how scattered profile customization was: "the profile
+builder in Settings... worth a real scoping pass... whenever Rob wants
+to build it." This is that pass.
+
+New page at /profile, linked from a small "Edit your profile ->" under
+the Hub's own call-sign. Four of its five controls already existed and
+work -- they were just buried inside the Hub's 2500+ line file with no
+page of their own: Call Sign (display_name), Hub Backdrop
+(hub_background_url, Storage upload), Commons Accent (the Blue Key's
+door, lib/keys.ts), and Voice Signature (Voice Tier 4). Their save logic
+-- optimistic updates with revert-on-error, the exact validation limits,
+the exact gating conditions -- was lifted close to verbatim rather than
+re-derived, so nothing that already worked changes behavior; the Hub
+keeps its own copies of all of it too, untouched.
+
+Ship Skin is the one actually new thing. lib/skins.ts has been read from
+all over the site for a while (Hub's background, now this page's own
+background) but nothing ever let anyone choose one -- it's been quietly
+stuck on whatever a profile's `ship_skin` column happened to hold since
+onboarding. Built a plain swatch picker for the 4 existing skins; picking
+one writes straight to the column and the whole Profile page re-skins
+itself immediately, so the picker previews its own choice live.
+
+Also added a small, read-only "Signal" section showing the Path assigned
+at onboarding (lib/paths.ts) -- framed as "chosen for you when you
+arrived," not editable. No re-pick flow exists or is planned for this;
+it's informational only, zero new risk.
+
+Verified with `npx tsc --noEmit` (clean).
