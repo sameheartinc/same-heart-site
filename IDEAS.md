@@ -3524,3 +3524,27 @@ arrived," not editable. No re-pick flow exists or is planned for this;
 it's informational only, zero new risk.
 
 Verified with `npx tsc --noEmit` (clean).
+
+
+## Cards and ProgressionSummary join the aviation deck (Oct 14, 2026)
+
+Wallet and Profile both landed on the same "command centre" visual
+language -- clipped-corner panels, HUD brackets, amber instrument-panel
+accents -- but Cards and the shared ProgressionSummary component were
+still the original plain rounded-box style, which made Wallet (where
+both of those render) feel like two different places stitched together.
+Brought them in line.
+
+ProgressionSummary got its own panel chrome plus a "Status - Progression"
+eyebrow; it's shared between /cards and /wallet, so both pages pick up
+the fix for free. CollectibleCard's tile went from a rounded rect to a
+clipped corner, and an owned card now pulses faintly in its own rarity
+color -- the same "active instrument light" treatment Wallet already
+gives a held Heart String. /cards itself picked up the same WorldField
+starfield backdrop and blueprint grid Wallet uses (Wallet already calls
+this page "the full manifest," so the two should read as one place), and
+each card section (Levels, Heart Strings, Events) is now its own panel
+with a status-readout header instead of a plain heading.
+
+Nothing about ownership, ranks, or any of the underlying fetches changed
+-- this was frame-only. Verified with `npx tsc --noEmit` (clean).

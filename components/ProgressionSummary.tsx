@@ -8,6 +8,13 @@ import { fetchProgression, type Progression } from "@/lib/progression";
 // Everything shown is derived server-side; this only displays it. XP and
 // Level never go down; only Momentum, Boost and streak move with recent
 // activity, which is why they're shown as live meters and XP is not.
+//
+// Shared between /cards and /wallet, so its own frame carries the
+// "aviation deck / command centre" language both of those pages already
+// use (see app/wallet/page.tsx's own comment on where that came from) --
+// clipped panel corners, HUD brackets, amber instrument-panel accents --
+// instead of the plain rounded box this used to be. Only the chrome
+// changed here; every number and the logic behind it is untouched.
 export default function ProgressionSummary() {
   const [p, setP] = useState<Progression | null>(null);
 
@@ -20,16 +27,20 @@ export default function ProgressionSummary() {
   const boostDetail = p.boost.parts.map((part) => `${part.label} +${part.percent}%`).join(" · ");
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: "14px",
-        background: "var(--panel)",
-        padding: "16px 18px",
-        maxWidth: "560px",
-        margin: "0 0 26px",
-      }}
-    >
+    <div className="progression-panel" style={{ padding: "18px 20px 20px", maxWidth: "560px", margin: "0 0 26px" }}>
+      <p
+        style={{
+          margin: "0 0 10px",
+          fontFamily: "var(--font-mono)",
+          fontSize: "10px",
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--gold)",
+        }}
+      >
+        Status &middot; Progression
+      </p>
+
       <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
         <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.4rem" }}>Level {p.level}</span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--ink-dim)" }}>
@@ -69,6 +80,36 @@ export default function ProgressionSummary() {
         />
         <Stat label="Standing" value={p.standing} />
       </div>
+
+      <style jsx>{`
+        .progression-panel {
+          position: relative;
+          clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+          background: linear-gradient(135deg, rgba(22, 26, 40, 0.88), rgba(9, 11, 18, 0.92));
+          border: 1px solid rgba(201, 161, 90, 0.4);
+          box-shadow: inset 0 0 0 1px rgba(201, 161, 90, 0.06), 0 0 22px rgba(201, 161, 90, 0.08);
+        }
+        .progression-panel::before,
+        .progression-panel::after {
+          content: "";
+          position: absolute;
+          width: 12px;
+          height: 12px;
+          border-color: var(--gold);
+          border-style: solid;
+          pointer-events: none;
+        }
+        .progression-panel::before {
+          top: -1px;
+          left: -1px;
+          border-width: 2px 0 0 2px;
+        }
+        .progression-panel::after {
+          bottom: -1px;
+          right: -1px;
+          border-width: 0 2px 2px 0;
+        }
+      `}</style>
     </div>
   );
 }

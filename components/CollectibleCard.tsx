@@ -6,6 +6,12 @@ import { CardDef, RARITY_ACCENT, cardAccent, describeCardSource } from "@/lib/ca
 // they're not yours yet, so the collection doubles as a list of things
 // to go earn. Purely presentational: whether a card is owned is decided
 // by the caller from profile_unlocks, never here.
+//
+// Tile shape matches the "aviation deck" language /wallet and /cards
+// already use (clipped corners, not rounded ones); an owned card pulses
+// faintly in its own rarity color, the same "active instrument light"
+// treatment Wallet already gives a held Heart String. Locked tiles stay
+// static -- dimmed and grayscale, same as before.
 export default function CollectibleCard({ card, owned }: { card: CardDef; owned: boolean }) {
   const accent = cardAccent(card);
   const rarityColor = RARITY_ACCENT[card.rarity];
@@ -14,17 +20,16 @@ export default function CollectibleCard({ card, owned }: { card: CardDef; owned:
 
   return (
     <div
+      className={owned ? "collectible-tile collectible-tile-owned" : "collectible-tile"}
       style={{
         aspectRatio: "5 / 7",
-        borderRadius: "14px",
-        overflow: "hidden",
         position: "relative",
         border: `2px solid ${owned ? rarityColor : "var(--border)"}`,
-        boxShadow: owned ? `0 0 18px ${rarityColor}44` : "none",
         background: "var(--panel)",
         opacity: owned ? 1 : 0.55,
         display: "flex",
         flexDirection: "column",
+        ["--collectible-glow" as string]: `${rarityColor}66`,
       }}
     >
       <div
@@ -85,6 +90,30 @@ export default function CollectibleCard({ card, owned }: { card: CardDef; owned:
           </p>
         )}
       </div>
+
+      <style jsx>{`
+        .collectible-tile {
+          clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+          overflow: hidden;
+        }
+        @keyframes collectiblePulse {
+          0%,
+          100% {
+            box-shadow: 0 0 10px var(--collectible-glow);
+          }
+          50% {
+            box-shadow: 0 0 20px var(--collectible-glow);
+          }
+        }
+        .collectible-tile-owned {
+          animation: collectiblePulse 2.6s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .collectible-tile-owned {
+            animation: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
