@@ -36,6 +36,13 @@ export default function WidgetFrame({ storageKey, children, lockedSkinKeys = [] 
   const [catalog, setCatalog] = useState<WidgetSkin[]>(FALLBACK_SKINS);
   const [skinKey, setSkinKey] = useState<WidgetSkinKey>(DEFAULT_WIDGET_SKIN_KEY);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Mobile fix (Oct 18, 2026) -- same bug as the Hub's Notices panel
+  // and ShareButton's menu: `right: 0` only stays on-screen when the
+  // widget frame it's anchored to happens to sit near the right edge.
+  // Widgets can land anywhere in the grid, so measuring the frame's
+  // real position and clamping to the viewport is what actually makes
+  // this safe everywhere, on any screen size.
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const availableSkins = catalog.filter((s) => !lockedSkinKeys.includes(s.key));
 
@@ -146,7 +153,16 @@ export default function WidgetFrame({ storageKey, children, lockedSkinKeys = [] 
         <span aria-hidden="true">{skin.headerLabel}</span>
         <button
           type="button"
-          onClick={() => setPickerOpen((open) => !open)}
+          onClick={() => {
+            const opening = !pickerOpen;
+            if (opening && frameRef.current) {
+              const rect = frameRef.current.getBoundingClientRect();
+              const width = 216;
+              const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+              setPickerPos({ top: rect.top + 24, left });
+            }
+            setPickerOpen(opening);
+          }}
           aria-label={`Change skin (currently ${skin.name})`}
           aria-expanded={pickerOpen}
           title={`Change skin (currently ${skin.name})`}
@@ -174,12 +190,12 @@ export default function WidgetFrame({ storageKey, children, lockedSkinKeys = [] 
         {children}
       </div>
 
-      {pickerOpen && (
+      {pickerOpen && pickerPos && (
         <div
           style={{
-            position: "absolute",
-            top: "24px",
-            right: 0,
+            position: "fixed",
+            top: pickerPos.top,
+            left: pickerPos.left,
             zIndex: 50,
             width: "216px",
             maxHeight: "260px",

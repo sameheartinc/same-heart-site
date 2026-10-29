@@ -3548,3 +3548,96 @@ with a status-readout header instead of a plain heading.
 
 Nothing about ownership, ranks, or any of the underlying fetches changed
 -- this was frame-only. Verified with `npx tsc --noEmit` (clean).
+
+## Mobile dropdowns were sliding off the left edge of the screen (Oct 18, 2026)
+
+Rob's report: opening Notices in the Hub on his phone showed "Nothing
+here yet" barely readable, off the screen to the left. The actual bug
+wasn't that panel specifically -- it was `position: "absolute"` combined
+with `right: 0`, anchored to whatever small element the dropdown trigger
+happened to be. That only stays on screen when the anchor itself sits
+near the viewport's right edge; on a narrow phone layout, with the
+trigger button sitting elsewhere, the panel overflows off-screen instead
+of clamping to it.
+
+Grepped the codebase for the same pattern and found it in three places:
+the Hub's notification bell panel, ShareButton's share menu, and
+WidgetFrame's per-widget skin picker. Fixed all three the same way --
+measure the real trigger's `getBoundingClientRect()` on open, clamp the
+computed `left` between a margin and `window.innerWidth - width -
+margin`, then render with `position: "fixed"` using that computed
+top/left instead of `position: "absolute"` + `right: 0`. Two other spots
+using the same CSS properties (`app/commons/page.tsx`'s full-width
+overlay, `app/page.tsx`'s footer) were checked and ruled out -- they use
+`left: 0; right: 0` for a full-width bar, not a small anchored dropdown,
+so they were never actually vulnerable to this.
+
+This was scoped as "fix every instance of this specific bug class," not
+a full mobile-friendliness pass -- there may be other mobile rough edges
+elsewhere that weren't part of this sweep. Verified with `npx tsc
+--noEmit` (clean).
+
+
+## Onboarding: dropped the inkblot, grew the question bank to 100 (Oct 18, 2026)
+
+Two changes to `PathOnboarding.tsx`/`lib/paths.ts`, both from the same
+ask. First: removed the inkblot stage ("which one feels closer?") --
+Rob's call, it read as irrelevant next to the three real questions. The
+flow now goes straight from the last question to `onComplete` instead of
+handing off to one more stage; `lib/paths.ts` lost the now-dead
+`InkblotOption`/`INKBLOTS`/`buildInkblotPath`.
+
+Second, the bigger one: Rob wanted a visitor who comes back to get a
+different onboarding experience, not the same three questions every
+time. `ONBOARDING_QUESTIONS` grew from 3 to 100 -- the original three
+plus 97 new ones, each still nudging exactly one of the four axes by 2
+points, same scoring as always. A new `pickOnboardingQuestions()` draws
+`ONBOARDING_QUESTION_COUNT` (3) of them at random, without repeats, once
+per mount -- same lazy-fill-after-mount pattern the ambient orb field
+already used, so server/client hydration still matches. Two different
+people, or the same person months apart, land on a different set of
+three almost every time now.
+
+The 97 new questions were written and validated (no duplicate ids,
+exactly 4 weighted options each) before anything touched the file, and
+deliberately avoid finance, health, self-harm, violence, or sexual
+content as topics -- both as general practice and with extra care given
+Rob's own disclosed history of online threats. Verified with `npx tsc
+--noEmit` (clean, after fixing a bracket slip from the original splice).
+
+
+## Peer Support gets its own bubble on the Galaxy map (Oct 19, 2026)
+
+The actual peer support system -- intake, matching, ongoing check-ins --
+has been the stated core of Same Heart since the beginning, distinct
+from `/support`'s static list of real crisis hotlines. This is its first
+real piece: a new "Peer Support" node orbiting the Galaxy page (joining
+Hub, Commons, Shop, Wallet, Field Guide, the Arcade, Deep Signals, and
+the Hearth), linking to `/peer-support` -- a real intake form, not a
+placeholder.
+
+The form asks what someone's looking for (support, to give support, or
+either), which general areas it's around (loneliness, grief,
+relationship stress, overwhelm, a life transition, or general
+accountability check-ins), how often they'd want to check in, and two
+optional free-text fields for context and anything a future peer should
+know. Submitting writes to a new `peer_support_intakes` table
+(`supabase/schema_peer_support.sql`, still needs to be run in the
+Supabase SQL editor) locked down by Row Level Security so a person can
+only ever see and edit their own row, and only while it's still
+`pending` -- a partial unique index keeps it to one active intake per
+person, so resubmitting edits that same row instead of creating a new
+one. `matched`/`closed` are reserved for the matching pass that hasn't
+been built yet; the column exists now so that pass won't need its own
+migration.
+
+Carries the same crisis disclaimer as `/support` (not a crisis service,
+911 for immediate danger, link to the real hotline list) since this
+page is clearly adjacent to that need even though it serves a different
+purpose. The new node sits at the widest open gap on the orbit ring
+(between Deep Signals and the Hearth), with its radius kept conservative
+on purpose -- learned from the Hearth's own history of drifting off the
+bottom edge on short screens at too steep a downward angle.
+
+Matching and check-ins are not built -- this is intake only. Verified
+with `npx tsc --noEmit` (clean).

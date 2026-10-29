@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -144,6 +144,17 @@ export default function HubPage() {
   const [notifications, setNotifications] = useState<CommonsNotification[]>([]);
   const [notifAuthors, setNotifAuthors] = useState<Record<string, PublicProfile>>({});
   const [notifOpen, setNotifOpen] = useState(false);
+  // Mobile fix (Oct 18, 2026) -- this panel used to anchor purely to
+  // its trigger button (`right: 0` on a small `position: relative`
+  // wrapper), which only stays on-screen when that button happens to
+  // sit near the right edge of the viewport. On a phone, with four
+  // stat tiles in a row, it usually doesn't -- the panel's left edge
+  // ran straight off the left side of the screen ("Nothing here yet"
+  // readable, just not visible). Measuring the button's real position
+  // and clamping to the viewport (see toggleNotifications) fixes this
+  // for every screen size, not just a media-query guess.
+  const [notifPos, setNotifPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const notifButtonRef = useRef<HTMLButtonElement>(null);
   // Floating bubbles -- an ambient, no-click-required companion to the
   // NOTICES bell above (ask was: "a little bubble pop up... make it
   // clickable to take them to the community area"), plus a second,
@@ -517,6 +528,12 @@ export default function HubPage() {
 
   async function toggleNotifications() {
     const opening = !notifOpen;
+    if (opening && notifButtonRef.current) {
+      const rect = notifButtonRef.current.getBoundingClientRect();
+      const width = Math.min(320, window.innerWidth - 32);
+      const left = Math.max(16, Math.min(rect.right - width, window.innerWidth - width - 16));
+      setNotifPos({ top: rect.bottom + 8, left, width });
+    }
     setNotifOpen(opening);
     if (opening && unreadNotifications.length > 0) {
       const ids = unreadNotifications.map((n) => n.id);
@@ -1684,6 +1701,7 @@ export default function HubPage() {
                 real unread count. See lib/commons.ts and PLAN.md. */}
             <div style={{ position: "relative" }}>
               <button
+                ref={notifButtonRef}
                 type="button"
                 onClick={toggleNotifications}
                 aria-label="Notifications"
@@ -1726,14 +1744,14 @@ export default function HubPage() {
                 </div>
               </button>
 
-              {notifOpen && (
+              {notifOpen && notifPos && (
                 <div
                   style={{
-                    position: "absolute",
-                    top: "calc(100% + 8px)",
-                    right: 0,
+                    position: "fixed",
+                    top: notifPos.top,
+                    left: notifPos.left,
                     zIndex: 5,
-                    width: "min(320px, 80vw)",
+                    width: notifPos.width,
                     maxHeight: "320px",
                     overflowY: "auto",
                     background: "var(--widget-panel)",

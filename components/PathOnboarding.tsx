@@ -3,15 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AxisScores,
-  INKBLOTS,
-  InkblotOption,
-  ONBOARDING_QUESTIONS,
+  ONBOARDING_QUESTION_COUNT,
   ORB_COLORS,
   OnboardingOption,
+  OnboardingQuestion,
   OrbColorOption,
   TEXTURES,
   TextureOption,
-  buildInkblotPath,
+  pickOnboardingQuestions,
   scoreOnboarding,
 } from "../lib/paths";
 import { playSelectChime, playTextureSound } from "../lib/orbTones";
@@ -20,7 +19,7 @@ interface PathOnboardingProps {
   onComplete: (scores: AxisScores) => void;
 }
 
-type Stage = "color" | "texture" | "question" | "inkblot";
+type Stage = "color" | "texture" | "question";
 
 interface AmbientOrb {
   id: number;
@@ -66,8 +65,6 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-const TOTAL_STEPS = 2 + ONBOARDING_QUESTIONS.length + 1; // colour, texture, questions, inkblot
-
 // Three quick sensory picks (a colour, a texture, an inkblot) wrapped
 // around the three original questions -- everything feeds the same
 // four-axis scoring in lib/paths.ts's scoreOnboarding. Rendered as one
@@ -77,17 +74,23 @@ export default function PathOnboarding({ onComplete }: PathOnboardingProps) {
   const [stage, setStage] = useState<Stage>("color");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [ambientOrbs, setAmbientOrbs] = useState<AmbientOrb[] | null>(null);
+  // Rob, Oct 18 2026: "the questions should not be the same...so if
+  // someone visits again its a new experience." Drawn once per mount
+  // from the ~100-question bank in lib/paths.ts, same lazy-fill pattern
+  // as ambientOrbs just above -- starts empty so server and client HTML
+  // match, then fills in right after.
+  const [sessionQuestions, setSessionQuestions] = useState<OnboardingQuestion[] | null>(null);
   const [pickedColor, setPickedColor] = useState<OrbColorOption | null>(null);
   const [pickedOrbId, setPickedOrbId] = useState<number | null>(null);
   const [pickedTexture, setPickedTexture] = useState<TextureOption | null>(null);
   const [questionAnswers, setQuestionAnswers] = useState<
     Array<OnboardingOption["weights"] | undefined>
   >([]);
-  const [finishingInkblot, setFinishingInkblot] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
     setAmbientOrbs(generateAmbientOrbs());
+    setSessionQuestions(pickOnboardingQuestions(ONBOARDING_QUESTION_COUNT));
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReducedMotion(mq.matches);
     const onChange = () => setReducedMotion(mq.matches);
@@ -95,14 +98,8 @@ export default function PathOnboarding({ onComplete }: PathOnboardingProps) {
     return () => mq.removeEventListener?.("change", onChange);
   }, []);
 
-  const stepIndex =
-    stage === "color"
-      ? 0
-      : stage === "texture"
-      ? 1
-      : stage === "question"
-      ? 2 + questionIndex
-      : TOTAL_STEPS - 1;
+  const TOTAL_STEPS = 2 + (sessionQuestions?.length ?? ONBOARDING_QUESTION_COUNT); // colour, texture, questions
+  const stepIndex = stage === "color" ? 0 : stage === "texture" ? 1 : 2 + questionIndex;
 
   const ambientHex = pickedColor?.hex ?? null;
   const ambientGlow = pickedColor?.glow ?? null;
@@ -124,36 +121,26 @@ export default function PathOnboarding({ onComplete }: PathOnboardingProps) {
     }, 900);
   }
 
+  // Rob, Oct 18 2026: "remove the last question about which one feels
+  // closer -- seems irrelevant." That was the inkblot stage -- it's
+  // gone now, so the last text question finishes onboarding directly
+  // instead of handing off to one more stage.
   function chooseQuestionOption(option: OnboardingOption) {
     const next = [...questionAnswers];
     next[questionIndex] = option.weights;
     setQuestionAnswers(next);
     playSelectChime();
     window.setTimeout(() => {
-      if (questionIndex + 1 < ONBOARDING_QUESTIONS.length) {
+      if (questionIndex + 1 < (sessionQuestions?.length ?? 0)) {
         setQuestionIndex(questionIndex + 1);
       } else {
-        setStage("inkblot");
+        const allAnswers = [pickedColor?.weights, pickedTexture?.weights, ...next];
+        onComplete(scoreOnboarding(allAnswers));
       }
     }, 380);
   }
 
-  function chooseInkblot(option: InkblotOption) {
-    if (finishingInkblot) return;
-    setFinishingInkblot(option.id);
-    playSelectChime();
-    window.setTimeout(() => {
-      const allAnswers = [
-        pickedColor?.weights,
-        pickedTexture?.weights,
-        ...questionAnswers,
-        option.weights,
-      ];
-      onComplete(scoreOnboarding(allAnswers));
-    }, reducedMotion ? 200 : 850);
-  }
-
-  const question = ONBOARDING_QUESTIONS[questionIndex];
+  const question = sessionQuestions?.[questionIndex];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "22px" }}>
@@ -230,7 +217,7 @@ export default function PathOnboarding({ onComplete }: PathOnboardingProps) {
                   )}, ${withAlpha(hex, 0.35)} 70%)`,
                   boxShadow: `0 0 ${orb.size * 0.6}px ${glow}`,
                   pointerEvents: isPicking ? "auto" : "none",
-                  opacity: stage === "inkblot" ? 0.35 : 1,
+                  opacity: 1,
                   animationDuration: `${orb.duration}s`,
                   animationDelay: `${orb.delay}s`,
                   ["--dx" as string]: `${orb.dx}px`,
@@ -382,53 +369,6 @@ export default function PathOnboarding({ onComplete }: PathOnboardingProps) {
                   }}
                 >
                   {option.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {stage === "inkblot" && pickedColor && (
-          <>
-            <p
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: "clamp(1.2rem, 3.2vw, 1.6rem)",
-                fontWeight: 600,
-                textAlign: "center",
-                margin: 0,
-              }}
-            >
-              Which one feels closer?
-            </p>
-            <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", justifyContent: "center" }}>
-              {INKBLOTS.map((blot) => (
-                <button
-                  key={blot.id}
-                  onClick={() => chooseInkblot(blot)}
-                  disabled={Boolean(finishingInkblot)}
-                  aria-label="Choose this shape"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
-                    cursor: finishingInkblot ? "default" : "pointer",
-                  }}
-                >
-                  <svg
-                    width="86"
-                    height="86"
-                    viewBox="0 0 200 200"
-                    className={finishingInkblot ? "path-squiggle-out" : undefined}
-                    style={{
-                      filter: `drop-shadow(0 0 12px ${withAlpha(pickedColor.hex, 0.35)})`,
-                    }}
-                  >
-                    <path
-                      d={buildInkblotPath(blot.radii)}
-                      fill={withAlpha(pickedColor.hex, blot.id === finishingInkblot ? 0.85 : 0.55)}
-                    />
-                  </svg>
                 </button>
               ))}
             </div>

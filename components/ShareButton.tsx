@@ -44,6 +44,13 @@ export function ShareButton({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
+  // Mobile fix (Oct 18, 2026) -- same bug as the Hub's Notices panel:
+  // `right: 0` on a small inline-block wrapper only keeps the menu
+  // on-screen when the Share button happens to sit near the right
+  // edge. Share buttons live inline in threads and posts, so that's
+  // often not true on a phone. Measuring the button's real position
+  // and clamping to the viewport fixes it everywhere this is used.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,7 +78,14 @@ export function ShareButton({
       }
       return;
     }
-    setOpen((v) => !v);
+    const opening = !open;
+    if (opening && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const width = 200; // a bit more than the menu's natural content width
+      const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+      setMenuPos({ top: rect.bottom + 6, left });
+    }
+    setOpen(opening);
   }
 
   async function copyLink() {
@@ -125,12 +139,12 @@ export function ShareButton({
         Share
       </button>
 
-      {open && !canNativeShare && (
+      {open && !canNativeShare && menuPos && (
         <div
           style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            right: 0,
+            position: "fixed",
+            top: menuPos.top,
+            left: menuPos.left,
             zIndex: 20,
             minWidth: "170px",
             padding: "8px",

@@ -113,6 +113,31 @@ export const GALAXY_NODES: GalaxyNode[] = [
     dim: true,
   },
   {
+    // The real peer support system Same Heart is actually built around
+    // (see lib/peerSupport.ts and supabase/schema_peer_support.sql) --
+    // intake is live here; matching and check-ins are later passes.
+    // Deliberately NOT dimmed, same reasoning as Deep Signals below:
+    // this is real, saved content from day one, not a placeholder.
+    // Sits at 85deg, the midpoint of the widest open gap on the ring
+    // (70deg, between Deep Signals at 50 and the Hearth at 120).
+    // radiusPct kept conservative on purpose -- 85deg is nearly
+    // straight down, and the Hearth's own history (see its comment
+    // below) is that a radius much past 40 at a steep downward angle
+    // pushes a node past the bottom edge on shorter screens. 38 lands
+    // this one at roughly the same vertical level as Deep Signals and
+    // the Hearth already sit at, not further out.
+    key: "peer-support",
+    href: "/peer-support",
+    monogram: "P",
+    icon: "icosahedron",
+    name: "Peer Support",
+    tagline: "Tell us what's going on",
+    accent: "#6fcf97",
+    angleDeg: 85,
+    radiusPct: 38,
+    scale: 1.05,
+  },
+  {
     // A "coming soon" placeholder, same shape as Wallet/Field Guide --
     // Rob's own idea: a play area for quick, funny little games (his
     // words: "geopolitical games... I have a lot of funny little games
