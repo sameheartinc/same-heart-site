@@ -3641,3 +3641,17 @@ bottom edge on short screens at too steep a downward angle.
 
 Matching and check-ins are not built -- this is intake only. Verified
 with `npx tsc --noEmit` (clean).
+
+Fixed a mobile readability bug on the Peer Support page: several pieces
+of text inside the dark `.command-panel` frames were colored with
+`var(--ink)`/`var(--ink-dim)` (a dark purple, meant for light
+backgrounds elsewhere on the site), which washed out to nearly
+invisible against the panel's near-black gradient on a phone screen --
+reported directly by seeing it on mobile. Fixed the "What are you
+looking for?" role options with white text and a slight glow per that
+report, and while in there fixed the same underlying issue everywhere
+else it appeared on this page: the crisis disclaimer banner, the
+locked/saved status messages, the focus-area chips, and the dropdown
+and both free-text boxes (that last one mattered most -- a dark
+textarea on a dark panel meant you couldn't see what you were typing).
+Verified with `npx tsc --noEmit` (clean).

@@ -184,7 +184,7 @@ export default function PeerSupportPage() {
             fontFamily: "var(--font-body)",
             fontSize: "0.86rem",
             lineHeight: 1.6,
-            color: "var(--ink-dim)",
+            color: "rgba(255,255,255,0.78)",
           }}
         >
           Same Heart is not a crisis service, and no one is monitoring this form in real
@@ -201,7 +201,7 @@ export default function PeerSupportPage() {
 
         {locked && (
           <div className="command-panel" style={{ padding: "16px 18px", marginBottom: "24px" }}>
-            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--ink-dim)" }}>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "rgba(255,255,255,0.78)" }}>
               Your intake is marked <strong style={{ color: "var(--gold)" }}>{existing?.status}</strong>. It&rsquo;s
               no longer editable here -- reach out through{" "}
               <Link href="/contact" style={{ color: "var(--gold)" }}>
@@ -214,7 +214,7 @@ export default function PeerSupportPage() {
 
         {savedJustNow && !locked && (
           <div className="command-panel" style={{ padding: "16px 18px", marginBottom: "24px" }}>
-            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--ink-dim)" }}>
+            <p style={{ margin: 0, fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "rgba(255,255,255,0.78)" }}>
               Saved. Your intake is marked <strong style={{ color: "var(--gold)" }}>pending</strong> -- you can
               come back and change any of this any time before it&rsquo;s matched.
             </p>
@@ -257,7 +257,7 @@ export default function PeerSupportPage() {
                       borderRadius: "999px",
                       border: `1px solid ${active ? "var(--gold)" : "var(--border)"}`,
                       background: active ? "rgba(201,161,90,0.16)" : "transparent",
-                      color: active ? "var(--gold)" : "var(--ink-dim)",
+                      color: active ? "var(--gold)" : "rgba(255,255,255,0.78)",
                       fontFamily: "var(--font-body)",
                       fontSize: "0.82rem",
                       opacity: locked ? 0.6 : 1,
@@ -354,7 +354,8 @@ function radioLabelStyle(active: boolean): React.CSSProperties {
     background: active ? "rgba(201,161,90,0.1)" : "transparent",
     fontFamily: "var(--font-body)",
     fontSize: "0.9rem",
-    color: "var(--ink)",
+    color: "#fff",
+    textShadow: "0 0 6px rgba(255,255,255,0.45)",
     cursor: "pointer",
   };
 }
@@ -364,7 +365,7 @@ const selectStyle: React.CSSProperties = {
   borderRadius: "10px",
   border: "1px solid var(--border)",
   background: "var(--void)",
-  color: "var(--ink)",
+  color: "#fff",
   fontSize: "0.9rem",
 };
 
@@ -373,7 +374,7 @@ const textareaStyle: React.CSSProperties = {
   borderRadius: "10px",
   border: "1px solid var(--border)",
   background: "var(--void)",
-  color: "var(--ink)",
+  color: "#fff",
   fontSize: "0.9rem",
   resize: "vertical",
 };
