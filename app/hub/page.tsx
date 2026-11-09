@@ -39,6 +39,8 @@ import { pickQuote, type Quote } from "@/lib/quotes";
 import { PATHS, type PathKey } from "@/lib/paths";
 import { streakVisualTier, checkInWithServer, type StreakMilestone } from "@/lib/streak";
 import { listMyUnlocks, evaluateEvolution } from "@/lib/evolution";
+import { CARDS, cardUnlockId, type CardDef } from "@/lib/cards";
+import CardVideoLightbox from "@/components/CardVideoLightbox";
 import { getMyMonetizationStatus, applyForMonetization, type MonetizationStatus } from "@/lib/monetization";
 import { FALLBACK_SKINS, loadWidgetSkins, type WidgetSkin, type WidgetSkinKey } from "@/lib/widgetSkins";
 import {
@@ -165,6 +167,11 @@ export default function HubPage() {
   const [replyBubbleDismissed, setReplyBubbleDismissed] = useState(false);
   const [trendingBubbleDismissed, setTrendingBubbleDismissed] = useState(false);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  // Which newly-earned card (if any) to show full-size with the sparkle
+  // splash the moment it's granted -- see the evaluateEvolution callback
+  // below. Holds a CardDef, not just an id, so CardVideoLightbox never
+  // has to look it back up.
+  const [cardReveal, setCardReveal] = useState<CardDef | null>(null);
   const [shareVisitCount, setShareVisitCount] = useState(0);
   // Double XP Hour -- see lib/evolution.ts's "ability-double-xp" and
   // app/api/abilities/double-xp/route.ts. The actual doubling happens
@@ -376,6 +383,15 @@ export default function HubPage() {
       evaluateEvolution().then((result) => {
         if (result.newlyEarned.length > 0) {
           listMyUnlocks().then((ids) => setUnlockedIds(new Set(ids)));
+          // The welcome card (see lib/cards.ts) is the one unlock that
+          // gets real fanfare right now -- Rob's spec (Nov 9 2026): a
+          // sparkle splash with the card's video, the moment it lands.
+          // Everything else in Evolution stays the quiet background
+          // check it's always been.
+          const newWelcomeCard = CARDS.find(
+            (c) => c.id === "welcome" && result.newlyEarned.includes(cardUnlockId(c.id))
+          );
+          if (newWelcomeCard) setCardReveal(newWelcomeCard);
         }
       });
 
@@ -3353,6 +3369,10 @@ export default function HubPage() {
           Sign out
         </button>
       </div>
+
+      {cardReveal && (
+        <CardVideoLightbox card={cardReveal} celebratory onClose={() => setCardReveal(null)} />
+      )}
     </main>
   );
 }

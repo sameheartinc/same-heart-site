@@ -118,7 +118,7 @@ export const CARDS: CardDef[] = [
     id: "welcome",
     name: "First Light",
     rarity: "uncommon",
-    image: null,
+    image: "/cards/welcome.png",
     video: "/cards/welcome.mp4",
     source: { type: "new-member" },
     blurb: "The first card every new arrival picks up, the moment they join.",

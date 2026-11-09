@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CardDef, RARITY_ACCENT, cardAccent, describeCardSource } from "@/lib/cards";
+import CardVideoLightbox from "@/components/CardVideoLightbox";
 
 // One collectible Card (see lib/cards.ts). Earned cards show their art --
 // or, until real art exists, a generated placeholder in the card's own
@@ -15,19 +16,20 @@ import { CardDef, RARITY_ACCENT, cardAccent, describeCardSource } from "@/lib/ca
 // faintly in its own rarity color, the same "active instrument light"
 // treatment Wallet already gives a held Heart String. Locked tiles stay
 // static -- dimmed and grayscale, same as before.
+//
+// A card with real video art (lib/cards.ts's `video` field) stays a
+// still image in the grid -- autoplaying video in every tile would be
+// noisy and heavy on a page with dozens of cards. Rob's spec (Nov 9
+// 2026): the grid shows the still, and clicking it opens the video
+// full-size, looping, closed with an X -- see CardVideoLightbox.
 export default function CollectibleCard({ card, owned }: { card: CardDef; owned: boolean }) {
-  // If a card's video 404s or otherwise fails (e.g. the real file hasn't
-  // been committed yet), fall back to the normal generated placeholder
-  // instead of a broken/blank video box -- same "earnable before its art
-  // exists" promise lib/cards.ts already makes for `image`.
-  const [videoFailed, setVideoFailed] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const accent = cardAccent(card);
   const rarityColor = RARITY_ACCENT[card.rarity];
   const glyph =
     card.source.type === "level" ? String(card.source.level) : card.source.type === "heart-string" ? "♥" : "✦";
-  const showVideo = owned && Boolean(card.video) && !videoFailed;
-  const showImage = owned && Boolean(card.image) && !showVideo;
-  const hasVisual = showImage || showVideo;
+  const showImage = owned && Boolean(card.image);
+  const isPlayable = owned && Boolean(card.video);
 
   return (
     <div
@@ -44,6 +46,9 @@ export default function CollectibleCard({ card, owned }: { card: CardDef; owned:
       }}
     >
       <div
+        onClick={isPlayable ? () => setLightboxOpen(true) : undefined}
+        role={isPlayable ? "button" : undefined}
+        aria-label={isPlayable ? `Play ${card.name} card video` : undefined}
         style={{
           flex: 1,
           position: "relative",
@@ -54,32 +59,10 @@ export default function CollectibleCard({ card, owned }: { card: CardDef; owned:
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          cursor: isPlayable ? "pointer" : "default",
         }}
       >
-        {showVideo && (
-          // A rotating/animated card (see lib/cards.ts's `video` field) --
-          // plays instead of a still image. Muted + autoPlay + playsInline
-          // so it actually autoplays on mobile Safari, loops forever since
-          // there's no "end" to a rotating card, and uses card.image (if
-          // set) as the poster frame while it loads.
-          <video
-            src={card.video ?? undefined}
-            poster={card.image ?? undefined}
-            autoPlay
-            loop
-            muted
-            playsInline
-            onError={() => setVideoFailed(true)}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
-        )}
-        {!hasVisual && (
+        {!showImage && (
           <span
             style={{
               fontFamily: "var(--font-display)",
@@ -91,6 +74,29 @@ export default function CollectibleCard({ card, owned }: { card: CardDef; owned:
           >
             {owned ? glyph : "?"}
           </span>
+        )}
+        {isPlayable && (
+          // Play-button affordance -- always visible (not hover-only),
+          // since most of this site is used on a phone.
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              bottom: "8px",
+              right: "8px",
+              width: "26px",
+              height: "26px",
+              borderRadius: "50%",
+              background: "rgba(9,11,18,0.72)",
+              border: `1px solid ${accent}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: `0 0 10px ${accent}88`,
+            }}
+          >
+            <span style={{ color: "#fff", fontSize: "10px", marginLeft: "2px" }}>&#9654;</span>
+          </div>
         )}
       </div>
       <div style={{ padding: "10px 10px 12px", background: "var(--panel)", borderTop: "1px solid var(--border)" }}>
@@ -123,6 +129,8 @@ export default function CollectibleCard({ card, owned }: { card: CardDef; owned:
           </p>
         )}
       </div>
+
+      {lightboxOpen && <CardVideoLightbox card={card} onClose={() => setLightboxOpen(false)} />}
 
       <style jsx>{`
         .collectible-tile {

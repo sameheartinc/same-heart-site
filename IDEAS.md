@@ -3714,3 +3714,21 @@ joined before the cutoff, so it was wrong to show it to them as
 
 Still needed: the real video file from Rob (public/cards/welcome.mp4).
 Verified with `npx tsc --noEmit` (clean).
+
+Second pass on the welcome card, same day: Rob sent the real still image
+(public/cards/welcome.png, now the card's `image`) and a spec for how the
+video should actually surface -- not autoplaying in every grid tile (too
+noisy/heavy on a page full of cards), but a still in the grid that opens
+the video full-size on click, looping, closed with an X. New
+components/CardVideoLightbox.tsx does that, reused two ways: a plain
+version for clicking any owned card with video (CollectibleCard.tsx's
+tile is now clickable only when it actually has one, with a small
+always-visible play badge since most of this site is used on a phone),
+and a celebratory version -- gold sparkle field, "You unlocked ___" line
+-- that app/hub/page.tsx now fires automatically the moment the welcome
+card is actually granted (the evaluateEvolution callback already knew
+what was newly earned; this is the first time anything on the site did
+more than silently update state with that). Nothing else about Evolution
+changed -- every other unlock is still the quiet background check it's
+always been; the splash is specific to this one card for now. Verified
+with `npx tsc --noEmit` (clean).
