@@ -3655,3 +3655,23 @@ locked/saved status messages, the focus-area chips, and the dropdown
 and both free-text boxes (that last one mattered most -- a dark
 textarea on a dark panel meant you couldn't see what you were typing).
 Verified with `npx tsc --noEmit` (clean).
+
+Added a persistent "return to the Galaxy" control -- a small ship icon
+(the same silhouette already used for the Galaxy cursor and the /login
+reveal) fixed in the top-right corner of every page, the mirror of
+GlobalPlayer's top-left "now playing" widget and built the same way: it
+lives once in the root layout (`components/GalaxyNav.tsx`) and hides
+itself with CSS on "/", "/login", and "/galaxy" rather than being added
+page by page. Rob's prompt: sending someone straight to Peer Support (for
+a talk he's giving) left them with literally no way back to the main
+Galaxy map.
+
+Clicking it never jumps straight into the Galaxy, on purpose: it checks
+for a real session first (no session -> /login, same as a first-time
+visitor following any link cold) and then checks that profile's
+`path_key` -- the real "finished the onboarding sequence" signal, not
+`archetype` (which gets set automatically at signup regardless of
+whether someone ever did the color/texture/question setup, so it can't
+be used to gate this). Only once both are true does it go to /galaxy;
+otherwise it sends them to /login to actually finish setup first.
+Verified with `npx tsc --noEmit` (clean).
