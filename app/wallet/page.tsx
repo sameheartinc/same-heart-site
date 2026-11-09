@@ -103,9 +103,14 @@ export default function WalletPage() {
   // "things to go earn" when nothing's owned yet, just a couple of
   // teasers once most of the shelf is already real trophies.
   const lockedFillCount = Math.max(0, CARD_PREVIEW_MAX - ownedPreview.length);
+  // Below Level 50 the only card that can possibly be owned is the one
+  // exception to that gate -- the new-member welcome card (see
+  // lib/cards.ts). Show that for real if it's held; just skip the
+  // locked-filler teaser cards, which are still genuinely out of reach
+  // down here.
   const previewCards =
     level < CARDS_MIN_LEVEL
-      ? []
+      ? ownedPreview
       : [...ownedPreview, ...CARDS.filter((c) => !isOwned(c.id)).slice(0, lockedFillCount)];
 
   return (
@@ -322,8 +327,8 @@ export default function WalletPage() {
             </span>
           </div>
 
-          {level < CARDS_MIN_LEVEL ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "6px" }}>
+          {level < CARDS_MIN_LEVEL && (
+            <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: previewCards.length > 0 ? "16px" : "6px" }}>
               <div
                 aria-hidden="true"
                 style={{
@@ -348,19 +353,18 @@ export default function WalletPage() {
                 get there.
               </p>
             </div>
-          ) : (
-            <>
-              <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.85rem", color: "var(--ink-dim)" }}>
-                Earned by leveling up, earning Heart Strings, and being here for special moments.
-              </p>
-              {previewCards.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "12px", marginBottom: "16px" }}>
-                  {previewCards.map((card) => (
-                    <CollectibleCard key={card.id} card={card} owned={isOwned(card.id)} />
-                  ))}
-                </div>
-              )}
-            </>
+          )}
+          {level >= CARDS_MIN_LEVEL && (
+            <p style={{ margin: "0 0 14px", fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: "0.85rem", color: "var(--ink-dim)" }}>
+              Earned by leveling up, earning Heart Strings, and being here for special moments.
+            </p>
+          )}
+          {previewCards.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+              {previewCards.map((card) => (
+                <CollectibleCard key={card.id} card={card} owned={isOwned(card.id)} />
+              ))}
+            </div>
           )}
 
           <Link

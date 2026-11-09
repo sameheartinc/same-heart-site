@@ -3675,3 +3675,42 @@ whether someone ever did the color/texture/question setup, so it can't
 be used to gate this). Only once both are true does it go to /galaxy;
 otherwise it sends them to /login to actually finish setup first.
 Verified with `npx tsc --noEmit` (clean).
+
+Added a "welcome card" every new member gets the moment they join --
+Rob: "new members should get a card unlock." Cards have had a hard rule
+since Sep 20 2026 ("you won't get cards until level 50") -- this is the
+one deliberate exception to it, not a change to that rule. A new
+`"new-member"` CardSource in lib/cards.ts, a matching carve-out in
+lib/evolution.ts's CARD_UNLOCKABLES (skips the Level 50 check only for
+this source type), and a new `joinedAtMs` signal threaded through
+app/api/evolution/evaluate/route.ts so eligibility can check WHEN someone
+joined against a fixed launch date (NEW_MEMBER_CARD_LAUNCH_MS, Nov 9
+2026) -- only people joining from here on get it, not backfilled to
+everyone already here (Rob had no preference either way; this felt like
+the more honest "welcome gift" reading of "new members," and it's a
+one-line constant to flip if he'd rather backfill everyone).
+
+Rob has a small rotating-card video he wants to use for this one instead
+of a still image, so CardDef grew an optional `video` field alongside
+`image` (components/CollectibleCard.tsx now plays it muted/looping, using
+`image` as the poster frame, and quietly falls back to the normal
+generated placeholder if the video 404s -- e.g. before the real file's
+actually been committed yet, same "earnable before its art exists"
+promise the catalog already makes for stills). Named it "First Light" as
+a first-cut placeholder -- trivial to rename once he's decided.
+
+Also fixed two spots that would've otherwise hidden this exact card from
+the one person it's for: /wallet's preview shelf was hard-coded to show
+nothing at all below Level 50 (`level < CARDS_MIN_LEVEL ? [] : ...`), and
+its "Clearance required" banner rendered instead of the card grid rather
+than alongside it. Both now show any card that's actually owned --
+practically speaking, only ever this one -- below Level 50, while still
+hiding the locked-filler teaser cards that genuinely are still out of
+reach down there. /cards gets its own "Welcome" section too, but only
+ever appears for people who actually hold it -- unlike every other
+locked card, this one isn't a reachable goal for someone who already
+joined before the cutoff, so it was wrong to show it to them as
+"Locked -- Join Same Heart."
+
+Still needed: the real video file from Rob (public/cards/welcome.mp4).
+Verified with `npx tsc --noEmit` (clean).

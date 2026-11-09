@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { CardDef, RARITY_ACCENT, cardAccent, describeCardSource } from "@/lib/cards";
 
 // One collectible Card (see lib/cards.ts). Earned cards show their art --
@@ -13,10 +16,18 @@ import { CardDef, RARITY_ACCENT, cardAccent, describeCardSource } from "@/lib/ca
 // treatment Wallet already gives a held Heart String. Locked tiles stay
 // static -- dimmed and grayscale, same as before.
 export default function CollectibleCard({ card, owned }: { card: CardDef; owned: boolean }) {
+  // If a card's video 404s or otherwise fails (e.g. the real file hasn't
+  // been committed yet), fall back to the normal generated placeholder
+  // instead of a broken/blank video box -- same "earnable before its art
+  // exists" promise lib/cards.ts already makes for `image`.
+  const [videoFailed, setVideoFailed] = useState(false);
   const accent = cardAccent(card);
   const rarityColor = RARITY_ACCENT[card.rarity];
   const glyph =
     card.source.type === "level" ? String(card.source.level) : card.source.type === "heart-string" ? "♥" : "✦";
+  const showVideo = owned && Boolean(card.video) && !videoFailed;
+  const showImage = owned && Boolean(card.image) && !showVideo;
+  const hasVisual = showImage || showVideo;
 
   return (
     <div
@@ -36,17 +47,39 @@ export default function CollectibleCard({ card, owned }: { card: CardDef; owned:
         style={{
           flex: 1,
           position: "relative",
-          background:
-            owned && card.image
-              ? `url(${card.image}) center / cover no-repeat`
-              : `radial-gradient(circle at 50% 38%, ${accent}${owned ? "cc" : "33"}, ${accent}${owned ? "22" : "0d"} 70%)`,
+          background: showImage
+            ? `url(${card.image}) center / cover no-repeat`
+            : `radial-gradient(circle at 50% 38%, ${accent}${owned ? "cc" : "33"}, ${accent}${owned ? "22" : "0d"} 70%)`,
           filter: owned ? "none" : "grayscale(1)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        {!(owned && card.image) && (
+        {showVideo && (
+          // A rotating/animated card (see lib/cards.ts's `video` field) --
+          // plays instead of a still image. Muted + autoPlay + playsInline
+          // so it actually autoplays on mobile Safari, loops forever since
+          // there's no "end" to a rotating card, and uses card.image (if
+          // set) as the poster frame while it loads.
+          <video
+            src={card.video ?? undefined}
+            poster={card.image ?? undefined}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onError={() => setVideoFailed(true)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        )}
+        {!hasVisual && (
           <span
             style={{
               fontFamily: "var(--font-display)",

@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
     foundingKeysHeld,
     keyColors: (keyRows ?? []).map((k) => k.key_color as string),
     nowMs: Date.now(),
+    joinedAtMs: joinedAt.getTime(),
   };
 
   const newlyEarned: string[] = [];

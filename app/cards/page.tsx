@@ -53,6 +53,13 @@ export default function CardsPage() {
   const isOwned = (card: CardDef) => owned.has(cardUnlockId(card.id));
   const collected = CARDS.filter(isOwned).length;
   const sections: { title: string; cards: CardDef[] }[] = [
+    // Unlike every other section, a card nobody can ever earn isn't a
+    // goal worth showing locked -- it's tied to WHEN someone joined, not
+    // something still ahead of them (see lib/cards.ts's NEW_MEMBER_CARD_
+    // LAUNCH_MS). So this section only exists at all for people who
+    // actually hold it; it quietly drops out otherwise, same as every
+    // other empty section already does below.
+    { title: "Welcome", cards: CARDS.filter((c) => c.source.type === "new-member" && isOwned(c)) },
     { title: "Levels", cards: CARDS.filter((c) => c.source.type === "level") },
     { title: "Heart Strings", cards: CARDS.filter((c) => c.source.type === "heart-string") },
     { title: "Events", cards: CARDS.filter((c) => c.source.type === "event") },
@@ -144,8 +151,8 @@ export default function CardsPage() {
         <ProgressionSummary />
 
         <p style={{ fontFamily: "var(--font-body)", fontStyle: "italic", color: "var(--ink-dim)", maxWidth: "56ch", margin: "0 0 18px" }}>
-          Earned by leveling up, earning Heart Strings, and being here for special moments. Once a card is
-          yours, it stays yours.
+          Earned by joining, leveling up, earning Heart Strings, and being here for special moments. Once a
+          card is yours, it stays yours.
         </p>
 
         {level < CARDS_MIN_LEVEL && (

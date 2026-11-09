@@ -35,7 +35,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { getLevel } from "@/lib/levels";
-import { CARDS, CARDS_MIN_LEVEL, cardUnlockId, describeCardSource } from "@/lib/cards";
+import { CARDS, CARDS_MIN_LEVEL, NEW_MEMBER_CARD_LAUNCH_MS, cardUnlockId, describeCardSource } from "@/lib/cards";
 
 export type UnlockKind = "widget-skin" | "milestone" | "ability" | "card"; // more kinds join this union as they ship
 
@@ -62,6 +62,12 @@ export interface UnlockableSignals {
   // function -- event cards (see lib/cards.ts) are only claimable inside
   // their window.
   nowMs: number;
+  // Epoch ms of profiles.joined_at -- an absolute moment, unlike
+  // tenureDays above (which is relative to "now" and so drifts). Added
+  // for the new-member welcome card (see lib/cards.ts's "new-member"
+  // source), which checks WHEN someone joined against a fixed launch
+  // date, not how long ago that was.
+  joinedAtMs: number;
 }
 
 export interface Unlockable {
@@ -134,7 +140,10 @@ const CARD_UNLOCKABLES: Unlockable[] = CARDS.map((card) => ({
   name: `${card.name} Card`,
   description: describeCardSource(card.source),
   isEligible: (s: UnlockableSignals) => {
-    if (getLevel(s.totalXP) < CARDS_MIN_LEVEL) return false;
+    // The new-member welcome card is the one deliberate exception to the
+    // Level 50 gate -- it's meant to be the very first card someone ever
+    // holds, not something they wait for. Everything else still waits.
+    if (card.source.type !== "new-member" && getLevel(s.totalXP) < CARDS_MIN_LEVEL) return false;
     switch (card.source.type) {
       case "level":
         return getLevel(s.totalXP) >= card.source.level;
@@ -142,6 +151,8 @@ const CARD_UNLOCKABLES: Unlockable[] = CARDS.map((card) => ({
         return s.keyColors.includes(card.source.color);
       case "event":
         return s.nowMs >= Date.parse(card.source.from) && s.nowMs <= Date.parse(card.source.until);
+      case "new-member":
+        return s.joinedAtMs >= NEW_MEMBER_CARD_LAUNCH_MS;
     }
   },
 }));

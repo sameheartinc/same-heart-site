@@ -44,7 +44,14 @@ export type CardRarity = "common" | "uncommon" | "rare" | "legendary";
 export type CardSource =
   | { type: "level"; level: number }
   | { type: "heart-string"; color: KeyColor }
-  | { type: "event"; label: string; from: string; until: string };
+  | { type: "event"; label: string; from: string; until: string }
+  // Granted the moment someone's a real member -- the one exception to
+  // "nothing below CARDS_MIN_LEVEL" (see lib/evolution.ts's CARD_UNLOCKABLES,
+  // which skips the Level 50 gate specifically for this source type). Only
+  // for people who joined on or after NEW_MEMBER_CARD_LAUNCH_MS below --
+  // Rob, Nov 9 2026: a welcome gift for people joining from here on, not
+  // retroactive to everyone already here.
+  | { type: "new-member" };
 
 export interface CardDef {
   id: string;
@@ -53,6 +60,12 @@ export interface CardDef {
   // Path under /public, e.g. "/cards/level-10.png". Null until real art
   // exists -- see HOW TO ADD A CARD above.
   image: string | null;
+  // Path under /public to a short looping clip (e.g. "/cards/welcome.mp4"),
+  // for a card whose art is a rotating/animated piece rather than a still
+  // image. Rendered instead of `image` where both exist (see
+  // components/CollectibleCard.tsx) -- `image`, if also set, is used as
+  // the video's poster frame while it loads.
+  video?: string | null;
   source: CardSource;
   // Optional one-line flavor text shown under the name.
   blurb?: string;
@@ -90,10 +103,27 @@ const LEVEL_CARDS: CardDef[] = Array.from({ length: MAX_LEVEL / LEVEL_CARD_STEP 
   };
 });
 
-// Starter catalog: the level cards above and one card per Heart String.
-// Names and rarities are first cuts meant to be renamed and re-rarified
-// once the real art arrives; only `id` is permanent.
+// Only people who joined on or after this moment are eligible for the
+// new-member welcome card -- see CardSource's "new-member" case above.
+// Nov 9 2026: the day this shipped. Change this if Rob ever wants it
+// backfilled to everyone already here instead -- a single-line edit either
+// way, nothing else about the card changes.
+export const NEW_MEMBER_CARD_LAUNCH_MS = Date.parse("2026-11-09T00:00:00Z");
+
+// Starter catalog: the welcome card, the level cards, and one card per
+// Heart String. Names and rarities are first cuts meant to be renamed and
+// re-rarified once the real art arrives; only `id` is permanent.
 export const CARDS: CardDef[] = [
+  {
+    id: "welcome",
+    name: "First Light",
+    rarity: "uncommon",
+    image: null,
+    video: "/cards/welcome.mp4",
+    source: { type: "new-member" },
+    blurb: "The first card every new arrival picks up, the moment they join.",
+  },
+
   ...LEVEL_CARDS,
 
   { id: "heart-green", name: "Green Heart String", rarity: "uncommon", image: null, source: { type: "heart-string", color: "green" } },
@@ -130,5 +160,7 @@ export function describeCardSource(source: CardSource): string {
       return `Earn the ${KEY_INFO[source.color].name}.`;
     case "event":
       return `Be here for ${source.label}.`;
+    case "new-member":
+      return "Join Same Heart.";
   }
 }
