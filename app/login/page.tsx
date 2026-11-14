@@ -8,12 +8,12 @@ import { ensureSession } from "@/lib/session";
 import { getTurnstileToken } from "@/lib/turnstile";
 import { getCapturedRef } from "@/lib/shareAttribution";
 import { usePathSignal } from "@/lib/cursorSignal";
-import { AxisScores, PathKey, PATHS, combineScores, pickPath } from "@/lib/paths";
+import { AxisScores, PathKey, combineScores, pickPath } from "@/lib/paths";
 import { ONBOARDING_WORLD, WORLDS } from "@/lib/worlds";
 import PathOnboarding from "@/components/PathOnboarding";
 import WorldField from "@/components/WorldField";
 
-type Stage = "gate" | "entering" | "quiz" | "revealing" | "ship" | "arriving" | "form";
+type Stage = "gate" | "entering" | "quiz" | "arriving" | "form";
 
 // Same ship-silhouette cursor as the Galaxy room (see app/galaxy/page.tsx)
 // -- applied here too during the colour/texture/question/inkblot picker so
@@ -78,7 +78,6 @@ function LoginPageInner() {
   const [pathKey, setPathKey] = useState<PathKey | null>(null);
 
   const cursorSignal = usePathSignal();
-  const path = pathKey ? PATHS[pathKey] : null;
   const backgroundWorld = pathKey ? WORLDS[pathKey] : ONBOARDING_WORLD;
 
   // Claim mode: someone already has an anonymous session (they've been
@@ -197,8 +196,13 @@ function LoginPageInner() {
         .eq("id", userId);
     }
 
-    setStage("revealing");
-    setTimeout(() => setStage("ship"), 2600);
+    // Rob, Nov 13 2026: cut the "You walk like..."/"Your vessel is
+    // ready" reveal screens entirely -- straight into the site the
+    // moment the one question's answered, no extra tap to leave.
+    // /star-day is a no-op relay straight to /hub (see that page) --
+    // same landing spot every other fresh-arrival path on this page
+    // already uses.
+    router.push("/star-day");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -319,10 +323,6 @@ function LoginPageInner() {
           from { opacity: 1; }
           to   { opacity: 0; }
         }
-        @keyframes shFloat {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
         .gate-mark { animation: gatePulse 2.8s ease-in-out infinite; cursor: pointer; }
         .gate-mark:hover { animation-play-state: paused; }
         .gate-mark.answering { animation: gateAnswer 0.7s ease-out forwards; cursor: default; }
@@ -338,7 +338,7 @@ function LoginPageInner() {
           position: "relative",
           zIndex: 1,
           width: "100%",
-          maxWidth: stage === "quiz" ? "min(1400px, 96vw)" : "480px",
+          maxWidth: "480px",
         }}
       >
         {(stage === "gate" || stage === "entering") && (
@@ -426,90 +426,6 @@ function LoginPageInner() {
               Same Heart&trade; &middot; First Signal
             </p>
             <PathOnboarding onComplete={handlePathComplete} />
-          </div>
-        )}
-
-        {stage === "revealing" && path && (
-          <div className="form-fade-in" style={{ textAlign: "center" }}>
-            <p
-              style={{
-                fontFamily: "var(--font-body)",
-                fontStyle: "italic",
-                color: "var(--ink-dim)",
-                marginBottom: "10px",
-              }}
-            >
-              You walk like&hellip;
-            </p>
-            <h1
-              style={{
-                fontFamily: "var(--font-display)",
-                fontWeight: 800,
-                fontSize: "clamp(2.2rem, 7vw, 3.2rem)",
-                margin: 0,
-                color: path.accent,
-              }}
-            >
-              {path.name}
-            </h1>
-            <p
-              style={{
-                fontFamily: "var(--font-body)",
-                fontStyle: "italic",
-                maxWidth: "40ch",
-                margin: "18px auto 0",
-                fontSize: "1.05rem",
-              }}
-            >
-              {path.tagline}
-            </p>
-          </div>
-        )}
-
-        {stage === "ship" && path && (
-          <div className="form-fade-in" style={{ textAlign: "center" }}>
-            <div
-              aria-hidden="true"
-              style={{
-                width: "84px",
-                height: "84px",
-                margin: "0 auto 22px",
-                animation: "shFloat 4s ease-in-out infinite",
-                filter: `drop-shadow(0 0 22px ${path.accent}aa)`,
-              }}
-            >
-              <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M50 6 L78 62 L50 48 L22 62 Z" fill={path.accent} fillOpacity="0.85" />
-                <path d="M50 48 L50 94 L38 78 Z M50 48 L50 94 L62 78 Z" fill={path.accent} fillOpacity="0.4" />
-              </svg>
-            </div>
-            <p
-              style={{
-                fontFamily: "var(--font-body)",
-                fontStyle: "italic",
-                color: "var(--ink-dim)",
-                marginBottom: "10px",
-              }}
-            >
-              Your vessel is ready.
-            </p>
-            <p
-              style={{
-                fontFamily: "var(--font-body)",
-                fontStyle: "italic",
-                maxWidth: "40ch",
-                margin: "0 auto 26px",
-                fontSize: "1rem",
-              }}
-            >
-              {path.essence}
-            </p>
-            <button
-              onClick={() => router.push("/star-day")}
-              style={{ ...buttonStyle, background: path.accent }}
-            >
-              Set off
-            </button>
           </div>
         )}
 

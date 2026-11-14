@@ -1,11 +1,12 @@
-// Small, dependency-free Web Audio helpers for the sensory onboarding
-// (see components/PathOnboarding.tsx) -- every sound here is generated
-// on the fly with an oscillator or a noise burst, so the texture step
-// ("a texture that relates to a sound") needs no audio files at all.
+// Small, dependency-free Web Audio helper for the onboarding question
+// pick (see components/PathOnboarding.tsx) -- generated on the fly with
+// an oscillator, so it needs no audio files at all.
 //
-// Every function is a safe no-op outside the browser, or if audio is
-// blocked/unsupported -- sound is a garnish on the onboarding flow, and
-// should never be able to break it.
+// A safe no-op outside the browser, or if audio is blocked/unsupported
+// -- sound is a garnish on the onboarding flow, and should never be
+// able to break it. (The texture step this once also scored -- a
+// distinct tone per shape -- is gone; see lib/paths.ts's file header,
+// Nov 13 2026.)
 
 let sharedCtx: AudioContext | null = null;
 
@@ -45,53 +46,7 @@ function tone(
   osc.stop(ctx.currentTime + start + duration + 0.05);
 }
 
-export type TextureSoundId = "smooth" | "rippled" | "woven" | "jagged";
-
-// One distinct sound per texture in lib/paths.ts's TEXTURES -- smooth is
-// a held low hum, rippled a quick ascending chime, woven two tones
-// answering each other, jagged a short burst of noise.
-export function playTextureSound(id: TextureSoundId): void {
-  const ctx = getContext();
-  if (!ctx) return;
-  try {
-    switch (id) {
-      case "smooth":
-        tone(ctx, 180, 0, 0.9, "sine", 0.08);
-        break;
-      case "rippled":
-        tone(ctx, 660, 0, 0.18, "sine", 0.07);
-        tone(ctx, 880, 0.12, 0.18, "sine", 0.06);
-        tone(ctx, 990, 0.24, 0.22, "sine", 0.05);
-        break;
-      case "woven":
-        tone(ctx, 440, 0, 0.7, "sine", 0.06);
-        tone(ctx, 550, 0.05, 0.65, "triangle", 0.05);
-        break;
-      case "jagged": {
-        const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * 0.25));
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-        }
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-        noise.connect(gain);
-        gain.connect(ctx.destination);
-        noise.start();
-        break;
-      }
-    }
-  } catch {
-    // See file header -- audio never gets to break the flow.
-  }
-}
-
-// A soft, texture-independent confirmation chime for a colour orb,
-// question bubble, or inkblot pick.
+// A soft confirmation chime for a question pick.
 export function playSelectChime(): void {
   const ctx = getContext();
   if (!ctx) return;

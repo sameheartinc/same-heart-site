@@ -3732,3 +3732,30 @@ more than silently update state with that). Nothing else about Evolution
 changed -- every other unlock is still the quiet background check it's
 always been; the splash is specific to this one card for now. Verified
 with `npx tsc --noEmit` (clean).
+
+Cut the onboarding quiz way down -- Rob: "too many prompts...i dont
+really like the set up with the shapes and textures...more dynamic and
+simple, straightforward so people can get to the website faster." The
+old flow was five picks before you ever saw the site: a colour orb, a
+texture shape, three text questions, then two more non-interactive
+screens ("You walk like...", "Your vessel is ready") and a "Set off"
+button. Walked through two rounds of direction with Rob first, since
+this determines a system (Path/world-theming) that Hub, Wallet, Cards,
+and Galaxy all read from -- landed on keeping Path assignment (so that
+theming stays intact) but cutting everything else to the bone.
+
+Now it's one question (ONBOARDING_QUESTION_COUNT in lib/paths.ts, down
+from 3), still drawn fresh from the ~100-question bank so it's a
+different one most visits, still blended with the live cursor-signal
+read the same as before -- scoreOnboarding already normalized by however
+many answers it's given, so dropping from 5 picks to 1 needed zero
+changes to the actual scoring math. The moment that one tap lands, it's
+straight to /star-day (which just relays to /hub) -- no reveal screens,
+no extra button. Deleted the colour/texture picker for good rather than
+hiding it: ORB_COLORS/TEXTURES/OrbColorOption/TextureOption out of
+lib/paths.ts, playTextureSound out of lib/orbTones.ts, the whole ambient-
+orb-field apparatus out of components/PathOnboarding.tsx (now just the
+question and its answers, over the same starfield backdrop every other
+page already uses). Verified with `npx tsc --noEmit` (clean), and
+grepped the whole repo after for any leftover reference to the removed
+exports -- none outside this file's own explanatory comment.

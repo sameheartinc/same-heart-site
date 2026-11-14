@@ -1,10 +1,18 @@
 // The four paths people quietly sort into as they move through the site.
-// Nobody picks a path from a menu -- it's read from a short run of small,
-// sensory picks (a colour, a texture, three quick questions, an inkblot)
-// plus how their cursor actually behaves, then blended together. This is
-// separate from Star Day (lib/starDay.ts): Path is a quick personality
-// read assigned at arrival; Star Day is the deeper, permanent signal from
-// a birth date, captured right after.
+// Nobody picks a path from a menu -- it's read from one quick question
+// (see ONBOARDING_QUESTION_COUNT below) plus how their cursor actually
+// behaves, then blended together. This is separate from Star Day
+// (lib/starDay.ts): Path is a quick personality read assigned at
+// arrival; Star Day is the deeper, permanent signal from a birth date,
+// captured right after.
+//
+// Rob, Nov 13 2026: this used to be five picks -- a colour orb, a
+// texture shape, and three text questions -- before handing off ("too
+// many prompts...i dont really like the set up with the shapes and
+// textures...more dynamic and simple, straightforward so people can get
+// to the website faster"). The colour/texture picker (ORB_COLORS/
+// TEXTURES) is gone for good, not just hidden -- if it ever needs to
+// come back, it's in git history, not a flag to flip here.
 
 export type PathKey = "guardian" | "seeker" | "weaver" | "flame";
 
@@ -1092,9 +1100,10 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
 ];
 
 // How many of the ~100 questions above a single onboarding run actually
-// asks -- unchanged from the original fixed set of three; only the pool
-// they're drawn from got bigger.
-export const ONBOARDING_QUESTION_COUNT = 3;
+// asks. Down from 3 (Nov 13 2026, see the file header) -- one quick tap,
+// still drawn fresh from the full bank each time, still feeds the same
+// four-axis scoring below.
+export const ONBOARDING_QUESTION_COUNT = 1;
 
 // Draws ONBOARDING_QUESTION_COUNT distinct questions at random from the
 // full bank, without replacement. Called once per onboarding run (see
@@ -1117,59 +1126,11 @@ export function pickOnboardingQuestions(count: number): OnboardingQuestion[] {
 // Rob wanted the very first touch to feel less like a form and more like
 // a psychoactive drift: a colour picked from a field of floating orbs,
 // then a texture that comes with its own sound, before the three text
-// questions above ever appear (rendered as coloured bubbles once this
-// runs -- see components/PathOnboarding.tsx). Used to close with a
-// final "which one feels closer" inkblot pick too; Rob called that one
-// irrelevant (Oct 18, 2026) and it's gone now -- the last text question
-// finishes onboarding directly. Every pick that's left is a real, if
-// gentle, signal into the same four axes everything else here scores
-// against -- see scoreOnboarding.
-
-export interface OrbColorOption {
-  id: string;
-  hex: string;
-  glow: string;
-  weights: Partial<AxisScores>;
-}
-
-// Four "pure" colours mirror each path's own accent 1:1 (so a clean
-// pick reads as a clean lean); four "between" colours blend two
-// neighbours, so the wheel feels continuous rather than four buckets in
-// a trenchcoat.
-export const ORB_COLORS: OrbColorOption[] = [
-  { id: "gold", hex: "#c9a15a", glow: "rgba(201,161,90,0.6)", weights: { guardian: 2 } },
-  { id: "azure", hex: "#7c9fd9", glow: "rgba(124,159,217,0.6)", weights: { seeker: 2 } },
-  { id: "rose", hex: "#c9576a", glow: "rgba(201,87,106,0.6)", weights: { weaver: 2 } },
-  { id: "ember", hex: "#e0703a", glow: "rgba(224,112,58,0.6)", weights: { flame: 2 } },
-  { id: "violet", hex: "#9b7ec9", glow: "rgba(155,126,201,0.6)", weights: { guardian: 1, seeker: 1 } },
-  { id: "teal", hex: "#54b0a4", glow: "rgba(84,176,164,0.6)", weights: { seeker: 1, weaver: 1 } },
-  { id: "coral", hex: "#d9808c", glow: "rgba(217,128,140,0.6)", weights: { weaver: 1, flame: 1 } },
-  { id: "amber", hex: "#d99149", glow: "rgba(217,145,73,0.6)", weights: { flame: 1, guardian: 1 } },
-];
-
-export type TextureId = "smooth" | "rippled" | "woven" | "jagged";
-
-export interface TextureOption {
-  id: TextureId;
-  label: string;
-  soundLabel: string;
-  weights: Partial<AxisScores>;
-}
-
-// Each texture is paired with a distinct tone (see lib/orbTones.ts) so
-// the pick is heard as much as it's seen.
-export const TEXTURES: TextureOption[] = [
-  { id: "smooth", label: "Smooth", soundLabel: "a low, steady hum", weights: { guardian: 2 } },
-  { id: "rippled", label: "Rippled", soundLabel: "a bright, curious chime", weights: { seeker: 2 } },
-  { id: "woven", label: "Woven", soundLabel: "a warm hum that answers back", weights: { weaver: 2 } },
-  { id: "jagged", label: "Jagged", soundLabel: "a sharp crackle of static", weights: { flame: 2 } },
-];
-
-// Every pick along the way -- colour, texture, the three questions, the
-// inkblot -- feeds this the same way: a Partial<AxisScores> worth up to
-// 2 points on one or two axes. The max per axis is derived from however
-// many picks were actually passed in, so this scales cleanly whether
-// it's fed 3 answers or 6.
+// questions above ever appear (rendered as pill buttons once this runs
+// -- see components/PathOnboarding.tsx). Every pick feeds this the same
+// way: a Partial<AxisScores> worth up to 2 points on one or two axes.
+// The max per axis is derived from however many picks were actually
+// passed in, so this scales cleanly whether it's fed 1 answer or 6.
 export function scoreOnboarding(
   answers: Array<Partial<AxisScores> | undefined>
 ): AxisScores {
