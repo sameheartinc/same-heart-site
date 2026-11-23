@@ -35,7 +35,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { getLevel } from "@/lib/levels";
-import { CARDS, CARDS_MIN_LEVEL, NEW_MEMBER_CARD_LAUNCH_MS, cardUnlockId, describeCardSource } from "@/lib/cards";
+import { CARDS, CARDS_MIN_LEVEL, PLATINUM_MIN_LEVEL, NEW_MEMBER_CARD_LAUNCH_MS, cardUnlockId, describeCardSource } from "@/lib/cards";
 
 export type UnlockKind = "widget-skin" | "milestone" | "ability" | "card"; // more kinds join this union as they ship
 
@@ -68,6 +68,16 @@ export interface UnlockableSignals {
   // source), which checks WHEN someone joined against a fixed launch
   // date, not how long ago that was.
   joinedAtMs: number;
+  // False for an anonymous Supabase session (lib/session.ts), true once
+  // someone's run the "Claim your account" flow (supabase.auth.updateUser
+  // with a real email/password -- see app/login/page.tsx's claimMode).
+  // Read from auth.users.is_anonymous by the evaluate route, never
+  // derived client-side.
+  isClaimed: boolean;
+  // profiles.claim_card_choice -- null until someone's picked from the
+  // claim-reward pool (see lib/cards.ts's CLAIM_CHOICE_CARD_IDS), written
+  // once by app/api/claim/choose-card/route.ts and never changed after.
+  claimedCardChoice: string | null;
 }
 
 export interface Unlockable {
@@ -140,10 +150,16 @@ const CARD_UNLOCKABLES: Unlockable[] = CARDS.map((card) => ({
   name: `${card.name} Card`,
   description: describeCardSource(card.source),
   isEligible: (s: UnlockableSignals) => {
-    // The new-member welcome card is the one deliberate exception to the
-    // Level 50 gate -- it's meant to be the very first card someone ever
-    // holds, not something they wait for. Everything else still waits.
-    if (card.source.type !== "new-member" && getLevel(s.totalXP) < CARDS_MIN_LEVEL) return false;
+    // The new-member welcome card and the claim-choice pool are the two
+    // deliberate exceptions to the Level 50 gate -- both are rewards for
+    // a specific moment (joining, securing the account), not something
+    // to wait for. Everything else still waits.
+    const exemptFromLevel50 = card.source.type === "new-member" || card.source.type === "claim-choice";
+    if (!exemptFromLevel50 && getLevel(s.totalXP) < CARDS_MIN_LEVEL) return false;
+    // The mythic/platinum tier has its own, higher floor that holds no
+    // matter what a card's own `source` says -- Rob's "once people
+    // surpass level 100" rule for the whole tier, not just one card.
+    if (card.rarity === "mythic" && getLevel(s.totalXP) < PLATINUM_MIN_LEVEL) return false;
     switch (card.source.type) {
       case "level":
         return getLevel(s.totalXP) >= card.source.level;
@@ -153,6 +169,8 @@ const CARD_UNLOCKABLES: Unlockable[] = CARDS.map((card) => ({
         return s.nowMs >= Date.parse(card.source.from) && s.nowMs <= Date.parse(card.source.until);
       case "new-member":
         return s.joinedAtMs >= NEW_MEMBER_CARD_LAUNCH_MS;
+      case "claim-choice":
+        return s.isClaimed && s.claimedCardChoice === card.id;
     }
   },
 }));

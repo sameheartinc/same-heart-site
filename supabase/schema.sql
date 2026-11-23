@@ -2811,3 +2811,21 @@ from sponsor_campaigns where slug = 'socks-and-warmth'
 on conflict (campaign_id, name) do nothing;
 
 notify pgrst, 'reload schema';
+
+-- Claim-reward card choice (Rob, Nov 23 2026): when someone claims their
+-- anonymous session into a real email/password account, they pick one
+-- card from a small pool (see lib/cards.ts's CLAIM_CHOICE_CARD_IDS) as a
+-- thank-you for securing their account. Written once by
+-- app/api/claim/choose-card/route.ts (service role), then read by
+-- app/api/evolution/evaluate/route.ts to grant it through the normal
+-- Evolution flow -- this column only records WHICH one was chosen, it
+-- never grants anything by itself.
+alter table profiles add column if not exists claim_card_choice text;
+
+-- Same lockdown pattern as xp/standing/commons_accent/etc above: the
+-- generic "Users update their own profile" policy would otherwise let a
+-- client write this column directly, skipping the claimed-account check
+-- and the idempotent choose-once guard in the route above.
+revoke update (claim_card_choice) on profiles from authenticated;
+
+notify pgrst, 'reload schema';

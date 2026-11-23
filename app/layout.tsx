@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import GlobalPlayer from "@/components/GlobalPlayer";
 import GalaxyNav from "@/components/GalaxyNav";
+import ClaimNudge from "@/components/ClaimNudge";
 import ShareAttributionCapture from "@/components/ShareAttributionCapture";
 import "./globals.css";
 
@@ -93,6 +94,7 @@ export default function RootLayout({
         />
         <GlobalPlayer />
         <GalaxyNav />
+        <ClaimNudge />
         <ShareAttributionCapture />
         {children}
         <Analytics />

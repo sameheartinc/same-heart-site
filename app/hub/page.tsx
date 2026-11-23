@@ -383,15 +383,19 @@ export default function HubPage() {
       evaluateEvolution().then((result) => {
         if (result.newlyEarned.length > 0) {
           listMyUnlocks().then((ids) => setUnlockedIds(new Set(ids)));
-          // The welcome card (see lib/cards.ts) is the one unlock that
-          // gets real fanfare right now -- Rob's spec (Nov 9 2026): a
-          // sparkle splash with the card's video, the moment it lands.
-          // Everything else in Evolution stays the quiet background
-          // check it's always been.
-          const newWelcomeCard = CARDS.find(
-            (c) => c.id === "welcome" && result.newlyEarned.includes(cardUnlockId(c.id))
+          // Any newly-earned card WITH REAL VIDEO ART gets the sparkle
+          // splash -- Rob's spec (Nov 9 2026) started as just the
+          // welcome card, generalized here so the claim-choice cards
+          // (lib/cards.ts) and anything added later get the same
+          // fanfare the moment their art exists, with no further code
+          // change. A card with no video yet (`video: null`) is simply
+          // skipped here -- CardVideoLightbox has nothing to show for
+          // it anyway. Everything else in Evolution stays the quiet
+          // background check it's always been.
+          const newCardWithVideo = CARDS.find(
+            (c) => Boolean(c.video) && result.newlyEarned.includes(cardUnlockId(c.id))
           );
-          if (newWelcomeCard) setCardReveal(newWelcomeCard);
+          if (newCardWithVideo) setCardReveal(newCardWithVideo);
         }
       });
 

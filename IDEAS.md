@@ -3759,3 +3759,71 @@ question and its answers, over the same starfield backdrop every other
 page already uses). Verified with `npx tsc --noEmit` (clean), and
 grepped the whole repo after for any leftover reference to the removed
 exports -- none outside this file's own explanatory comment.
+
+## Card rarity ladder, claim-reward card choice, and a timed signup nudge (Nov 23 2026)
+
+Rob: "now how are we going to know if a user has obtained the card... and
+if they sign in from the same device... is it worked in to remember the
+persons account... could we maybe have a prompt pop up once a user has
+been on the site a few minutes reminding them to sign up with their
+email and secure an account.. once they secure the account they get to
+choose an unlockable card." Then: "make me a list of grey which would be
+regular cards, more purple, blue and red cards as being common and rare
+cards, special cards including holographics and gold cards and platinum
+unbreakable editions" (once past Level 100).
+
+Answering the actual question first: card ownership already lives in
+profile_unlocks, keyed to the Supabase account -- it already survives a
+refresh on the SAME device/browser via the anonymous session
+(lib/session.ts). What it doesn't survive is a different device or a
+cleared browser, because that's a different anonymous session with
+nothing in it. Only claiming the account with a real email (already a
+flow -- app/login/page.tsx's claimMode) fixes that. So the actual gap
+wasn't card tracking, it was that nobody was ever nudged to claim.
+
+Shipped:
+- lib/cards.ts: CardRarity grew from 4 to 6 tiers -- common (grey),
+  uncommon (blue), rare (purple), epic (red), legendary (gold), mythic
+  (platinum) -- with RARITY_ACCENT colors to match. Added CardFinish
+  ("holo" | "foil", cosmetic only) and a `realWorldNote` field for
+  platinum/"unbreakable" cards meant to point at something real (a
+  coordinate, a hidden object). Added PLATINUM_MIN_LEVEL = 100,
+  structurally enforced for the whole mythic tier in evolution.ts, not
+  just whatever level a card's own `source` happens to name.
+- A new CardSource case, "claim-choice", plus four real catalog entries
+  (CLAIM_CHOICE_CARD_IDS: claim-guardian/seeker/weaver/flame -- one per
+  Path) -- the pool someone picks from the moment they claim their
+  account. Exempted from the Level 50 gate, same as new-member.
+- lib/evolution.ts + the evaluate route: new isClaimed/claimedCardChoice
+  signals (is_anonymous off the authenticated user record, and
+  profiles.claim_card_choice), so "claim-choice" cards grant through the
+  exact same trusted, idempotent flow every other card already uses.
+- New route app/api/claim/choose-card/route.ts: the only writer of
+  profiles.claim_card_choice (service role; column locked against
+  authenticated in schema.sql, same pattern as xp/commons_accent/etc).
+  Records the pick once, idempotently; the actual grant still happens
+  through evaluateEvolution(), never written directly by this route.
+- app/login/page.tsx: claiming now lands on a new "choose-card" stage
+  (the four Path cards) instead of redirecting straight to the Hub --
+  pick one, it's recorded and granted, then the normal "arrival" message
+  and redirect carry on as before.
+- New components/ClaimNudge.tsx, mounted at the root layout: checks
+  once per app load whether the session is anonymous, and if so pops a
+  small modal after 3 minutes on site (not on "/" or "/login") offering
+  "Secure my account" (straight to /login?claim=1) or "Not now" (snoozed
+  24h in localStorage, fails open if storage is blocked).
+- app/hub/page.tsx: generalized the celebratory sparkle-splash reveal
+  from "only the welcome card" to "any newly-earned card with real video
+  art" -- so the claim-choice cards (and anything else added later) get
+  the same fanfare automatically once art exists, no further code
+  change needed.
+
+Deliberately NOT done yet: the dozens of named, themed cards from the
+checklist (Open Door, Lake Ontario Dawn, Take Back the Night, Carved
+From the Same Wood, The Unbreakable Heart, etc.) aren't in the catalog
+as real entries -- each one needs a real trigger decided (level? event
+window? something else?) and real art, same as every card before it.
+Add them one at a time via the HOW TO ADD A CARD steps at the top of
+lib/cards.ts as art comes in, same workflow as the welcome card.
+
+Verified: `npx tsc --noEmit` clean across the whole project.

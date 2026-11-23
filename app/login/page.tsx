@@ -12,8 +12,15 @@ import { AxisScores, PathKey, combineScores, pickPath } from "@/lib/paths";
 import { ONBOARDING_WORLD, WORLDS } from "@/lib/worlds";
 import PathOnboarding from "@/components/PathOnboarding";
 import WorldField from "@/components/WorldField";
+import { CARDS, cardAccent, type CardDef } from "@/lib/cards";
+import { evaluateEvolution } from "@/lib/evolution";
 
-type Stage = "gate" | "entering" | "quiz" | "arriving" | "form";
+type Stage = "gate" | "entering" | "quiz" | "arriving" | "form" | "choose-card";
+
+// The claim-reward pool (see lib/cards.ts's CLAIM_CHOICE_CARD_IDS) --
+// read straight off the catalog so a fifth choice added there shows up
+// here with no further change.
+const CLAIM_CHOICE_CARDS: CardDef[] = CARDS.filter((c) => c.source.type === "claim-choice");
 
 // Same ship-silhouette cursor as the Galaxy room (see app/galaxy/page.tsx)
 // -- applied here too during the colour/texture/question/inkblot picker so
@@ -76,6 +83,7 @@ function LoginPageInner() {
   const [arrivalMessage, setArrivalMessage] = useState("Something in you just answered.");
   const [userId, setUserId] = useState<string | null>(null);
   const [pathKey, setPathKey] = useState<PathKey | null>(null);
+  const [choosingCard, setChoosingCard] = useState(false);
 
   const cursorSignal = usePathSignal();
   const backgroundWorld = pathKey ? WORLDS[pathKey] : ONBOARDING_WORLD;
@@ -205,6 +213,39 @@ function LoginPageInner() {
     router.push("/star-day");
   }
 
+
+  // Writes the pick (service-role route -- profiles.claim_card_choice is
+  // locked against direct client writes, see supabase/schema.sql), then
+  // asks Evolution to grant it right away rather than waiting for the
+  // Hub's own background check to catch it a moment later.
+  async function handleChooseCard(cardId: string) {
+    setChoosingCard(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setChoosingCard(false);
+      router.push(landingPath);
+      return;
+    }
+    try {
+      await fetch("/api/claim/choose-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ cardId }),
+      });
+      await evaluateEvolution();
+    } catch {
+      // Even if this one request hiccups, the Hub's own quiet
+      // background check (evaluateEvolution on load) will catch the
+      // choice next time it runs -- nothing here is the only chance.
+    }
+    const chosen = CLAIM_CHOICE_CARDS.find((c) => c.id === cardId);
+    setArrivalMessage(chosen ? `${chosen.name} is yours.` : "Your account is permanent now.");
+    setChoosingCard(false);
+    setStage("arriving");
+    setTimeout(() => router.push(landingPath), 1400);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -217,9 +258,7 @@ function LoginPageInner() {
         setError(result.error.message);
         return;
       }
-      setArrivalMessage("Your account is permanent now.");
-      setStage("arriving");
-      setTimeout(() => router.push(landingPath), 1400);
+      setStage("choose-card");
       return;
     }
 
@@ -561,6 +600,86 @@ function LoginPageInner() {
               </button>
             )}
           </form>
+        )}
+
+        {stage === "choose-card" && (
+          <div className="form-fade-in" style={{ textAlign: "center", maxWidth: "420px" }}>
+            <p
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "1.1rem",
+                color: "var(--ink)",
+                margin: "0 0 6px",
+              }}
+            >
+              Your account is permanent now.
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-body)",
+                color: "var(--ink-dim)",
+                fontSize: "0.88rem",
+                margin: "0 0 20px",
+              }}
+            >
+              Pick one to keep -- not necessarily the Path you were already given, just whichever one's you.
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: "10px",
+              }}
+            >
+              {CLAIM_CHOICE_CARDS.map((card) => {
+                const accent = cardAccent(card);
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    disabled={choosingCard}
+                    onClick={() => handleChooseCard(card.id)}
+                    style={{
+                      background: "var(--panel)",
+                      border: `2px solid ${accent}`,
+                      borderRadius: "10px",
+                      padding: "14px 10px",
+                      cursor: choosingCard ? "default" : "pointer",
+                      opacity: choosingCard ? 0.6 : 1,
+                      textAlign: "left",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontWeight: 700,
+                        fontSize: "0.88rem",
+                        color: accent,
+                      }}
+                    >
+                      {card.name}
+                    </span>
+                    {card.blurb && (
+                      <span
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontStyle: "italic",
+                          fontSize: "0.72rem",
+                          color: "var(--ink-dim)",
+                        }}
+                      >
+                        {card.blurb}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {stage === "arriving" && (

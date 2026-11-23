@@ -31,15 +31,46 @@ import { KEY_INFO, type KeyColor } from "@/lib/keys";
 //        { type: "event", label, from, until }  -- signed in and evaluated
 //                                                  while now is inside the
 //                                                  window (ISO timestamps)
+//        { type: "new-member" }                 -- joined after the launch
+//                                                  date (see
+//                                                  NEW_MEMBER_CARD_LAUNCH_MS)
+//        { type: "claim-choice" }                -- offered in the pool
+//                                                  someone picks from the
+//                                                  moment they secure their
+//                                                  account (see
+//                                                  CLAIM_CHOICE_CARD_IDS)
+//   4. Picking the mythic/platinum tier? Nothing grants below
+//      PLATINUM_MIN_LEVEL regardless of what `source` says -- see
+//      lib/evolution.ts's CARD_UNLOCKABLES. Consider a `realWorldNote`
+//      too (see CardDef) if this one's meant to point at something
+//      real, not just digital.
 //
 // Event cards are claimed automatically the first time someone's Hub
 // runs its quiet background check inside the window; once claimed they're
-// kept forever, and nobody can claim one after `until`.
+// kept forever, and nobody can claim one after `until`. new-member and
+// claim-choice cards are the two exceptions to the Level 50 gate below --
+// both are rewards for a specific moment (joining, securing the account),
+// not something to wait for.
 
 // Cards start at this Level and not before -- see the header above.
 export const CARDS_MIN_LEVEL = 50;
 
-export type CardRarity = "common" | "uncommon" | "rare" | "legendary";
+// Six tiers, grey to platinum (Rob, Nov 23 2026): "grey which would be
+// regular cards, more purple, blue and red cards as being common and
+// rare cards, special cards including holographics and gold cards and
+// platinum unbreakable editions." Climbing order is common (grey) ->
+// uncommon (blue) -> rare (purple) -> epic (red) -> legendary (gold) ->
+// mythic (platinum) -- see RARITY_ACCENT for the actual colors and
+// PLATINUM_MIN_LEVEL below for the "once people surpass level 100" gate
+// on the mythic tier specifically.
+export type CardRarity = "common" | "uncommon" | "rare" | "epic" | "legendary" | "mythic";
+
+// A card's physical "finish" -- independent of rarity, so any tier can
+// carry it, though in practice holo/foil is reserved for legendary and
+// mythic. Purely cosmetic (a CSS treatment on the art), never read by
+// isEligible anywhere -- see components/CollectibleCard.tsx once it
+// starts rendering this.
+export type CardFinish = "holo" | "foil";
 
 export type CardSource =
   | { type: "level"; level: number }
@@ -51,7 +82,16 @@ export type CardSource =
   // for people who joined on or after NEW_MEMBER_CARD_LAUNCH_MS below --
   // Rob, Nov 9 2026: a welcome gift for people joining from here on, not
   // retroactive to everyone already here.
-  | { type: "new-member" };
+  | { type: "new-member" }
+  // The claim-reward pool (Rob, Nov 23 2026): "once they secure the
+  // account they get to choose an unlockable card." Eligible once (a)
+  // the profile is a claimed, non-anonymous account and (b) its chosen
+  // id (profiles.claim_card_choice, written once by
+  // app/api/claim/choose-card/route.ts) matches this card's id -- see
+  // lib/evolution.ts's isClaimed/claimedCardChoice signals. Like
+  // new-member, this skips the Level 50 gate: the whole point is a
+  // reward for securing the account, not something to wait for.
+  | { type: "claim-choice" };
 
 export interface CardDef {
   id: string;
@@ -69,14 +109,31 @@ export interface CardDef {
   source: CardSource;
   // Optional one-line flavor text shown under the name.
   blurb?: string;
+  // Cosmetic finish -- see CardFinish above. Omitted/undefined = plain.
+  finish?: CardFinish;
+  // Platinum/"unbreakable" cards only: a real-world clue, coordinate, or
+  // hint tied to an actual object or location Rob has placed -- shown on
+  // the card's detail view once that UI exists. Plain text, never
+  // parsed or validated here; what it means is entirely Rob's to define
+  // per card. Leave unset for every other tier.
+  realWorldNote?: string;
 }
 
+// Grey, blue, purple, red, gold, platinum -- Rob's own tier colors
+// (Nov 23 2026), in climbing order.
 export const RARITY_ACCENT: Record<CardRarity, string> = {
-  common: "#a29cb0",
-  uncommon: "#3fae62",
-  rare: "#4a8fe0",
-  legendary: "#e8c27a",
+  common: "#a29cb0", // grey
+  uncommon: "#4a8fe0", // blue
+  rare: "#9b6fe0", // purple
+  epic: "#e0574a", // red
+  legendary: "#e8c27a", // gold
+  mythic: "#d9ddE6", // platinum
 };
+
+// The mythic/platinum tier never grants below this level, regardless of
+// what a card's own `source` says -- a structural backstop for Rob's
+// "once people surpass level 100" rule, enforced in lib/evolution.ts.
+export const PLATINUM_MIN_LEVEL = 100;
 
 // One card every 50 levels across the whole 1000-level ladder (Level 50
 // is also where cards begin; Level 1000 is the capstone -- see IDEAS.md's
@@ -87,9 +144,11 @@ const MAX_LEVEL = 1000;
 
 function levelRarity(level: number): CardRarity {
   if (level <= 100) return "common";
-  if (level <= 300) return "uncommon";
-  if (level <= 700) return "rare";
-  return "legendary";
+  if (level <= 250) return "uncommon";
+  if (level <= 500) return "rare";
+  if (level <= 750) return "epic";
+  if (level <= 950) return "legendary";
+  return "mythic"; // Level 1000 only, at the current 50-level step
 }
 
 const LEVEL_CARDS: CardDef[] = Array.from({ length: MAX_LEVEL / LEVEL_CARD_STEP }, (_, i) => {
@@ -110,9 +169,25 @@ const LEVEL_CARDS: CardDef[] = Array.from({ length: MAX_LEVEL / LEVEL_CARD_STEP 
 // way, nothing else about the card changes.
 export const NEW_MEMBER_CARD_LAUNCH_MS = Date.parse("2026-11-09T00:00:00Z");
 
-// Starter catalog: the welcome card, the level cards, and one card per
-// Heart String. Names and rarities are first cuts meant to be renamed and
-// re-rarified once the real art arrives; only `id` is permanent.
+// The claim-reward pool (Rob, Nov 23 2026) -- see CardSource's
+// "claim-choice" case above. Four cards, one per Path, so securing your
+// account doubles as a small identity choice: pick the one that's you,
+// not necessarily the Path you were already assigned. Any card in CARDS
+// with source.type === "claim-choice" is offered; app/login/page.tsx's
+// "choose-card" stage reads this list directly rather than hardcoding
+// the four ids, so adding a fifth choice later is just another entry
+// here.
+export const CLAIM_CHOICE_CARD_IDS = [
+  "claim-guardian",
+  "claim-seeker",
+  "claim-weaver",
+  "claim-flame",
+] as const;
+
+// Starter catalog: the welcome card, the claim-choice pool, the level
+// cards, and one card per Heart String. Names and rarities are first
+// cuts meant to be renamed and re-rarified once the real art arrives;
+// only `id` is permanent.
 export const CARDS: CardDef[] = [
   {
     id: "welcome",
@@ -122,6 +197,39 @@ export const CARDS: CardDef[] = [
     video: "/cards/welcome.mp4",
     source: { type: "new-member" },
     blurb: "The first card every new arrival picks up, the moment they join.",
+  },
+
+  {
+    id: "claim-guardian",
+    name: "Guardian's Watch",
+    rarity: "rare",
+    image: null,
+    source: { type: "claim-choice" },
+    blurb: "Chosen, not just assigned -- the one who stands at the door.",
+  },
+  {
+    id: "claim-seeker",
+    name: "Seeker's Trailhead",
+    rarity: "rare",
+    image: null,
+    source: { type: "claim-choice" },
+    blurb: "Chosen, not just assigned -- the one who takes the unmarked trail.",
+  },
+  {
+    id: "claim-weaver",
+    name: "Weaver's Loom",
+    rarity: "rare",
+    image: null,
+    source: { type: "claim-choice" },
+    blurb: "Chosen, not just assigned -- the one who turns thread into something that holds.",
+  },
+  {
+    id: "claim-flame",
+    name: "Flame's Ember",
+    rarity: "rare",
+    image: null,
+    source: { type: "claim-choice" },
+    blurb: "Chosen, not just assigned -- the one who keeps the coal glowing.",
   },
 
   ...LEVEL_CARDS,
@@ -162,5 +270,7 @@ export function describeCardSource(source: CardSource): string {
       return `Be here for ${source.label}.`;
     case "new-member":
       return "Join Same Heart.";
+    case "claim-choice":
+      return "Secure your account to choose this.";
   }
 }

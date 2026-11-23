@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profileRow, error: profileError } = await admin
     .from("profiles")
-    .select("joined_at, xp, longest_streak, current_streak")
+    .select("joined_at, xp, longest_streak, current_streak, claim_card_choice")
     .eq("id", profileId)
     .single();
 
@@ -82,6 +82,11 @@ export async function POST(request: NextRequest) {
     keyColors: (keyRows ?? []).map((k) => k.key_color as string),
     nowMs: Date.now(),
     joinedAtMs: joinedAt.getTime(),
+    // is_anonymous comes straight off the authenticated user record
+    // above, not anything the client could shape -- same trust model as
+    // everything else in this route.
+    isClaimed: !(userData.user as { is_anonymous?: boolean }).is_anonymous,
+    claimedCardChoice: (profileRow as { claim_card_choice?: string | null }).claim_card_choice ?? null,
   };
 
   const newlyEarned: string[] = [];
